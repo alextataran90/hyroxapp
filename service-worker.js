@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-18-v11-icons";
+const APP_VERSION = "2026-05-18-v12-settings-fit";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

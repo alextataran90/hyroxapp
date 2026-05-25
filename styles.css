@@ -660,12 +660,18 @@ a.block-load.unset:active {
   font-size: 16px;
   color: var(--text);
   letter-spacing: -0.01em;
-  flex-shrink: 0;
-  min-width: 140px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .form-input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
   background: transparent;
   border: none;
   color: var(--accent);
