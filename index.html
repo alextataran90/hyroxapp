@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Hyrox" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Hyrox Trainer</title>
+</head>
+<body>
+  <header id="topbar">
+    <div id="topbar-left">
+      <span id="phase-chip"></span>
+      <span id="week-chip"></span>
+    </div>
+    <div id="topbar-right">
+      <span id="countdown"></span>
+    </div>
+  </header>
+  <main id="app"></main>
+  <nav id="tabbar">
+    <a href="#/today" class="tab" data-tab="today">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      <span>Today</span>
+    </a>
+    <a href="#/week" class="tab" data-tab="week">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>Week</span>
+    </a>
+    <a href="#/plan" class="tab" data-tab="plan">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+      <span>Plan</span>
+    </a>
+    <a href="#/tests" class="tab" data-tab="tests">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span>Tests</span>
+    </a>
+    <a href="#/settings" class="tab" data-tab="settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span>
+    </a>
+  </nav>
+  <div id="update-banner" hidden>
+    <span>New plan available</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button id="dismiss-btn" aria-label="Dismiss"
+        onclick="const b=this.closest('#update-banner');b.hidden=true;try{const v=b.dataset.version;if(v)localStorage.setItem('hyrox.app.version',v)}catch(e){}">×</button>
+      <button id="update-btn"
+        onclick="(async()=>{const b=this.closest('#update-banner');b.hidden=true;try{const v=b.dataset.version;if(v)localStorage.setItem('hyrox.app.version',v)}catch(e){};if('serviceWorker' in navigator){try{const r=await navigator.serviceWorker.getRegistrations();for(const x of r)await x.unregister();}catch(e){};if(window.caches){try{const k=await caches.keys();for(const c of k)await caches.delete(c);}catch(e){}}};location.replace(location.pathname+'?v='+Date.now()+location.hash)})()">Reload</button>
+    </div>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

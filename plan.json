@@ -1,0 +1,5202 @@
+{
+  "version": "2026-05-18-v4-trim",
+  "metadata": {
+    "athlete": "Alex Tataran",
+    "raceTarget": "Sub 1:08",
+    "raceDate": "2026-09-26",
+    "startDate": "2026-05-18",
+    "lastPB": {
+      "total": "1:15:17",
+      "event": "Malaga 2026",
+      "date": "2026-05-17",
+      "ageGroup": "35-39",
+      "overallRank": "#724 of 2073",
+      "agRank": "#170",
+      "runs": [
+        "3:55",
+        "4:25",
+        "4:45",
+        "5:03",
+        "4:54",
+        "4:46",
+        "5:18",
+        "5:04"
+      ],
+      "runsTotal": "38:06",
+      "stations": {
+        "SkiErg": "4:22",
+        "Sled Push": "2:49",
+        "Sled Pull": "3:42",
+        "Burpee Broad Jump": "4:55",
+        "Row": "4:31",
+        "Farmers Carry": "1:52",
+        "Sandbag Lunges": "4:32",
+        "Wall Balls": "4:53"
+      }
+    },
+    "timeBudget": "Save ~7:17 to break 1:08. Plan targets ~9 min of upside.",
+    "trainingFocus": [
+      "Compromised running — especially after sandbag lunges (Run 7: 5:18) and burpees (Run 4: 5:03)",
+      "Sandbag lunge endurance — unbroken sets at race load",
+      "Wall ball capacity — sub 4:10, ideally unbroken or 30/20",
+      "Row speed — target 1:55/500m for sub-4:00 1000m",
+      "Run economy at 4:10/km Hyrox target pace",
+      "Transition speed — sub-30s into/out of stations"
+    ],
+    "changelog": [
+      {
+        "version": "2026-05-17-v2",
+        "date": "2026-05-17",
+        "notes": "Added 15-min aerobic finishers to all S1/S4 strength sessions (excl. test/taper/race weeks). S1=SkiErg/Bike, S4=Row. Phase-progressive intensity. Strength sessions extended 60→75 min."
+      },
+      {
+        "version": "2026-05-17-v3-variety",
+        "date": "2026-05-18",
+        "notes": "Rewrote 26 strength-day finishers as mixed-modal conditioning: For Time, AMRAP, EMOM, sandwiches, Death-by, ladders. One unique finisher per week within each phase. Monolithic single-erg pieces replaced."
+      },
+      {
+        "version": "2026-05-18-v4-trim",
+        "date": "2026-05-18",
+        "notes": "Trimmed warmups/cooldowns across active weeks (W1-3, 5-7, 9-11, 13-15) to 2-line focused versions. Added core triplet finishers to all hybrid sessions to bring main work density up from ~26 to ~32 min."
+      }
+    ]
+  },
+  "phases": [
+    {
+      "name": "Base",
+      "weeks": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "focus": "Aerobic base · strength accumulation · station technique"
+    },
+    {
+      "name": "Build",
+      "weeks": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "focus": "Threshold work · heavier strength · compromised-run drills"
+    },
+    {
+      "name": "Peak",
+      "weeks": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "focus": "VO2 max · power · race-pace stations"
+    },
+    {
+      "name": "Race-Specific",
+      "weeks": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "focus": "Full Hyrox sims · race-load stations · sharp running"
+    },
+    {
+      "name": "Taper",
+      "weeks": [
+        17,
+        18,
+        19
+      ],
+      "focus": "Volume down · intensity held · race week"
+    }
+  ],
+  "weeks": [
+    {
+      "number": 1,
+      "phase": "Base",
+      "test": false,
+      "theme": "Anchor week. Wake up the systems, lock in technique, no grinders.",
+      "sessions": [
+        {
+          "id": "W01S1",
+          "title": "Lower Strength — Squat Foundation",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "intent": "Set baseline squat volume. Quality reps over loads.",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "4 × 6",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.7
+              }
+            },
+            {
+              "name": "Romanian Deadlift",
+              "scheme": "3 × 8",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.55
+              }
+            },
+            {
+              "name": "DB Walking Lunge",
+              "scheme": "3 × 20 steps",
+              "rest": "90s",
+              "load": {
+                "type": "fixed",
+                "value": "2 × 20 kg DB"
+              },
+              "note": "Slow control. This is your sandbag-lunge insurance."
+            },
+            {
+              "name": "Side Plank",
+              "scheme": "3 × 30s / side",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "For Time — Row + Ski + Push-Ups",
+              "scheme": "3 rounds for time · target 12–15 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "400m Row",
+                  "12 cal SkiErg",
+                  "10 push-ups"
+                ]
+              },
+              "note": "Z3 effort. Steady, not a sprint. First round sets the tone."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W01S2",
+          "title": "Easy Aerobic Run",
+          "duration": 60,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "intent": "Build the engine. Conversational only.",
+          "warmup": [
+            "5 min walk-jog",
+            "Dynamic leg swings"
+          ],
+          "blocks": [
+            {
+              "name": "Continuous easy run",
+              "scheme": "45 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1
+              },
+              "note": "RPE 4. Nose-breathe if you can."
+            },
+            {
+              "name": "Strides",
+              "scheme": "4 × 30s",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.95
+              },
+              "note": "Smooth, fast, relaxed. Not all-out."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W01S3",
+          "title": "Hybrid — Run + Wall Ball Drills",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Teach the legs to run after wall ball burn. Negative-split mandate.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "5 rounds",
+              "scheme": "600m run + 25 wall balls · 90s rest between",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "thresholdPaceSecPerKm",
+                  "factor": 1.02,
+                  "label": "run"
+                },
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                }
+              ],
+              "note": "Target round time within 15s window. Hold the 5th."
+            },
+            {
+              "name": "Anti-Rotation Stiff Core",
+              "scheme": "3 rounds · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "30s side plank each side",
+                  "10 Pallof press each side"
+                ]
+              },
+              "note": "Stiff core protects sandbag-lunge position."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W01S4",
+          "title": "Upper Strength — Press + Pull",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "intent": "Build upper push and pull base. Carry-over to SkiErg & Row.",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "4 × 6",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.7
+              }
+            },
+            {
+              "name": "Pendlay Row",
+              "scheme": "4 × 8",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.55
+              },
+              "note": "Dead-stop on floor each rep."
+            },
+            {
+              "name": "Strict OHP",
+              "scheme": "3 × 8",
+              "rest": "90s",
+              "load": {
+                "type": "pct",
+                "ref": "ohp1RM",
+                "pct": 0.6
+              }
+            },
+            {
+              "name": "Pull-ups",
+              "scheme": "3 × AMRAP-1",
+              "load": {
+                "type": "bw"
+              },
+              "note": "Leave 1 rep in the tank."
+            },
+            {
+              "name": "For Time — Row + Run + Wall Balls",
+              "scheme": "3 rounds for time · target 12–14 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "500m Row",
+                  "200m Run",
+                  "12 Wall Balls"
+                ]
+              },
+              "note": "Try to keep wall balls unbroken."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W01S5",
+          "title": "Tempo Run",
+          "duration": 50,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "intent": "First taste of threshold. Controlled.",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "4 × 5 min @ threshold",
+              "scheme": "90s jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              },
+              "note": "Should feel hard-but-controlled. RPE 7."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W01S6",
+          "title": "Mini Hyrox Sim",
+          "duration": 75,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Rehearse the format at sub-max effort. Smooth transitions, no racing.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "4 rounds, continuous",
+              "scheme": "800m run + 1 station each round",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.08,
+                  "label": "run pace"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "Round 1: 1000m SkiErg",
+                    "Round 2: 50m Sled Push (race load)",
+                    "Round 3: 25 Wall Balls",
+                    "Round 4: 20m Sandbag Lunges (race load)"
+                  ]
+                }
+              ],
+              "note": "Hold even effort. Don't race. Practice transitions sub 30s."
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "phase": "Base",
+      "test": false,
+      "theme": "Add volume. Stay technical.",
+      "sessions": [
+        {
+          "id": "W02S1",
+          "title": "Lower Strength — Squat 5×5",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "5 × 5",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Romanian Deadlift",
+              "scheme": "3 × 8",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.6
+              }
+            },
+            {
+              "name": "Front-Rack BB Lunge",
+              "scheme": "3 × 10 / leg",
+              "rest": "90s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.3
+              },
+              "note": "Front rack — taxes core like sandbag."
+            },
+            {
+              "name": "Hanging Knee Raises",
+              "scheme": "3 × 12",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "AMRAP 12 — Ski + KB + Burpees",
+              "scheme": "As many rounds as possible in 12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "12 cal SkiErg",
+                  "10 KB Swings (24 kg)",
+                  "8 burpees"
+                ]
+              },
+              "note": "Sustainable pace. Aim 5–7 rounds. Last round, empty."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W02S2",
+          "title": "Easy Run + Strides",
+          "duration": 65,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "5 min walk-jog",
+            "Dynamic leg swings"
+          ],
+          "blocks": [
+            {
+              "name": "Continuous easy",
+              "scheme": "50 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1
+              }
+            },
+            {
+              "name": "Strides",
+              "scheme": "6 × 30s",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.95
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W02S3",
+          "title": "Hybrid — Run + Burpee Broad Jump",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Direct hit on your 2nd-weakest combo (Run 4 after burpees at Malaga).",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "5 rounds",
+              "scheme": "600m run + 10 burpee broad jumps · 75s rest",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "thresholdPaceSecPerKm",
+                  "factor": 1.02,
+                  "label": "run"
+                },
+                {
+                  "type": "label",
+                  "value": "10 BBJ (full extension, jump 1.5m)"
+                }
+              ],
+              "note": "Stand tall every burpee. No half jumps."
+            },
+            {
+              "name": "Core EMOM 5",
+              "scheme": "5 min EMOM · alternating",
+              "load": {
+                "type": "list",
+                "items": [
+                  "Odd min: 12 hollow rocks",
+                  "Even min: 10 leg lifts"
+                ]
+              },
+              "note": "Top off the trunk."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W02S4",
+          "title": "Upper Strength — Bench 5×5",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "5 × 5",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Pendlay Row",
+              "scheme": "4 × 6",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.6
+              }
+            },
+            {
+              "name": "Strict OHP",
+              "scheme": "4 × 5",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "ohp1RM",
+                "pct": 0.65
+              }
+            },
+            {
+              "name": "Chin-ups",
+              "scheme": "4 × AMRAP-1",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "AMRAP 12 — Row + WB + Run",
+              "scheme": "As many rounds as possible in 12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "400m Row",
+                  "12 Wall Balls",
+                  "200m Run"
+                ]
+              },
+              "note": "Aim 4–5 rounds. Honest row split."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W02S5",
+          "title": "Threshold Intervals",
+          "duration": 60,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "4 × 6 min @ threshold",
+              "scheme": "90s jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W02S6",
+          "title": "4-Station Sim",
+          "duration": 80,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "4 rounds continuous",
+              "scheme": "1000m run + 1 station",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.06,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: 500m Row",
+                    "R2: 20m Sandbag Lunges (race load)",
+                    "R3: 30 Wall Balls",
+                    "R4: 50m Sled Pull (race load)"
+                  ]
+                }
+              ],
+              "note": "Smooth and steady. No racing."
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "phase": "Base",
+      "test": false,
+      "theme": "Peak base week. Highest volume of phase, then we test.",
+      "sessions": [
+        {
+          "id": "W03S1",
+          "title": "Lower Strength — Squat 5×4 + Deficit DL",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "5 × 4",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Deficit Deadlift (2.5cm)",
+              "scheme": "3 × 6",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.65
+              }
+            },
+            {
+              "name": "Bulgarian Split Squat",
+              "scheme": "3 × 8 / leg",
+              "rest": "90s",
+              "load": {
+                "type": "fixed",
+                "value": "2 × 20-22.5 kg DB"
+              }
+            },
+            {
+              "name": "Plank Up-Down",
+              "scheme": "3 × 10",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "EMOM 14 — Ski / Bodyweight Alt.",
+              "scheme": "14 min EMOM · alternating odd / even",
+              "load": {
+                "type": "list",
+                "items": [
+                  "Odd min: 12 cal SkiErg",
+                  "Even min: 8 burpees + 5 push-ups"
+                ]
+              },
+              "note": "Each minute starts on the bell. Rest is whatevers left of the minute."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W03S2",
+          "title": "Long Z2 Run",
+          "duration": 75,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "intent": "Aerobic capacity build. Stay easy.",
+          "warmup": [
+            "5 min walk-jog",
+            "Dynamic leg swings"
+          ],
+          "blocks": [
+            {
+              "name": "Continuous easy",
+              "scheme": "65 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1
+              },
+              "note": "Conversational. HR <75% max."
+            },
+            {
+              "name": "Strides",
+              "scheme": "6 × 20s",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.92
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W03S3",
+          "title": "Hybrid Triple — Run + WB + Burpee",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Compound the two weakest stations + run.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "6 rounds",
+              "scheme": "500m run + 25 wall balls + 8 burpee broad jumps · 90s rest",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "thresholdPaceSecPerKm",
+                  "factor": 1.03,
+                  "label": "run"
+                },
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                }
+              ],
+              "note": "Pace this. Round 6 should match round 1."
+            },
+            {
+              "name": "Core Triplet",
+              "scheme": "3 rounds for time · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "12 V-ups",
+                  "10 push-ups",
+                  "30s plank"
+                ]
+              },
+              "note": "Quick core cap. Hold the plank tight."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W03S4",
+          "title": "Upper Strength + Push Press",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "5 × 4",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Bent-Over Row",
+              "scheme": "4 × 6",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.65
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 4",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Weighted Pull-up",
+              "scheme": "4 × 5",
+              "rest": "120s",
+              "load": {
+                "type": "fixed",
+                "value": "Add 5-10 kg"
+              }
+            },
+            {
+              "name": "5 RFT — Row + Wall Balls",
+              "scheme": "5 rounds for time · target 14–16 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "400m Row",
+                  "10 Wall Balls"
+                ]
+              },
+              "note": "Unbroken wall balls every round."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W03S5",
+          "title": "Hill Repeats",
+          "duration": 55,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "intent": "Power for sled push + strength-endurance for hard runs.",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "8 × 90s steep hill",
+              "scheme": "Jog down recovery",
+              "load": {
+                "type": "rpe",
+                "value": 8
+              },
+              "note": "Drive knees, arms. 4-6% grade."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W03S6",
+          "title": "Half Hyrox @ Race Load",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "First true rehearsal at race loads. Conservative pace.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "4 rounds",
+              "scheme": "1000m run + 1 station at race load",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.05,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: SkiErg 1000m",
+                    "R2: Sled Push 50m (race load)",
+                    "R3: Sled Pull 50m (race load)",
+                    "R4: 30 Burpee Broad Jumps"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "phase": "Base",
+      "test": true,
+      "theme": "TEST WEEK. Volume down. Three benchmarks.",
+      "sessions": [
+        {
+          "id": "W04S1",
+          "title": "Prime — Light Squat + Bench",
+          "duration": 45,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "intent": "Sharpen, don't tire. Loads 75% only.",
+          "warmup": [
+            "5 min bike + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "3 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Bench Press",
+              "scheme": "3 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Plank",
+              "scheme": "3 × 45s",
+              "load": {
+                "type": "bw"
+              }
+            }
+          ],
+          "cooldown": [
+            "Walk"
+          ]
+        },
+        {
+          "id": "W04S2",
+          "title": "Easy Shake",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "blocks": [
+            {
+              "name": "Easy jog",
+              "scheme": "25 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1.05
+              }
+            },
+            {
+              "name": "Pickups",
+              "scheme": "4 × 20s",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.95
+              }
+            }
+          ]
+        },
+        {
+          "id": "W04S3",
+          "title": "TEST — 3RM Back Squat",
+          "duration": 60,
+          "focus": "test",
+          "defaultDay": "Wed",
+          "warmup": [
+            "10 min bike + dynamic",
+            "Ramp sets: 5 @ 40%, 5 @ 50%, 3 @ 60%, 3 @ 70%, 2 @ 80%, 1 @ 85%"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: 3RM Back Squat",
+              "scheme": "Up to 3 working sets to find true 3RM",
+              "load": {
+                "type": "label",
+                "value": "Open weight · 3 max attempts"
+              },
+              "note": "Log the heaviest clean 3. Update backSquat1RM = 3RM × 1.07 in Settings if new PB."
+            }
+          ],
+          "cooldown": [
+            "Stretch"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "3RM weight (kg)",
+              "RPE on top set",
+              "Bar speed feel"
+            ],
+            "instructions": "Record weight, then update backSquat1RM in Settings (3RM × 1.07 ≈ 1RM)."
+          }
+        },
+        {
+          "id": "W04S4",
+          "title": "Mobility + Easy Spin",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Thu",
+          "blocks": [
+            {
+              "name": "Easy bike or row",
+              "scheme": "20 min Z1",
+              "load": {
+                "type": "rpe",
+                "value": 3
+              }
+            },
+            {
+              "name": "Full mobility flow",
+              "scheme": "10 min",
+              "load": {
+                "type": "bw"
+              },
+              "note": "Hips, T-spine, ankles."
+            }
+          ]
+        },
+        {
+          "id": "W04S5",
+          "title": "TEST — 5K Time Trial",
+          "duration": 60,
+          "focus": "test",
+          "defaultDay": "Fri",
+          "warmup": [
+            "15 min progressive jog",
+            "4 × 100m strides"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: 5K all out",
+              "scheme": "Flat route or track",
+              "load": {
+                "type": "label",
+                "value": "Race effort"
+              },
+              "note": "Even splits or slight negative. This sets thresholdPace going forward."
+            }
+          ],
+          "cooldown": [
+            "10 min easy walk-jog"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "5K time",
+              "Per-km splits",
+              "Avg HR if available",
+              "RPE"
+            ],
+            "instructions": "After test: thresholdPaceSecPerKm ≈ 5K pace + 10-15 sec/km. Update Settings."
+          }
+        },
+        {
+          "id": "W04S6",
+          "title": "TEST — Half Hyrox Sim",
+          "duration": 90,
+          "focus": "test",
+          "defaultDay": "Sat",
+          "intent": "The big benchmark. All splits captured.",
+          "warmup": [
+            "15 min progressive + race mobility + 2 × 30s strides"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: Half Hyrox @ race load",
+              "scheme": "4 rounds: 1km run + station, continuous",
+              "load": [
+                {
+                  "type": "label",
+                  "value": "Race effort throughout"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1 station: SkiErg 1000m",
+                    "R2 station: Sled Push 50m (race load)",
+                    "R3 station: Sled Pull 50m (race load)",
+                    "R4 station: 30 Burpee Broad Jumps"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "Total time",
+              "Each 1km run split",
+              "Each station time",
+              "Transition seconds",
+              "RPE final round"
+            ],
+            "instructions": "SCREENSHOT your watch summary + log in Tests tab. Send to Claude in chat for plan refresh."
+          }
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "phase": "Build",
+      "test": false,
+      "theme": "Phase shift. Heavier strength, threshold runs, drilling compromised running.",
+      "sessions": [
+        {
+          "id": "W05S1",
+          "title": "Lower — Squat Top Set + Back Off",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat top set",
+              "scheme": "1 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Back Squat back-off",
+              "scheme": "3 × 5",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Deadlift",
+              "scheme": "3 × 5",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Heavy DB Walking Lunge",
+              "scheme": "3 × 16 steps",
+              "rest": "120s",
+              "load": {
+                "type": "fixed",
+                "value": "2 × 22.5-25 kg DB"
+              },
+              "note": "Loaded lunge work is non-negotiable for you."
+            },
+            {
+              "name": "Pallof Press",
+              "scheme": "3 × 10 / side",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "For Time — Ski 1k + 30 WB + Ski 1k",
+              "scheme": "For time · target 12–14 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "1000m SkiErg",
+                  "30 Wall Balls",
+                  "1000m SkiErg"
+                ]
+              },
+              "note": "Sandwich. Pace the first ski. Second ski with cooked arms — thats the point."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W05S2",
+          "title": "Threshold Intervals — Long",
+          "duration": 65,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "5 min walk-jog",
+            "Dynamic leg swings"
+          ],
+          "blocks": [
+            {
+              "name": "3 × 10 min @ threshold",
+              "scheme": "2 min jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              },
+              "note": "Hold the third rep."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W05S3",
+          "title": "Compromised Run — Lunge → Run",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "THE priority session. Run-off-lunge is your biggest weakness.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "5 rounds",
+              "scheme": "20m sandbag lunges + 800m run · 90s rest",
+              "load": [
+                {
+                  "type": "station",
+                  "ref": "sandbagLoad",
+                  "label": "sandbag"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.05,
+                  "label": "run"
+                }
+              ],
+              "note": "First run will feel awful. Round 5 should match round 1. This is your race day."
+            },
+            {
+              "name": "Anti-Rotation Stiff Core",
+              "scheme": "3 rounds · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "30s side plank each side",
+                  "10 Pallof press each side"
+                ]
+              },
+              "note": "Stiff core protects sandbag-lunge position."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W05S4",
+          "title": "Upper — Heavy Press + Pulling Volume",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press top set",
+              "scheme": "1 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Bench back-off",
+              "scheme": "3 × 5",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Weighted Pull-up",
+              "scheme": "5 × 4",
+              "rest": "120s",
+              "load": {
+                "type": "fixed",
+                "value": "Add 10-15 kg"
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "5 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Face Pulls",
+              "scheme": "3 × 15",
+              "load": {
+                "type": "fixed",
+                "value": "Light band/cable"
+              }
+            },
+            {
+              "name": "For Time — 2000m Row",
+              "scheme": "Single piece for time · pacing test",
+              "load": {
+                "type": "split",
+                "ref": "row2KSplit",
+                "factor": 1
+              },
+              "note": "Even pacing. First 500m feels easy, last 500m push. Compare to Wk 8 test."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W05S5",
+          "title": "Race-Pace Repeats",
+          "duration": 55,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "8 × 800m @ Hyrox target pace",
+              "scheme": "60s standing rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              },
+              "note": "Goal: every rep at 4:10/km flat. This is THE race-winning pace."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W05S6",
+          "title": "Half Hyrox @ Race Load — Smooth",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Race rehearsal: focus stations 2-4 of race (sled pull → burpees → row).",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "4 rounds, continuous",
+              "scheme": "1km run + station at race load",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.04,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: Sled Pull 50m",
+                    "R2: 30 BBJ",
+                    "R3: Row 1000m",
+                    "R4: 100m Farmers Carry (race load)"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "phase": "Build",
+      "test": false,
+      "theme": "Push the lunge-run combo. Volume slightly up on intervals.",
+      "sessions": [
+        {
+          "id": "W06S1",
+          "title": "Lower — Squat + Sandbag Conditioning",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "4 × 4",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Romanian Deadlift",
+              "scheme": "4 × 6",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.7
+              }
+            },
+            {
+              "name": "Sandbag-Style Carries (Bear Hug)",
+              "scheme": "4 × 40m",
+              "rest": "90s",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              },
+              "note": "Race-load sandbag bear-hug carries. Builds the holding position."
+            },
+            {
+              "name": "Reverse Lunge (BB front rack)",
+              "scheme": "3 × 10 / leg",
+              "rest": "90s",
+              "load": {
+                "type": "pct",
+                "ref": "frontSquat1RM",
+                "pct": 0.4
+              }
+            },
+            {
+              "name": "AMRAP 12 — Ski + Burpees + KB",
+              "scheme": "As many rounds as possible in 12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "200m SkiErg (~12 cal)",
+                  "8 burpees",
+                  "10 KB Swings (24 kg)"
+                ]
+              },
+              "note": "Aim 5–6 rounds."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W06S2",
+          "title": "Threshold Cruise Intervals",
+          "duration": 65,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "5 × 6 min @ threshold",
+              "scheme": "75s jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W06S3",
+          "title": "Compromised Run — Burpee → Run",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Drilling Run 4 of Hyrox (post-burpee).",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "6 rounds",
+              "scheme": "10 BBJ + 600m run · 75s rest",
+              "load": [
+                {
+                  "type": "label",
+                  "value": "10 BBJ full extension"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.03,
+                  "label": "run"
+                }
+              ],
+              "note": "Calm breathing on burpees — keep next 50m runnable."
+            },
+            {
+              "name": "Core EMOM 5",
+              "scheme": "5 min EMOM · alternating",
+              "load": {
+                "type": "list",
+                "items": [
+                  "Odd min: 12 hollow rocks",
+                  "Even min: 10 leg lifts"
+                ]
+              },
+              "note": "Top off the trunk."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W06S4",
+          "title": "Upper — Bench Volume + Carry",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "4 × 4",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Single-arm DB Row",
+              "scheme": "4 × 8 / side",
+              "rest": "90s",
+              "load": {
+                "type": "fixed",
+                "value": "Heavy DB"
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 5",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.78
+              }
+            },
+            {
+              "name": "Heavy Farmers Carry",
+              "scheme": "4 × 50m",
+              "rest": "75s",
+              "load": {
+                "type": "station",
+                "ref": "farmersLoad"
+              },
+              "note": "Race-load farmers. Already a strength — maintain."
+            },
+            {
+              "name": "AMRAP 12 — Row + WB + Run",
+              "scheme": "As many rounds as possible in 12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "250m Row",
+                  "10 Wall Balls",
+                  "200m Run"
+                ]
+              },
+              "note": "Aim 5+ rounds."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W06S5",
+          "title": "Race-Pace 1000s",
+          "duration": 55,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "6 × 1000m @ Hyrox target pace",
+              "scheme": "90s jog rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              },
+              "note": "Goal: every km within 5s of 4:10."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W06S6",
+          "title": "Half Hyrox — Run-Heavy Sim",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "4 rounds",
+              "scheme": "1.2km run + station at race load",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.05,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: SkiErg 1000m",
+                    "R2: 30 Wall Balls",
+                    "R3: 20m Sandbag Lunges",
+                    "R4: 30 BBJ"
+                  ]
+                }
+              ],
+              "note": "Slightly longer runs = run-economy stress at race load."
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "phase": "Build",
+      "test": false,
+      "theme": "Highest volume of Build. Then we deload-test.",
+      "sessions": [
+        {
+          "id": "W07S1",
+          "title": "Lower — Squat + Heavy Pulls",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "5 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Deadlift",
+              "scheme": "4 × 4",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Front-Rack BB Lunge",
+              "scheme": "3 × 8 / leg",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "frontSquat1RM",
+                "pct": 0.45
+              }
+            },
+            {
+              "name": "Side Plank w/ Reach",
+              "scheme": "3 × 10 / side",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "5 RFT — Ski + Run + BBJ",
+              "scheme": "5 rounds for time · target 13–15 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "250m SkiErg",
+                  "200m Run",
+                  "8 Burpee Broad Jumps"
+                ]
+              },
+              "note": "Drilling BBJ → run transition. Every round."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W07S2",
+          "title": "Threshold + Surges",
+          "duration": 65,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "4 × (5 min threshold + 1 min @ 5K)",
+              "scheme": "2 min jog between sets",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              },
+              "note": "Surge is at 5K pace."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W07S3",
+          "title": "Compromised Run — Wall Ball → Run",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Final station fatigue carries into Run 8. Train it.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "5 rounds",
+              "scheme": "30 wall balls + 700m run · 90s rest",
+              "load": [
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.04,
+                  "label": "run"
+                }
+              ],
+              "note": "30/0 or 20/10 split — find a sustainable pattern. Then RUN."
+            },
+            {
+              "name": "Core Triplet",
+              "scheme": "3 rounds for time · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "12 V-ups",
+                  "10 push-ups",
+                  "30s plank"
+                ]
+              },
+              "note": "Quick core cap. Hold the plank tight."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W07S4",
+          "title": "Upper — Bench 5×3 + Pull Up Cluster",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "5 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Weighted Pull-up",
+              "scheme": "6 × 3",
+              "rest": "120s",
+              "load": {
+                "type": "fixed",
+                "value": "Add 15-20 kg"
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "DB Snatch",
+              "scheme": "4 × 8 alternating",
+              "rest": "60s",
+              "load": {
+                "type": "fixed",
+                "value": "22.5 kg DB"
+              },
+              "note": "Hyrox-style alternating snatch. Hip drive."
+            },
+            {
+              "name": "5 RFT — Row + Wall Balls",
+              "scheme": "5 rounds for time · target 13–15 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "500m Row",
+                  "15 Wall Balls"
+                ]
+              },
+              "note": "Unbroken wall balls. Target row 1:55/500m."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W07S5",
+          "title": "Race-Pace Ladder",
+          "duration": 60,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "400-800-1200-800-400 @ Hyrox pace",
+              "scheme": "60s rest between reps",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              },
+              "note": "Ladder simulates varying pacing demands within the race."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W07S6",
+          "title": "6-Station Hyrox Sim",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "First 75% of full Hyrox. All stations at race load.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "6 rounds continuous",
+              "scheme": "1km run + station at race load",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.05,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: SkiErg 1000m",
+                    "R2: Sled Push 50m",
+                    "R3: Sled Pull 50m",
+                    "R4: 30 BBJ",
+                    "R5: Row 1000m",
+                    "R6: 100m Farmers Carry"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "phase": "Build",
+      "test": true,
+      "theme": "TEST WEEK 2. Deload + 3 benchmarks.",
+      "sessions": [
+        {
+          "id": "W08S1",
+          "title": "Prime — Squat Speed Doubles",
+          "duration": 45,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min bike + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "5 × 2 fast",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.7
+              },
+              "note": "Bar speed. Don't grind."
+            },
+            {
+              "name": "Pull-ups",
+              "scheme": "3 × 5",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "Plank",
+              "scheme": "3 × 45s",
+              "load": {
+                "type": "bw"
+              }
+            }
+          ],
+          "cooldown": [
+            "Walk"
+          ]
+        },
+        {
+          "id": "W08S2",
+          "title": "Easy Shake + Strides",
+          "duration": 35,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "blocks": [
+            {
+              "name": "Easy jog",
+              "scheme": "25 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1.05
+              }
+            },
+            {
+              "name": "6 × 30s strides",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.93
+              }
+            }
+          ]
+        },
+        {
+          "id": "W08S3",
+          "title": "TEST — 3RM Deadlift",
+          "duration": 60,
+          "focus": "test",
+          "defaultDay": "Wed",
+          "warmup": [
+            "10 min bike + mobility",
+            "Ramp: 5@40, 5@55, 3@70, 2@80, 1@88"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: 3RM Deadlift",
+              "scheme": "Up to 3 working attempts at 3RM",
+              "load": {
+                "type": "label",
+                "value": "Open weight"
+              }
+            }
+          ],
+          "cooldown": [
+            "Stretch"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "3RM weight (kg)",
+              "RPE on top set"
+            ],
+            "instructions": "Update deadlift1RM ≈ 3RM × 1.07."
+          }
+        },
+        {
+          "id": "W08S4",
+          "title": "Mobility + Spin",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Thu",
+          "blocks": [
+            {
+              "name": "Easy bike",
+              "scheme": "20 min",
+              "load": {
+                "type": "rpe",
+                "value": 3
+              }
+            },
+            {
+              "name": "Full mobility flow",
+              "scheme": "10 min",
+              "load": {
+                "type": "bw"
+              }
+            }
+          ]
+        },
+        {
+          "id": "W08S5",
+          "title": "TEST — 2K Row + 1K SkiErg",
+          "duration": 60,
+          "focus": "test",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min progressive row + ski"
+          ],
+          "blocks": [
+            {
+              "name": "TEST 1: 2000m Row all-out",
+              "load": {
+                "type": "label",
+                "value": "Race effort"
+              }
+            },
+            {
+              "name": "Easy spin",
+              "scheme": "10 min",
+              "load": {
+                "type": "rpe",
+                "value": 3
+              }
+            },
+            {
+              "name": "TEST 2: 1000m SkiErg all-out",
+              "load": {
+                "type": "label",
+                "value": "Race effort"
+              }
+            }
+          ],
+          "cooldown": [
+            "10 min walk"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "2K row time + avg split",
+              "1K Ski time + avg split"
+            ],
+            "instructions": "Update row2KSplit and ski1KSplit in Settings (per-500m avg)."
+          }
+        },
+        {
+          "id": "W08S6",
+          "title": "TEST — Half Hyrox Sim",
+          "duration": 90,
+          "focus": "test",
+          "defaultDay": "Sat",
+          "intent": "Second benchmark sim. Compare to Week 4.",
+          "warmup": [
+            "15 min progressive + race mobility"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: Half Hyrox @ race load",
+              "scheme": "4 rounds: 1km run + station",
+              "load": [
+                {
+                  "type": "label",
+                  "value": "Race effort"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1 station: SkiErg 1000m",
+                    "R2 station: Sled Push 50m",
+                    "R3 station: Sled Pull 50m",
+                    "R4 station: 30 BBJ"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk + foam roll"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "Total time",
+              "Each 1km split",
+              "Each station time",
+              "Transitions",
+              "RPE final round"
+            ],
+            "instructions": "SCREENSHOT + log in Tests tab. Send to Claude for Plan v3 update."
+          }
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "phase": "Peak",
+      "test": false,
+      "theme": "Phase shift. VO2 max work + Olympic lift power + race-pace stations.",
+      "sessions": [
+        {
+          "id": "W09S1",
+          "title": "Power Lower — Cleans + Squat",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Power Clean",
+              "scheme": "6 × 2",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "clean1RM",
+                "pct": 0.75
+              },
+              "note": "Speed under the bar. Catch in quarter squat."
+            },
+            {
+              "name": "Back Squat",
+              "scheme": "5 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Walking Lunge w/ Sandbag",
+              "scheme": "3 × 30m",
+              "rest": "120s",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              },
+              "note": "Bear hug carry into lunge. Race position."
+            },
+            {
+              "name": "Pallof Press",
+              "scheme": "3 × 10 / side",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "21-15-9 For Time — Ski + Row + Burpees",
+              "scheme": "For time · target 10–12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "21-15-9 cal SkiErg",
+                  "21-15-9 cal Row",
+                  "21-15-9 burpees"
+                ]
+              },
+              "note": "Classic triplet. Hard from the gun."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W09S2",
+          "title": "VO2 Max — 5 × 4 min",
+          "duration": 60,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "5 × 4 min @ 5K-3K pace",
+              "scheme": "2 min jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "race5KSecPerKm",
+                "factor": 0.97
+              },
+              "note": "Hard but controlled. RPE 8-9."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W09S3",
+          "title": "Race-Pace Hybrid — Run + WB + Lunge",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Race intensity. All your big-3 weaknesses chained.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "4 rounds",
+              "scheme": "600m run + 25 wall balls + 10m sandbag lunges · 2 min rest",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                },
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                },
+                {
+                  "type": "station",
+                  "ref": "sandbagLoad",
+                  "label": "sandbag"
+                }
+              ],
+              "note": "Race pace throughout. This IS your race."
+            },
+            {
+              "name": "Anti-Rotation Stiff Core",
+              "scheme": "3 rounds · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "30s side plank each side",
+                  "10 Pallof press each side"
+                ]
+              },
+              "note": "Stiff core protects sandbag-lunge position."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W09S4",
+          "title": "Upper — Push Press Power + Pulls",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Push Press",
+              "scheme": "6 × 2",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Bench Press",
+              "scheme": "4 × 4",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Weighted Pull-up",
+              "scheme": "5 × 3",
+              "rest": "120s",
+              "load": {
+                "type": "fixed",
+                "value": "Add 15-20 kg"
+              }
+            },
+            {
+              "name": "DB Snatch",
+              "scheme": "4 × 10 alt.",
+              "rest": "60s",
+              "load": {
+                "type": "fixed",
+                "value": "22.5-25 kg"
+              }
+            },
+            {
+              "name": "Row 1k → 50 WB → Row 1k",
+              "scheme": "For time · target 12–14 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "1000m Row (race split)",
+                  "50 Wall Balls (any breakdown)",
+                  "1000m Row (survival pace)"
+                ]
+              },
+              "note": "First row at race split. WB broken. Second row whatever you have left."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W09S5",
+          "title": "Tempo + Strides",
+          "duration": 50,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "20 min @ marathon pace",
+              "scheme": "Continuous",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1.08
+              },
+              "note": "Aerobic stress without threshold burn."
+            },
+            {
+              "name": "6 × 100m strides",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.9
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W09S6",
+          "title": "Full Hyrox 75% — Race-Load Sim",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Six stations at race load with race-pace runs. Hardest workout of phase.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "6 rounds at race effort",
+              "scheme": "1km run + station, continuous",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.03,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: SkiErg 1000m",
+                    "R2: Sled Push 50m",
+                    "R3: Sled Pull 50m",
+                    "R4: 30 BBJ",
+                    "R5: Row 1000m",
+                    "R6: 100m Farmers Carry"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "phase": "Peak",
+      "test": false,
+      "theme": "VO2 ceiling + power. Highest intensity week.",
+      "sessions": [
+        {
+          "id": "W10S1",
+          "title": "Power Lower — Cleans Heavy",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Power Clean",
+              "scheme": "5 × 2",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "clean1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Back Squat",
+              "scheme": "5 × 2",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.87
+              }
+            },
+            {
+              "name": "Sandbag Bear-Hug Lunge",
+              "scheme": "3 × 20m",
+              "rest": "120s",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              }
+            },
+            {
+              "name": "Hanging Leg Raises",
+              "scheme": "3 × 12",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "AMRAP 12 — Ski + Row + BBJ",
+              "scheme": "As many rounds as possible in 12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "250m SkiErg",
+                  "200m Row",
+                  "8 Burpee Broad Jumps"
+                ]
+              },
+              "note": "Aim 5+ rounds. BBJ technique stays clean under fatigue."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W10S2",
+          "title": "VO2 — 12 × 400m",
+          "duration": 60,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "12 × 400m @ 3K pace",
+              "scheme": "200m jog recovery (75s)",
+              "load": {
+                "type": "pace",
+                "ref": "race5KSecPerKm",
+                "factor": 0.93
+              },
+              "note": "Smooth speed. Don't blow rep 4."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W10S3",
+          "title": "Race-Pace Hybrid — Burpee Focus",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "5 rounds",
+              "scheme": "12 BBJ + 800m run · 90s rest",
+              "load": [
+                {
+                  "type": "label",
+                  "value": "12 full BBJ"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                }
+              ]
+            },
+            {
+              "name": "Core EMOM 5",
+              "scheme": "5 min EMOM · alternating",
+              "load": {
+                "type": "list",
+                "items": [
+                  "Odd min: 12 hollow rocks",
+                  "Even min: 10 leg lifts"
+                ]
+              },
+              "note": "Top off the trunk."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W10S4",
+          "title": "Upper — Heavy Bench + Push Press",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "5 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "5 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Pendlay Row",
+              "scheme": "4 × 5",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.7
+              }
+            },
+            {
+              "name": "DB Snatch",
+              "scheme": "5 × 8 alt.",
+              "rest": "60s",
+              "load": {
+                "type": "fixed",
+                "value": "25 kg DB"
+              }
+            },
+            {
+              "name": "8 × 500m Row @ Race Split",
+              "scheme": "8 rounds · 60s rest between",
+              "load": {
+                "type": "split",
+                "ref": "row2KSplit",
+                "factor": 0.98
+              },
+              "note": "Below your goal 2k split. Race-pace lock-in."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W10S5",
+          "title": "Race-Pace 1km Repeats",
+          "duration": 55,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "8 × 1000m @ Hyrox target",
+              "scheme": "60s standing rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              },
+              "note": "Tight cluster. Every km under 4:12."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W10S6",
+          "title": "Full Hyrox 75% — Variations",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "6 rounds",
+              "scheme": "1km run + race-load station",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.03,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: SkiErg 1000m",
+                    "R2: 30 Wall Balls",
+                    "R3: Sled Push 50m",
+                    "R4: 20m Sandbag Lunges",
+                    "R5: Sled Pull 50m",
+                    "R6: 30 BBJ"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "phase": "Peak",
+      "test": false,
+      "theme": "Final peak push. Then deload-test.",
+      "sessions": [
+        {
+          "id": "W11S1",
+          "title": "Power Lower — Cleans + Heavy Squat",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Power Clean",
+              "scheme": "5 × 1 + drop set 1 × 3 @ 75%",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "clean1RM",
+                "pct": 0.88
+              }
+            },
+            {
+              "name": "Back Squat",
+              "scheme": "4 × 2",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.9
+              },
+              "note": "Heaviest session of peak. Quality only."
+            },
+            {
+              "name": "Sandbag Lunge",
+              "scheme": "3 × 30m",
+              "rest": "120s",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              }
+            },
+            {
+              "name": "Ab Wheel",
+              "scheme": "3 × 10",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "Death by Ski Calories",
+              "scheme": "Min 1: 1 cal · Min 2: 2 cal · ... until you fail to finish in time",
+              "load": {
+                "type": "label",
+                "value": "Add 1 cal each minute"
+              },
+              "note": "Most people fail around minute 13–15. Mental more than physical."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W11S2",
+          "title": "VO2 — 6 × 1000m",
+          "duration": 65,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "6 × 1000m @ 5K pace",
+              "scheme": "75s jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "race5KSecPerKm",
+                "factor": 1
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W11S3",
+          "title": "Race-Pace Hybrid — Wall Ball Capacity",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Big wall ball session. 100 reps in 4 sets.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "4 rounds",
+              "scheme": "25 wall balls + 800m run · 90s rest",
+              "load": [
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                }
+              ],
+              "note": "Unbroken wall ball every round. That's the goal."
+            },
+            {
+              "name": "Core Triplet",
+              "scheme": "3 rounds for time · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "12 V-ups",
+                  "10 push-ups",
+                  "30s plank"
+                ]
+              },
+              "note": "Quick core cap. Hold the plank tight."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W11S4",
+          "title": "Upper — Heavy Push Press + Pulls",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Push Press",
+              "scheme": "5 × 2",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.88
+              }
+            },
+            {
+              "name": "Bench Press",
+              "scheme": "4 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Weighted Pull-up",
+              "scheme": "4 × 3",
+              "rest": "120s",
+              "load": {
+                "type": "fixed",
+                "value": "Add 20 kg"
+              }
+            },
+            {
+              "name": "BB Snatch (Power)",
+              "scheme": "5 × 2",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "snatch1RM",
+                "pct": 0.75
+              },
+              "note": "Power snatch, not full. Hip drive practice."
+            },
+            {
+              "name": "AMRAP 12 — Row + WB + BBJ",
+              "scheme": "As many rounds as possible in 12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "400m Row",
+                  "12 Wall Balls",
+                  "5 Burpee Broad Jumps"
+                ]
+              },
+              "note": "Race-specific triplet. Aim 4 rounds or more."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W11S5",
+          "title": "Cruise Intervals — Long",
+          "duration": 60,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "5 min walk-jog",
+            "Dynamic leg swings"
+          ],
+          "blocks": [
+            {
+              "name": "3 × 10 min @ threshold-fast",
+              "scheme": "2 min jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 0.98
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W11S6",
+          "title": "FULL HYROX SIM — First",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "First full 8-station Hyrox at sub-max effort. Get the feel of length.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "Full Hyrox @ ~85% effort",
+              "scheme": "8 × (1km + station). Aim total ~1:14-1:16.",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.07,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: SkiErg 1000m",
+                    "R2: Sled Push 50m (race load)",
+                    "R3: Sled Pull 50m (race load)",
+                    "R4: 80m Burpee Broad Jump",
+                    "R5: Row 1000m",
+                    "R6: 200m Farmers Carry (race load)",
+                    "R7: 100m Sandbag Lunges (race load)",
+                    "R8: 100 Wall Balls @ race load"
+                  ]
+                }
+              ],
+              "note": "FIRST FULL SIM. Don't race. Get the feel. Log splits."
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 12,
+      "phase": "Peak",
+      "test": true,
+      "theme": "TEST WEEK 3. Calibrate before race-specific phase.",
+      "sessions": [
+        {
+          "id": "W12S1",
+          "title": "Prime — Speed Doubles",
+          "duration": 45,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min bike + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "4 × 2 fast",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.7
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 2 fast",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.7
+              }
+            },
+            {
+              "name": "Plank",
+              "scheme": "3 × 45s",
+              "load": {
+                "type": "bw"
+              }
+            }
+          ],
+          "cooldown": [
+            "Walk"
+          ]
+        },
+        {
+          "id": "W12S2",
+          "title": "Easy Shake",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "blocks": [
+            {
+              "name": "Easy jog",
+              "scheme": "25 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1.05
+              }
+            },
+            {
+              "name": "4 × 20s pickups",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.95
+              }
+            }
+          ]
+        },
+        {
+          "id": "W12S3",
+          "title": "TEST — 3RM Bench Press",
+          "duration": 50,
+          "focus": "test",
+          "defaultDay": "Wed",
+          "warmup": [
+            "10 min easy + ramp 5@40, 5@55, 3@70, 2@80"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: 3RM Bench",
+              "scheme": "Up to 3 working attempts",
+              "load": {
+                "type": "label",
+                "value": "Open weight"
+              }
+            }
+          ],
+          "cooldown": [
+            "Stretch"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "3RM weight"
+            ],
+            "instructions": "Update bench1RM ≈ 3RM × 1.07."
+          }
+        },
+        {
+          "id": "W12S4",
+          "title": "Mobility + Easy Bike",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Thu",
+          "blocks": [
+            {
+              "name": "Easy bike",
+              "scheme": "20 min Z1",
+              "load": {
+                "type": "rpe",
+                "value": 3
+              }
+            },
+            {
+              "name": "Mobility flow",
+              "scheme": "10 min",
+              "load": {
+                "type": "bw"
+              }
+            }
+          ]
+        },
+        {
+          "id": "W12S5",
+          "title": "TEST — 5K Time Trial",
+          "duration": 60,
+          "focus": "test",
+          "defaultDay": "Fri",
+          "warmup": [
+            "15 min progressive + 4 strides"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: 5K all-out",
+              "scheme": "Flat route or track",
+              "load": {
+                "type": "label",
+                "value": "Race effort"
+              }
+            }
+          ],
+          "cooldown": [
+            "10 min easy"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "5K time",
+              "Per-km splits",
+              "Avg HR",
+              "RPE"
+            ],
+            "instructions": "Compare to Week 4 test. Update thresholdPaceSecPerKm if pace improved."
+          }
+        },
+        {
+          "id": "W12S6",
+          "title": "TEST — FULL HYROX SIM",
+          "duration": 90,
+          "focus": "test",
+          "defaultDay": "Sat",
+          "intent": "Big day. Full Hyrox at race effort. Predicts race time within 1-2 minutes.",
+          "warmup": [
+            "20 min progressive + race mobility + 2 × 30s strides"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: FULL Hyrox @ race effort",
+              "scheme": "8 × (1km + station). All race loads.",
+              "load": [
+                {
+                  "type": "label",
+                  "value": "RACE EFFORT"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "R1: SkiErg 1000m",
+                    "R2: Sled Push 50m",
+                    "R3: Sled Pull 50m",
+                    "R4: 80m Burpee Broad Jump",
+                    "R5: Row 1000m",
+                    "R6: 200m Farmers Carry",
+                    "R7: 100m Sandbag Lunges",
+                    "R8: 100 Wall Balls"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "20 min walk + foam roll + nutrition"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "TOTAL TIME",
+              "Each run split (all 8)",
+              "Each station time",
+              "Each transition",
+              "RPE per round"
+            ],
+            "instructions": "BIG SCREENSHOT moment. Capture everything. Send to Claude. Plan v4 will be tuned to your actual gaps from this sim."
+          }
+        }
+      ]
+    },
+    {
+      "number": 13,
+      "phase": "Race-Specific",
+      "test": false,
+      "theme": "Phase shift. Every session has race specificity. Maintain strength, sharpen running, drill stations.",
+      "sessions": [
+        {
+          "id": "W13S1",
+          "title": "Strength Maintenance + Sandbag",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "intent": "Strength stays. Volume drops, intensity holds.",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "4 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Deadlift",
+              "scheme": "3 × 3",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "deadlift1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Sandbag Lunges (race load)",
+              "scheme": "4 × 25m",
+              "rest": "75s",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              },
+              "note": "Race-load only from now on."
+            },
+            {
+              "name": "Sled Push (race load)",
+              "scheme": "4 × 25m",
+              "rest": "60s",
+              "load": {
+                "type": "station",
+                "ref": "sledPushLoad"
+              }
+            },
+            {
+              "name": "Hyrox Triplet × 3 RFT",
+              "scheme": "3 rounds for time · race effort · target 11–13 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "200m Run",
+                  "20 Wall Balls",
+                  "5 Burpee Broad Jumps"
+                ]
+              },
+              "note": "Run after WB and BBJ — your two weakest combos from Malaga."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W13S2",
+          "title": "Race-Pace Repeats",
+          "duration": 55,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "10 × 800m @ Hyrox pace",
+              "scheme": "60s standing rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W13S3",
+          "title": "Compromised Run — All Three",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Drill all 3 race-day combos that hurt you. Lunge-run, Burpee-run, WB-run.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "3 sets",
+              "scheme": "[10m sandbag lunge + 400m run]+[10 BBJ + 400m run]+[20 wall balls + 400m run] · 3 min rest between SETS",
+              "load": [
+                {
+                  "type": "station",
+                  "ref": "sandbagLoad",
+                  "label": "sandbag"
+                },
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.02,
+                  "label": "all runs"
+                }
+              ],
+              "note": "Each set is 30m lunge + 30 burpees + 60 wall balls + 1200m. Pace it."
+            },
+            {
+              "name": "Anti-Rotation Stiff Core",
+              "scheme": "3 rounds · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "30s side plank each side",
+                  "10 Pallof press each side"
+                ]
+              },
+              "note": "Stiff core protects sandbag-lunge position."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W13S4",
+          "title": "Upper Maintenance + Station Drills",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "3 × 5",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.75
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 3",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "SkiErg 4 × 500m",
+              "scheme": "60s rest",
+              "rest": "60s",
+              "load": {
+                "type": "split",
+                "ref": "ski1KSplit",
+                "factor": 0.98
+              }
+            },
+            {
+              "name": "Row 4 × 500m",
+              "scheme": "60s rest",
+              "rest": "60s",
+              "load": {
+                "type": "split",
+                "ref": "row2KSplit",
+                "factor": 0.95
+              },
+              "note": "Push these. Target Row split: 1:55."
+            },
+            {
+              "name": "100 Wall Balls For Time",
+              "scheme": "100 reps · any breakdown · target sub 7 min",
+              "load": {
+                "type": "station",
+                "ref": "wallBallLoad"
+              },
+              "note": "Capacity test. Try 30/30/20/20 or 25 × 4. Find what works."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W13S5",
+          "title": "Tempo + Race Pace Mix",
+          "duration": 55,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "3 × (5 min threshold + 3 min Hyrox pace)",
+              "scheme": "2 min jog between sets",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              },
+              "note": "Surge to Hyrox target pace for 3 min."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W13S6",
+          "title": "Full Hyrox @ Race Effort",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Full Hyrox at 95% effort. Practice nutrition, transitions, mental cues.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "FULL Hyrox",
+              "scheme": "8 × (1km + station) continuous",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.02,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "Full race order: SkiErg → SledPush → SledPull → BBJ → Row → Farmers → SandbagLunges → WallBalls"
+                  ]
+                }
+              ],
+              "note": "Wear race kit. Use race fueling. Test mental cues."
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 14,
+      "phase": "Race-Specific",
+      "test": false,
+      "theme": "Sharpen running. Hold strength. Top week of race-specific volume.",
+      "sessions": [
+        {
+          "id": "W14S1",
+          "title": "Strength + Station Power",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "5 × 2",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Power Clean",
+              "scheme": "5 × 1",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "clean1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Sled Push (race load)",
+              "scheme": "5 × 25m",
+              "rest": "75s",
+              "load": {
+                "type": "station",
+                "ref": "sledPushLoad"
+              }
+            },
+            {
+              "name": "Sled Pull (race load)",
+              "scheme": "5 × 25m",
+              "rest": "75s",
+              "load": {
+                "type": "station",
+                "ref": "sledPullLoad"
+              }
+            },
+            {
+              "name": "Ski Sandwich — 800 + 30 BBJ + 800",
+              "scheme": "For time · target 12–14 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "800m SkiErg",
+                  "30 Burpee Broad Jumps",
+                  "800m SkiErg"
+                ]
+              },
+              "note": "BBJ in the middle. The second ski with destroyed legs is the lesson."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W14S2",
+          "title": "VO2 — 8 × 600m",
+          "duration": 60,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "8 × 600m @ 5K-3K pace",
+              "scheme": "60s jog recovery",
+              "load": {
+                "type": "pace",
+                "ref": "race5KSecPerKm",
+                "factor": 0.95
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W14S3",
+          "title": "Race-Day Triple Block",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Simulate the end of race — final 3 stations.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "2 sets",
+              "scheme": "[200m Farmers + 1km run + 50m Sandbag Lunge + 1km run + 50 Wall Balls + 1km run] · 5 min rest between",
+              "load": [
+                {
+                  "type": "station",
+                  "ref": "farmersLoad",
+                  "label": "farmers"
+                },
+                {
+                  "type": "station",
+                  "ref": "sandbagLoad",
+                  "label": "sandbag"
+                },
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1.02,
+                  "label": "runs"
+                }
+              ],
+              "note": "This is the back half of the race. The set with no break."
+            },
+            {
+              "name": "Core EMOM 5",
+              "scheme": "5 min EMOM · alternating",
+              "load": {
+                "type": "list",
+                "items": [
+                  "Odd min: 12 hollow rocks",
+                  "Even min: 10 leg lifts"
+                ]
+              },
+              "note": "Top off the trunk."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W14S4",
+          "title": "Upper + Erg Race-Pace",
+          "duration": 75,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "4 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 3",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "SkiErg @ race pace",
+              "scheme": "2 × 1000m",
+              "rest": "3 min",
+              "load": {
+                "type": "split",
+                "ref": "ski1KSplit",
+                "factor": 1
+              },
+              "note": "Target your goal Ski split exactly."
+            },
+            {
+              "name": "Row @ race pace",
+              "scheme": "2 × 1000m",
+              "rest": "3 min",
+              "load": {
+                "type": "split",
+                "ref": "row2KSplit",
+                "factor": 0.97
+              }
+            },
+            {
+              "name": "2 × (1k Row + 25 WB)",
+              "scheme": "2 rounds for time · 2 min rest between · target 12–14 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "1000m Row (target 1:55–2:00/500m)",
+                  "25 Wall Balls (unbroken if possible)"
+                ]
+              },
+              "note": "Race-effort row. WB capacity."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W14S5",
+          "title": "Race-Pace + Surges",
+          "duration": 50,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "5 × (800m @ Hyrox pace + 30s surge @ 5K pace)",
+              "scheme": "60s jog rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              },
+              "note": "Practice race-day surges out of transitions."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W14S6",
+          "title": "Full Hyrox — Top Effort",
+          "duration": 90,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Hardest sim of training. Predict race-day output.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "FULL HYROX — 95% effort",
+              "scheme": "Standard race order, race loads, race fuel",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                },
+                {
+                  "type": "label",
+                  "value": "Goal: get under 1:10. Sub 1:09 = on track for 1:08."
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 15,
+      "phase": "Race-Specific",
+      "test": false,
+      "theme": "Sharpen further. Volume comes down 15%. Intensity stays.",
+      "sessions": [
+        {
+          "id": "W15S1",
+          "title": "Strength — Heavy Singles + Stations",
+          "duration": 70,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "3 × 2",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.87
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 2",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Sandbag Lunge (race load)",
+              "scheme": "3 × 50m",
+              "rest": "120s",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              },
+              "note": "Race-distance reps."
+            },
+            {
+              "name": "Sled Push (race load)",
+              "scheme": "3 × 50m",
+              "rest": "120s",
+              "load": {
+                "type": "station",
+                "ref": "sledPushLoad"
+              }
+            },
+            {
+              "name": "Sharp Triplet × 3 — Race Pace",
+              "scheme": "3 rounds for time · race effort · target 10–12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "200m Run @ 4:10/km",
+                  "15 Wall Balls",
+                  "5 Burpee Broad Jumps"
+                ]
+              },
+              "note": "Race-day pace and movements. Crisp transitions."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W15S2",
+          "title": "Race-Pace Repeats — Tight",
+          "duration": 50,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "6 × 1000m @ Hyrox pace",
+              "scheme": "45s standing rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              },
+              "note": "Short rest = simulates race transition recovery."
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W15S3",
+          "title": "Race-Day Simulation — First 4 Stations",
+          "duration": 60,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "intent": "Drill the opening half at race intensity.",
+          "warmup": [
+            "5 min progressive jog or row",
+            "Primer · 5 air squats + 5 push-ups + 5 burpees"
+          ],
+          "blocks": [
+            {
+              "name": "Half Hyrox — first 4 stations",
+              "scheme": "Continuous race effort",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "1km run → SkiErg 1000m",
+                    "1km run → Sled Push 50m",
+                    "1km run → Sled Pull 50m",
+                    "1km run → 80m BBJ"
+                  ]
+                }
+              ],
+              "note": "Capture splits. Should feel under control."
+            },
+            {
+              "name": "Core Triplet",
+              "scheme": "3 rounds for time · ~5 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "12 V-ups",
+                  "10 push-ups",
+                  "30s plank"
+                ]
+              },
+              "note": "Quick core cap. Hold the plank tight."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin"
+          ]
+        },
+        {
+          "id": "W15S4",
+          "title": "Upper Sharpen + Carries",
+          "duration": 70,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min easy bike or row",
+            "Mobility flow · hips, T-spine, ankles",
+            "First lift: 2 ramp sets @ 40-60%"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "3 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Weighted Pull-up",
+              "scheme": "4 × 2",
+              "rest": "120s",
+              "load": {
+                "type": "fixed",
+                "value": "Add 20-25 kg"
+              }
+            },
+            {
+              "name": "Farmers Carry (race load)",
+              "scheme": "5 × 100m",
+              "rest": "75s",
+              "load": {
+                "type": "station",
+                "ref": "farmersLoad"
+              }
+            },
+            {
+              "name": "DB Snatch",
+              "scheme": "3 × 10 alt",
+              "rest": "60s",
+              "load": {
+                "type": "fixed",
+                "value": "25 kg"
+              }
+            },
+            {
+              "name": "30-20-10 For Time — Row + WB + KB",
+              "scheme": "For time · target 10–12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "30-20-10 cal Row",
+                  "30-20-10 Wall Balls",
+                  "30-20-10 KB Swings (24 kg)"
+                ]
+              },
+              "note": "Last set hurts. Thats the work."
+            }
+          ],
+          "cooldown": [
+            "5 min easy walk or spin",
+            "Foam roll quads + hips"
+          ]
+        },
+        {
+          "id": "W15S5",
+          "title": "Tempo + Strides",
+          "duration": 45,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min easy progressive jog",
+            "4 × 100m strides @ race pace"
+          ],
+          "blocks": [
+            {
+              "name": "15 min @ threshold",
+              "scheme": "Continuous",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              }
+            },
+            {
+              "name": "6 × 100m strides",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.92
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk-jog",
+            "Calf + hamstring stretch"
+          ]
+        },
+        {
+          "id": "W15S6",
+          "title": "Half Hyrox — Race Pace, Back 4",
+          "duration": 75,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Drill the back half. Where races are won or lost.",
+          "warmup": [
+            "12 min progressive jog",
+            "2 × 100m strides + station-specific primer"
+          ],
+          "blocks": [
+            {
+              "name": "Back 4 stations at race load + pace",
+              "scheme": "4 × (1km + station)",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "1km run → Row 1000m",
+                    "1km run → 200m Farmers (race load)",
+                    "1km run → 100m Sandbag Lunges (race load)",
+                    "1km run → 100 Wall Balls (race load)"
+                  ]
+                }
+              ],
+              "note": "These are the stations that broke you last race. Now you own them."
+            }
+          ],
+          "cooldown": [
+            "10 min walk",
+            "Foam roll 5 min"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "phase": "Race-Specific",
+      "test": true,
+      "theme": "TEST WEEK 4. Last big test. Then taper.",
+      "sessions": [
+        {
+          "id": "W16S1",
+          "title": "Prime — Speed Doubles",
+          "duration": 40,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min bike + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "4 × 2 fast",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.72
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "4 × 2 fast",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.72
+              }
+            },
+            {
+              "name": "Plank",
+              "scheme": "3 × 45s",
+              "load": {
+                "type": "bw"
+              }
+            }
+          ],
+          "cooldown": [
+            "Walk"
+          ]
+        },
+        {
+          "id": "W16S2",
+          "title": "Easy Shake",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "blocks": [
+            {
+              "name": "Easy jog",
+              "scheme": "25 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1.05
+              }
+            },
+            {
+              "name": "6 × 100m strides",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.92
+              }
+            }
+          ]
+        },
+        {
+          "id": "W16S3",
+          "title": "TEST — 3RM Push Press",
+          "duration": 50,
+          "focus": "test",
+          "defaultDay": "Wed",
+          "warmup": [
+            "10 min + mobility + jerk drill"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: 3RM Push Press",
+              "scheme": "Up to 3 working attempts",
+              "load": {
+                "type": "label",
+                "value": "Open weight"
+              }
+            }
+          ],
+          "cooldown": [
+            "Stretch"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "3RM weight"
+            ],
+            "instructions": "Update pushPress1RM ≈ 3RM × 1.07."
+          }
+        },
+        {
+          "id": "W16S4",
+          "title": "Mobility + Easy Bike",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Thu",
+          "blocks": [
+            {
+              "name": "Easy bike",
+              "scheme": "20 min Z1",
+              "load": {
+                "type": "rpe",
+                "value": 3
+              }
+            },
+            {
+              "name": "Mobility flow",
+              "scheme": "10 min",
+              "load": {
+                "type": "bw"
+              }
+            }
+          ]
+        },
+        {
+          "id": "W16S5",
+          "title": "TEST — 5K + 2K Row",
+          "duration": 75,
+          "focus": "test",
+          "defaultDay": "Fri",
+          "warmup": [
+            "15 min progressive"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: 5K all-out",
+              "scheme": "Flat route or track",
+              "load": {
+                "type": "label",
+                "value": "Race effort"
+              }
+            },
+            {
+              "name": "Easy bike",
+              "scheme": "15 min recovery",
+              "load": {
+                "type": "rpe",
+                "value": 3
+              }
+            },
+            {
+              "name": "TEST: 2K row all-out",
+              "load": {
+                "type": "label",
+                "value": "Race effort"
+              }
+            }
+          ],
+          "cooldown": [
+            "10 min walk"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "5K time",
+              "Per-km splits",
+              "2K Row time",
+              "2K Row split"
+            ],
+            "instructions": "Update thresholdPace and row2KSplit. Compare progress vs Week 8/12."
+          }
+        },
+        {
+          "id": "W16S6",
+          "title": "TEST — FINAL FULL HYROX",
+          "duration": 90,
+          "focus": "test",
+          "defaultDay": "Sat",
+          "intent": "Last sim before race. Should be within 1-2 min of race target.",
+          "warmup": [
+            "20 min progressive + race mobility + 2 strides"
+          ],
+          "blocks": [
+            {
+              "name": "TEST: FULL HYROX @ race effort",
+              "scheme": "Full race order, full loads, race fuel + kit",
+              "load": [
+                {
+                  "type": "label",
+                  "value": "Goal time: 1:09 or better = sub 1:08 race is on"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "Full race order, in order:",
+                    "1km → SkiErg",
+                    "1km → Sled Push",
+                    "1km → Sled Pull",
+                    "1km → BBJ",
+                    "1km → Row",
+                    "1km → Farmers",
+                    "1km → Sandbag Lunges",
+                    "1km → Wall Balls"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "20 min walk + protein + foam roll"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "TOTAL TIME",
+              "All 8 run splits",
+              "All 8 station times",
+              "All transitions",
+              "HR profile if available",
+              "RPE per round",
+              "What broke first"
+            ],
+            "instructions": "FINAL TEST. SCREENSHOT EVERYTHING. Send to Claude. We use this for the taper plan + race-day pacing strategy."
+          }
+        }
+      ]
+    },
+    {
+      "number": 17,
+      "phase": "Taper",
+      "test": false,
+      "theme": "Taper week 1. Volume −25%. Intensity holds.",
+      "sessions": [
+        {
+          "id": "W17S1",
+          "title": "Strength — Quality Singles",
+          "duration": 60,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min bike + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "3 × 2",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.82
+              }
+            },
+            {
+              "name": "Bench Press",
+              "scheme": "3 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Sandbag Lunge (race load)",
+              "scheme": "2 × 50m",
+              "rest": "120s",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              }
+            },
+            {
+              "name": "Easy Triplet × 3 — Z2",
+              "scheme": "3 rounds at Z2 · target 10–12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "250m SkiErg easy",
+                  "10 Wall Balls",
+                  "200m walk-jog"
+                ]
+              },
+              "note": "Movement only. HR stays low."
+            }
+          ],
+          "cooldown": [
+            "Foam roll"
+          ]
+        },
+        {
+          "id": "W17S2",
+          "title": "Race-Pace 1000s — Short",
+          "duration": 45,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min + strides"
+          ],
+          "blocks": [
+            {
+              "name": "5 × 1000m @ Hyrox pace",
+              "scheme": "60s standing rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              }
+            }
+          ],
+          "cooldown": [
+            "10 min easy"
+          ]
+        },
+        {
+          "id": "W17S3",
+          "title": "Compromised Drill — Race Sequence",
+          "duration": 50,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "warmup": [
+            "10 min jog + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "3 rounds (race effort, full rest)",
+              "scheme": "20 wall balls + 400m run + 10m sandbag lunge + 400m run · 3 min full recovery",
+              "load": [
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                },
+                {
+                  "type": "station",
+                  "ref": "sandbagLoad",
+                  "label": "sandbag"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 0.98,
+                  "label": "run"
+                }
+              ],
+              "note": "FAST. Full rest. Quality only."
+            }
+          ],
+          "cooldown": [
+            "10 min walk"
+          ]
+        },
+        {
+          "id": "W17S4",
+          "title": "Upper Sharpen + Erg Race-Pace",
+          "duration": 65,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min row + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Bench Press",
+              "scheme": "3 × 3",
+              "rest": "150s",
+              "load": {
+                "type": "pct",
+                "ref": "bench1RM",
+                "pct": 0.78
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "3 × 3",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.78
+              }
+            },
+            {
+              "name": "SkiErg 1000m @ race pace",
+              "scheme": "1 × 1000m",
+              "load": {
+                "type": "split",
+                "ref": "ski1KSplit",
+                "factor": 1
+              }
+            },
+            {
+              "name": "Row 1000m @ race pace",
+              "scheme": "1 × 1000m",
+              "load": {
+                "type": "split",
+                "ref": "row2KSplit",
+                "factor": 0.97
+              }
+            },
+            {
+              "name": "Easy Triplet × 3 — Z2",
+              "scheme": "3 rounds at Z2 · target 10–12 min",
+              "load": {
+                "type": "list",
+                "items": [
+                  "300m Row easy",
+                  "15 Wall Balls",
+                  "1 min walk"
+                ]
+              },
+              "note": "Loose, easy. Just movement."
+            }
+          ],
+          "cooldown": [
+            "Stretch"
+          ]
+        },
+        {
+          "id": "W17S5",
+          "title": "Tempo + Strides — Short",
+          "duration": 40,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "10 min + strides"
+          ],
+          "blocks": [
+            {
+              "name": "12 min @ threshold",
+              "scheme": "Continuous",
+              "load": {
+                "type": "pace",
+                "ref": "thresholdPaceSecPerKm",
+                "factor": 1
+              }
+            },
+            {
+              "name": "4 × 100m strides",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.92
+              }
+            }
+          ],
+          "cooldown": [
+            "8 min easy"
+          ]
+        },
+        {
+          "id": "W17S6",
+          "title": "Half Hyrox — Sharpener",
+          "duration": 70,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Last sim. Race effort, race fuel, race kit.",
+          "warmup": [
+            "15 min + race mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Half Hyrox @ race effort",
+              "scheme": "4 × (1km + station) — race order first 4",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "1km → SkiErg 1000m",
+                    "1km → Sled Push 50m",
+                    "1km → Sled Pull 50m",
+                    "1km → 80m BBJ"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "15 min walk + foam roll"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 18,
+      "phase": "Taper",
+      "test": false,
+      "theme": "Taper week 2. Volume −45%. Stay sharp, don't tire.",
+      "sessions": [
+        {
+          "id": "W18S1",
+          "title": "Strength — Sharp Singles",
+          "duration": 35,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min bike + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Back Squat",
+              "scheme": "2 × 2",
+              "rest": "180s",
+              "load": {
+                "type": "pct",
+                "ref": "backSquat1RM",
+                "pct": 0.85
+              }
+            },
+            {
+              "name": "Push Press",
+              "scheme": "3 × 2",
+              "rest": "120s",
+              "load": {
+                "type": "pct",
+                "ref": "pushPress1RM",
+                "pct": 0.8
+              }
+            },
+            {
+              "name": "Sled Push (race load)",
+              "scheme": "2 × 25m",
+              "rest": "90s",
+              "load": {
+                "type": "station",
+                "ref": "sledPushLoad"
+              }
+            }
+          ],
+          "cooldown": [
+            "Walk"
+          ]
+        },
+        {
+          "id": "W18S2",
+          "title": "Race-Pace Sharpener",
+          "duration": 40,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "12 min + strides"
+          ],
+          "blocks": [
+            {
+              "name": "5 × 600m @ Hyrox pace",
+              "scheme": "60s rest",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              }
+            }
+          ],
+          "cooldown": [
+            "10 min easy"
+          ]
+        },
+        {
+          "id": "W18S3",
+          "title": "Short Hybrid Sharpener",
+          "duration": 40,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "warmup": [
+            "10 min jog + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "2 rounds (full rest)",
+              "scheme": "15 wall balls + 600m run · 3 min rest",
+              "load": [
+                {
+                  "type": "station",
+                  "ref": "wallBallLoad",
+                  "label": "wall ball"
+                },
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 0.98,
+                  "label": "run"
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "10 min walk"
+          ]
+        },
+        {
+          "id": "W18S4",
+          "title": "Easy Spin + Stations Drill",
+          "duration": 35,
+          "focus": "strength",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min row + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Easy SkiErg",
+              "scheme": "5 min",
+              "load": {
+                "type": "rpe",
+                "value": 4
+              }
+            },
+            {
+              "name": "Race-pace SkiErg 500m",
+              "scheme": "1 rep",
+              "load": {
+                "type": "split",
+                "ref": "ski1KSplit",
+                "factor": 1
+              }
+            },
+            {
+              "name": "Easy Row",
+              "scheme": "5 min",
+              "load": {
+                "type": "rpe",
+                "value": 4
+              }
+            },
+            {
+              "name": "Race-pace Row 500m",
+              "scheme": "1 rep",
+              "load": {
+                "type": "split",
+                "ref": "row2KSplit",
+                "factor": 0.97
+              }
+            },
+            {
+              "name": "Sandbag pickup + carry drill",
+              "scheme": "3 × 20m practice",
+              "load": {
+                "type": "station",
+                "ref": "sandbagLoad"
+              }
+            }
+          ],
+          "cooldown": [
+            "Stretch"
+          ]
+        },
+        {
+          "id": "W18S5",
+          "title": "Easy Run + Strides",
+          "duration": 35,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "5 min walk"
+          ],
+          "blocks": [
+            {
+              "name": "Easy jog",
+              "scheme": "20 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1
+              }
+            },
+            {
+              "name": "6 × 100m strides",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.92
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk"
+          ]
+        },
+        {
+          "id": "W18S6",
+          "title": "Pre-Race Tune-Up",
+          "duration": 50,
+          "focus": "sim",
+          "defaultDay": "Sat",
+          "intent": "Short race-pace tune. Mind-body activation.",
+          "warmup": [
+            "10 min progressive + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Pre-race tune",
+              "scheme": "2 × (1km run + 500m SkiErg + 30m Sled Push + 1km run) · 3 min rest",
+              "load": [
+                {
+                  "type": "pace",
+                  "ref": "raceHyroxTargetSecPerKm",
+                  "factor": 1,
+                  "label": "run"
+                },
+                {
+                  "type": "station",
+                  "ref": "sledPushLoad",
+                  "label": "sled"
+                }
+              ],
+              "note": "Activation, not exhaustion."
+            }
+          ],
+          "cooldown": [
+            "10 min walk + foam roll"
+          ]
+        }
+      ]
+    },
+    {
+      "number": 19,
+      "phase": "Taper",
+      "test": false,
+      "theme": "RACE WEEK. Minimal load. Maximum sharpness. Trust the work.",
+      "sessions": [
+        {
+          "id": "W19S1",
+          "title": "Easy Shake + Race Loads",
+          "duration": 35,
+          "focus": "strength",
+          "defaultDay": "Mon",
+          "warmup": [
+            "5 min bike + mobility"
+          ],
+          "blocks": [
+            {
+              "name": "Empty bar squat + warm-up sets",
+              "scheme": "3 × 5",
+              "load": {
+                "type": "fixed",
+                "value": "Bar to 50% only"
+              }
+            },
+            {
+              "name": "Sled Push (race load)",
+              "scheme": "2 × 15m",
+              "rest": "120s",
+              "load": {
+                "type": "station",
+                "ref": "sledPushLoad"
+              },
+              "note": "Get a feel. Don't tire."
+            },
+            {
+              "name": "5 BBJ + 5 Wall Balls",
+              "scheme": "2 sets",
+              "load": {
+                "type": "label",
+                "value": "Movement prep only"
+              }
+            }
+          ],
+          "cooldown": [
+            "Walk"
+          ]
+        },
+        {
+          "id": "W19S2",
+          "title": "Race-Pace Pickups",
+          "duration": 30,
+          "focus": "run",
+          "defaultDay": "Tue",
+          "warmup": [
+            "10 min easy"
+          ],
+          "blocks": [
+            {
+              "name": "4 × 400m @ Hyrox pace",
+              "scheme": "90s walk recovery",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 1
+              },
+              "note": "Crisp. Easy after."
+            }
+          ],
+          "cooldown": [
+            "5 min walk"
+          ]
+        },
+        {
+          "id": "W19S3",
+          "title": "Mobility + Transitions Drill",
+          "duration": 30,
+          "focus": "hybrid",
+          "defaultDay": "Wed",
+          "blocks": [
+            {
+              "name": "Mobility flow",
+              "scheme": "15 min",
+              "load": {
+                "type": "bw"
+              }
+            },
+            {
+              "name": "Transition rehearsal",
+              "scheme": "5 × dummy transitions (run → station entry → run out)",
+              "load": {
+                "type": "label",
+                "value": "Practice only. Feel race kit, fuel timing, mental cues."
+              }
+            }
+          ]
+        },
+        {
+          "id": "W19S4",
+          "title": "Pre-Race Activation",
+          "duration": 25,
+          "focus": "run",
+          "defaultDay": "Thu",
+          "warmup": [
+            "5 min walk"
+          ],
+          "blocks": [
+            {
+              "name": "Easy jog",
+              "scheme": "12 min",
+              "load": {
+                "type": "pace",
+                "ref": "easyPaceSecPerKm",
+                "factor": 1.05
+              }
+            },
+            {
+              "name": "4 × 20s strides",
+              "rest": "walk back",
+              "load": {
+                "type": "pace",
+                "ref": "raceHyroxTargetSecPerKm",
+                "factor": 0.95
+              }
+            }
+          ],
+          "cooldown": [
+            "5 min walk"
+          ]
+        },
+        {
+          "id": "W19S5",
+          "title": "Race Eve — Shakeout",
+          "duration": 20,
+          "focus": "run",
+          "defaultDay": "Fri",
+          "warmup": [
+            "—"
+          ],
+          "blocks": [
+            {
+              "name": "Easy walk-jog",
+              "scheme": "15 min",
+              "load": {
+                "type": "rpe",
+                "value": 3
+              },
+              "note": "Loosen up. Hydrate. Carb load complete. Race kit laid out."
+            }
+          ]
+        },
+        {
+          "id": "W19S6",
+          "title": "RACE DAY — HYROX MALAGA/EU",
+          "duration": 90,
+          "focus": "test",
+          "defaultDay": "Sat",
+          "intent": "Sub 1:08. Execute the plan.",
+          "warmup": [
+            "60 min before: easy walk + dynamic warmup",
+            "30 min before: 8 min progressive jog + 3 × 100m strides",
+            "10 min before: 5 BBJ + 5 wall balls + 30m sled push (light) — feel the floor"
+          ],
+          "blocks": [
+            {
+              "name": "RACE: 8 × (1km + station)",
+              "scheme": "Even pacing. Sub 4:10/km on the runs.",
+              "load": [
+                {
+                  "type": "label",
+                  "value": "Target: 1:07:59 or better"
+                },
+                {
+                  "type": "list",
+                  "items": [
+                    "Run 1: 4:00-4:05 (conservative)",
+                    "Run 2-6: 4:05-4:15 (steady)",
+                    "Run 7: 4:10-4:20 (hold form post-lunges)",
+                    "Run 8: empty the tank",
+                    "Stations: target sled push 2:40, wall balls 4:00 unbroken if possible"
+                  ]
+                }
+              ]
+            }
+          ],
+          "cooldown": [
+            "Walk + celebrate"
+          ],
+          "testProtocol": {
+            "metrics": [
+              "Total time",
+              "All 8 runs",
+              "All 8 stations",
+              "All transitions"
+            ],
+            "instructions": "Send race result screenshot to Claude — we'll plan the next cycle."
+          }
+        }
+      ]
+    }
+  ]
+}
