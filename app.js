@@ -5,6 +5,8 @@ const SETTINGS_KEY = "hyrox.settings";
 const PROGRESS_KEY = "hyrox.progress";
 const TESTS_KEY = "hyrox.tests";
 const DAY_OVERRIDES_KEY = "hyrox.dayOverrides";
+const OVERRIDES_KEY = "hyrox.overrides";
+const USER_BLOCKS_KEY = "hyrox.userblocks";
 const PLAN_URL = "plan.json";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -111,6 +113,54 @@ function getTests() {
 
 function getDayOverrides() {
   return loadJSON(DAY_OVERRIDES_KEY, { overrides: {} });
+}
+
+/* ---------- Weight overrides ---------- */
+
+function getOverrides() {
+  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function getBlockOverride(weekNum, sessionId, blockIdx) {
+  const o = getOverrides();
+  return o[`W${weekNum}.${sessionId}.b${blockIdx}`] ?? null;
+}
+
+function setBlockOverride(weekNum, sessionId, blockIdx, kg) {
+  const o = getOverrides();
+  const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+  if (kg == null) delete o[key];
+  else o[key] = kg;
+  localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o));
+}
+
+/* ---------- User-added blocks ---------- */
+
+function getUserBlocks(weekNum, sessionId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(USER_BLOCKS_KEY) || "{}");
+    return all[`W${weekNum}.${sessionId}`] || [];
+  } catch { return []; }
+}
+
+function addUserBlock(weekNum, sessionId, block) {
+  try {
+    const all = JSON.parse(localStorage.getItem(USER_BLOCKS_KEY) || "{}");
+    const key = `W${weekNum}.${sessionId}`;
+    if (!all[key]) all[key] = [];
+    all[key].push({ ...block, id: "ub" + Date.now() });
+    localStorage.setItem(USER_BLOCKS_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function deleteUserBlock(weekNum, sessionId, blockId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(USER_BLOCKS_KEY) || "{}");
+    const key = `W${weekNum}.${sessionId}`;
+    if (all[key]) all[key] = all[key].filter((b) => b.id !== blockId);
+    localStorage.setItem(USER_BLOCKS_KEY, JSON.stringify(all));
+  } catch {}
 }
 
 /* ---------- Ref lookup ---------- */
@@ -458,6 +508,10 @@ function renderSessionCard(session, weekNum, expanded) {
     ? session.blocks.map((b, i) => renderBlock(b, settings, weekNum, session.id, i)).join("")
     : "";
 
+  const userBlocksHtml = expanded
+    ? getUserBlocks(weekNum, session.id).map((ub) => renderUserBlock(ub, weekNum, session.id)).join("")
+    : "";
+
   const warmupHtml = (session.warmup || []).map((w) =>
     `<div class="prep-row">${escapeHtml(w)}</div>`).join("");
 
@@ -478,10 +532,11 @@ function renderSessionCard(session, weekNum, expanded) {
       <div class="section-header">Warm-up</div>
       <div class="list">${warmupHtml}</div>` : ""}
 
-    ${blocksHtml ? `
+    ${(blocksHtml || userBlocksHtml) ? `
       <div class="section-header">Main</div>
-      <div class="list">${blocksHtml}</div>
-      <div class="section-footer">Tap a row to mark it done.</div>` : ""}
+      <div class="list">${blocksHtml}${userBlocksHtml}</div>
+      <button class="btn-reschedule" data-action="add-exercise" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--accent)">+ Add exercise</button>
+      <div class="section-footer">Tap a weight to adjust it · tap ✓ circle to mark done.</div>` : ""}
 
     ${cooldownHtml ? `
       <div class="section-header">Cooldown</div>
@@ -520,16 +575,28 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
 
   if (block.load) {
     if (isCompound) {
-      // Render compound loads inline, below the scheme
       inlineLoadHtml = `<div class="block-multi">${renderLoadCompound(block.load, settings)}</div>`;
+    } else if (block.load.type === "pct") {
+      // Adjustable — check override and add tap target
+      const max = getRefValue(block.load.ref, settings);
+      if (!max) {
+        trailingLoad = setRefLink(block.load.ref);
+      } else {
+        const r = settings.rounding || 2.5;
+        const planKg = Math.round((max * block.load.pct) / r) * r;
+        const override = getBlockOverride(weekNum, sessionId, blockIdx);
+        const displayKg = override != null ? override : planKg;
+        const isOverridden = override != null;
+        trailingLoad = `<span class="block-load${isOverridden ? " overridden" : ""}" data-adjust="1" data-week="${weekNum}" data-sid="${escapeHtml(sessionId)}" data-bidx="${blockIdx}" data-plan-kg="${planKg}" data-block-name="${escapeHtml(block.name)}">${displayKg} kg</span>`;
+      }
     } else {
       trailingLoad = renderLoadSimple(block.load, settings);
     }
   }
 
   return `
-    <div class="block ${done ? "done" : ""}" data-block-idx="${blockIdx}" data-session="${escapeHtml(sessionId)}">
-      <div class="block-check">
+    <div class="block ${done ? "done" : ""}">
+      <div class="block-check" data-action="toggle-block" data-block-idx="${blockIdx}" data-session="${escapeHtml(sessionId)}">
         <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 7 12 13 4"/></svg>
       </div>
       <div class="block-body">
@@ -540,6 +607,22 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
         ${block.scheme ? `<div class="block-scheme">${escapeHtml(block.scheme)}${block.rest ? ` · rest ${escapeHtml(block.rest)}` : ""}</div>` : ""}
         ${inlineLoadHtml}
         ${block.note ? `<div class="block-note">${escapeHtml(block.note)}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function renderUserBlock(ub, weekNum, sessionId) {
+  return `
+    <div class="block-custom">
+      <div class="block-custom-badge">Custom</div>
+      <div class="block-body">
+        <div class="block-row">
+          <span class="block-name">${escapeHtml(ub.name)}</span>
+          ${ub.load ? `<span class="block-load" style="color:var(--info)">${escapeHtml(ub.load)}</span>` : ""}
+        </div>
+        ${ub.scheme ? `<div class="block-scheme">${escapeHtml(ub.scheme)}</div>` : ""}
+        <button class="block-delete" data-action="delete-user-block" data-week="${weekNum}" data-sid="${escapeHtml(sessionId)}" data-ubid="${escapeHtml(ub.id)}">Remove</button>
       </div>
     </div>
   `;
@@ -1052,13 +1135,219 @@ function attachSessionHandlers(weekNum) {
     btn.addEventListener("click", () => showReschedulePicker(weekNum, btn.dataset.session));
   });
 
-  document.querySelectorAll(".block").forEach((blockEl) => {
-    blockEl.addEventListener("click", () => {
-      const sessionId = blockEl.dataset.session;
-      const idx = Number(blockEl.dataset.blockIdx);
+  // Check-circle toggles done (not the whole block row)
+  document.querySelectorAll("[data-action='toggle-block']").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const sessionId = el.dataset.session;
+      const idx = Number(el.dataset.blockIdx);
       toggleBlockDone(weekNum, sessionId, idx);
-      blockEl.classList.toggle("done");
+      const blockEl = el.closest(".block");
+      if (blockEl) blockEl.classList.toggle("done");
     });
+  });
+
+  // Tap adjustable load chip → weight adjustment sheet
+  document.querySelectorAll("[data-adjust]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wk = Number(el.dataset.week);
+      const sid = el.dataset.sid;
+      const bidx = Number(el.dataset.bidx);
+      const planKg = Number(el.dataset.planKg);
+      const blockName = el.dataset.blockName || "";
+      const override = getBlockOverride(wk, sid, bidx);
+      const currentKg = override != null ? override : planKg;
+      showAdjustLoadSheet(wk, sid, bidx, blockName, planKg, currentKg);
+    });
+  });
+
+  // Add exercise
+  document.querySelectorAll("[data-action='add-exercise']").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showAddExerciseSheet(Number(btn.dataset.week), btn.dataset.sid);
+    });
+  });
+
+  // Delete user block
+  document.querySelectorAll("[data-action='delete-user-block']").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!confirm("Remove this exercise?")) return;
+      deleteUserBlock(Number(btn.dataset.week), btn.dataset.sid, btn.dataset.ubid);
+      route();
+    });
+  });
+}
+
+/* ---------- Adjust load action sheet ---------- */
+
+function showAdjustLoadSheet(weekNum, sessionId, blockIdx, blockName, planKg, currentKg) {
+  const isOverridden = currentKg !== planKg;
+
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog" aria-label="Adjust load">
+      <div class="action-sheet-title">
+        ${escapeHtml(blockName)}
+        <div class="action-sheet-title-sub">${isOverridden
+          ? `Custom: <strong>${currentKg} kg</strong> · Plan: ${planKg} kg`
+          : `Plan: <strong>${planKg} kg</strong>`}</div>
+      </div>
+      <div class="action-sheet-group">
+        <button class="action-sheet-btn" data-delta="-5">−5 kg<span class="action-sheet-sub">${currentKg - 5} kg</span></button>
+        <button class="action-sheet-btn" data-delta="-2.5">−2.5 kg<span class="action-sheet-sub">${currentKg - 2.5} kg</span></button>
+        <button class="action-sheet-btn" data-custom="1">Enter value…<span class="action-sheet-sub"></span></button>
+        <button class="action-sheet-btn" data-delta="2.5">+2.5 kg<span class="action-sheet-sub">${currentKg + 2.5} kg</span></button>
+        <button class="action-sheet-btn" data-delta="5">+5 kg<span class="action-sheet-sub">${currentKg + 5} kg</span></button>
+        ${isOverridden ? `<button class="action-sheet-btn" data-reset="1" style="color:var(--danger)">Reset to plan<span class="action-sheet-sub">${planKg} kg</span></button>` : ""}
+      </div>
+      <button class="action-sheet-btn action-sheet-cancel" data-cancel="1">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+
+  function close() {
+    sheet.classList.remove("open");
+    setTimeout(() => sheet.remove(), 200);
+  }
+
+  function applyAndClose(kg) {
+    setBlockOverride(weekNum, sessionId, blockIdx, Math.max(0, Math.round(kg * 10) / 10));
+    close();
+    setTimeout(route, 220);
+  }
+
+  sheet.addEventListener("click", (e) => {
+    if (e.target === sheet) { close(); return; }
+    if (e.target.closest("[data-cancel]")) { close(); return; }
+
+    const deltaBtn = e.target.closest("[data-delta]");
+    if (deltaBtn) { applyAndClose(currentKg + Number(deltaBtn.dataset.delta)); return; }
+
+    if (e.target.closest("[data-reset]")) {
+      setBlockOverride(weekNum, sessionId, blockIdx, null);
+      close();
+      setTimeout(route, 220);
+      return;
+    }
+
+    if (e.target.closest("[data-custom]")) {
+      close();
+      setTimeout(() => showCustomKgInput(weekNum, sessionId, blockIdx, blockName, planKg, currentKg), 250);
+    }
+  });
+}
+
+function showCustomKgInput(weekNum, sessionId, blockIdx, blockName, planKg, currentKg) {
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">Custom load · ${escapeHtml(blockName)}</div>
+      <div class="action-sheet-group" style="padding:20px 16px 24px">
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px">
+          <input id="custom-kg-input" class="form-input" type="number" step="2.5" min="0" value="${currentKg}" inputmode="decimal" style="font-size:32px;font-weight:700;color:var(--accent);text-align:center;width:130px;flex:none;border-bottom:2px solid var(--accent);padding-bottom:4px" />
+          <span style="font-size:22px;color:var(--text-3);font-weight:500">kg</span>
+        </div>
+        <div style="font-size:13px;color:var(--text-3);text-align:center;margin-top:10px">Plan: ${planKg} kg</div>
+      </div>
+      <div style="padding:0 10px 10px;display:flex;gap:10px">
+        <button class="btn btn-secondary" data-cancel="1" style="flex:1">Cancel</button>
+        <button class="btn" id="save-custom-kg" style="flex:1">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => {
+    sheet.classList.add("open");
+    setTimeout(() => {
+      const inp = document.getElementById("custom-kg-input");
+      if (inp) { inp.focus(); inp.select && inp.select(); }
+    }, 300);
+  });
+
+  function close() {
+    sheet.classList.remove("open");
+    setTimeout(() => sheet.remove(), 200);
+  }
+
+  sheet.querySelector("[data-cancel]").addEventListener("click", close);
+  document.getElementById("save-custom-kg").addEventListener("click", () => {
+    const val = parseFloat(document.getElementById("custom-kg-input")?.value);
+    if (!isNaN(val) && val >= 0) {
+      setBlockOverride(weekNum, sessionId, blockIdx, val);
+      close();
+      setTimeout(route, 220);
+    }
+  });
+}
+
+/* ---------- Add exercise action sheet ---------- */
+
+function showAddExerciseSheet(weekNum, sessionId) {
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">Add exercise</div>
+      <div class="action-sheet-group" style="padding:12px 16px 16px">
+        <div class="form-row" style="background:transparent;padding:10px 0">
+          <label class="form-label" style="color:var(--text-3)">Name</label>
+          <input id="ub-name" class="form-input" type="text" placeholder="e.g. Pull-ups" autocomplete="off" />
+        </div>
+        <div class="form-row" style="background:transparent;padding:10px 0">
+          <label class="form-label" style="color:var(--text-3)">Sets / scheme</label>
+          <input id="ub-scheme" class="form-input" type="text" placeholder="e.g. 3×10" autocomplete="off" />
+        </div>
+        <div class="form-row" style="background:transparent;padding:10px 0">
+          <label class="form-label" style="color:var(--text-3)">Load / note</label>
+          <input id="ub-load" class="form-input" type="text" placeholder="optional" autocomplete="off" />
+        </div>
+      </div>
+      <div style="padding:0 10px 10px;display:flex;gap:10px">
+        <button class="btn btn-secondary" data-cancel="1" style="flex:1">Cancel</button>
+        <button class="btn" id="save-user-block" style="flex:1">Add</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => {
+    sheet.classList.add("open");
+    setTimeout(() => {
+      const inp = document.getElementById("ub-name");
+      if (inp) inp.focus();
+    }, 300);
+  });
+
+  function close() {
+    sheet.classList.remove("open");
+    setTimeout(() => sheet.remove(), 200);
+  }
+
+  function save() {
+    const name = (document.getElementById("ub-name")?.value || "").trim();
+    if (!name) { document.getElementById("ub-name")?.focus(); return; }
+    const scheme = (document.getElementById("ub-scheme")?.value || "").trim();
+    const load = (document.getElementById("ub-load")?.value || "").trim();
+    addUserBlock(weekNum, sessionId, { name, scheme, load });
+    close();
+    setTimeout(route, 220);
+  }
+
+  sheet.querySelector("[data-cancel]").addEventListener("click", close);
+  document.getElementById("save-user-block").addEventListener("click", save);
+  document.getElementById("ub-load").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") save();
+  });
+  document.getElementById("ub-scheme").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("ub-load")?.focus();
+  });
+  document.getElementById("ub-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("ub-scheme")?.focus();
   });
 }
 

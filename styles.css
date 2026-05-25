@@ -1087,6 +1087,95 @@ textarea.form-input {
 .action-sheet-cancel::after { display: none !important; }
 .action-sheet-cancel:active { background: var(--surface-2); }
 
+.action-sheet-title-sub {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 4px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.action-sheet-title-sub strong {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* ============================================================
+   Adjustable load chip (pct type — tap to adjust)
+   ============================================================ */
+
+.block-load[data-adjust] {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  position: relative;
+}
+
+.block-load[data-adjust]:active {
+  opacity: 0.6;
+  transform: scale(0.94);
+}
+
+/* Blue when overridden from plan */
+.block-load.overridden {
+  color: var(--info);
+}
+
+/* ============================================================
+   Custom (user-added) exercise blocks
+   ============================================================ */
+
+.block-custom {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  position: relative;
+  background: rgba(10, 132, 255, 0.06);
+}
+
+.block-custom::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 0;
+  bottom: 0;
+  height: 0.5px;
+  background: var(--separator);
+}
+
+.block-custom:last-child::after { display: none; }
+
+.block-custom-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--info);
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(10, 132, 255, 0.15);
+  flex-shrink: 0;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.block-delete {
+  display: inline-block;
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 0;
+  margin-top: 6px;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  font-family: inherit;
+}
+
+.block-delete:active { opacity: 0.6; }
+
 /* Hide elements but keep accessible */
 .sr-only {
   position: absolute;
