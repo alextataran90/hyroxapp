@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-25-v13-adjust-add";
+const APP_VERSION = "2026-05-25-v14-ten-features";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

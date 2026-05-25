@@ -1188,3 +1188,515 @@ textarea.form-input {
   white-space: nowrap;
   border: 0;
 }
+
+/* ============================================================
+   Race time projector
+   ============================================================ */
+
+.projector-card {
+  background: var(--surface-1);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.projector-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+.projector-time {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.projector-detail {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+.projector-detail-label {
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.projector-detail-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.projector-note {
+  font-size: 12px;
+  color: var(--text-4);
+  letter-spacing: -0.01em;
+  margin-top: 4px;
+}
+
+/* Compact projector for Today tab */
+.projector-compact {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 14px;
+}
+
+.projector-compact-inner {
+  flex: 1;
+  background: var(--surface-1);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
+.projector-compact-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.projector-compact-time {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Catch-up banner
+   ============================================================ */
+
+.catchup-banner {
+  background: rgba(255,214,10,0.10);
+  border: 1px solid rgba(255,214,10,0.22);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catchup-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.catchup-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--warn);
+  margin-bottom: 2px;
+}
+
+.catchup-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.catchup-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.catchup-btn {
+  background: var(--warn);
+  color: #000;
+  border: none;
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.12s;
+}
+
+.catchup-btn:active { opacity: 0.7; }
+
+.catchup-btn.catchup-skip {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+/* ============================================================
+   Session journal
+   ============================================================ */
+
+.journal-input {
+  width: 100%;
+  background: var(--surface-1);
+  border: none;
+  border-radius: 12px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 14px 16px;
+  outline: none;
+  resize: none;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+  min-height: 80px;
+  display: block;
+}
+
+.journal-input::placeholder { color: var(--text-4); }
+
+.journal-input:focus {
+  box-shadow: inset 0 0 0 1.5px rgba(255,149,0,0.4);
+}
+
+/* ============================================================
+   Block action buttons (timer, log set)
+   ============================================================ */
+
+.block-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.block-action-btn {
+  background: var(--surface-2);
+  color: var(--text-3);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.block-action-btn:active { background: var(--surface-3); }
+
+.block-action-btn[data-action="start-timer"] {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.block-action-btn[data-action="start-timer"]:active {
+  background: rgba(255,149,0,0.25);
+}
+
+.block-action-log {
+  color: var(--info);
+  background: rgba(10,132,255,0.12);
+}
+
+.block-action-log:active {
+  background: rgba(10,132,255,0.22);
+}
+
+/* ============================================================
+   Set log pills
+   ============================================================ */
+
+.set-log-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.set-log-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(48,209,88,0.15);
+  color: var(--success);
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.set-log-pill-del {
+  color: rgba(48,209,88,0.55);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.set-log-pill-del:active { color: var(--danger); }
+
+/* ============================================================
+   Log input row (kg / reps / RPE)
+   ============================================================ */
+
+.log-input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.log-input-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.log-input-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+}
+
+.log-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: none;
+  border-radius: 8px;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  padding: 10px 6px;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  min-height: 52px;
+}
+
+.log-input:focus {
+  box-shadow: inset 0 0 0 1.5px rgba(255,149,0,0.5);
+}
+
+.log-input::placeholder { color: var(--text-4); font-size: 18px; }
+
+/* ============================================================
+   RPE grid
+   ============================================================ */
+
+.rpe-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.rpe-btn {
+  background: var(--surface-2);
+  border: none;
+  border-radius: 10px;
+  color: var(--rpe-color, var(--text));
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  padding: 14px 4px;
+  cursor: pointer;
+  transition: background-color 0.1s, transform 0.08s;
+}
+
+.rpe-btn:active {
+  background: var(--surface-3);
+  transform: scale(0.92);
+}
+
+/* ============================================================
+   Interval timer overlay
+   ============================================================ */
+
+.timer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.timer-overlay.open {
+  background: rgba(0,0,0,0.96);
+}
+
+.timer-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 24px;
+  width: 100%;
+  max-width: 360px;
+  position: relative;
+}
+
+.timer-close {
+  position: absolute;
+  top: -20px;
+  right: 0;
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 8px;
+  line-height: 1;
+  font-family: inherit;
+}
+
+.timer-close:active { color: var(--text); }
+
+.timer-phase {
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.timer-phase-work { color: var(--danger); }
+.timer-phase-rest { color: var(--success); }
+
+.timer-countdown {
+  font-size: 96px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+}
+
+.timer-rep-info {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.timer-name {
+  font-size: 14px;
+  color: var(--text-4);
+  letter-spacing: -0.01em;
+}
+
+.timer-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.timer-btn {
+  background: var(--surface-2);
+  border: none;
+  border-radius: 14px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 14px 32px;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+}
+
+.timer-btn:active { opacity: 0.7; }
+
+.timer-progress {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.timer-pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  transition: background-color 0.2s;
+}
+
+.timer-pip.done { background: var(--success); }
+.timer-pip.active { background: var(--accent); }
+
+/* ============================================================
+   Progress chart
+   ============================================================ */
+
+.progress-chart-wrap {
+  background: var(--surface-1);
+  border-radius: 14px;
+  padding: 16px 12px 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+/* ============================================================
+   Toggle pill (notifications)
+   ============================================================ */
+
+.toggle-pill {
+  width: 50px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--surface-3);
+  position: relative;
+  cursor: pointer;
+  border: none;
+  flex-shrink: 0;
+  transition: background-color 0.22s;
+}
+
+.toggle-pill::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--text-4);
+  transition: transform 0.22s, background-color 0.22s;
+}
+
+.toggle-pill.on {
+  background: var(--success);
+}
+
+.toggle-pill.on::after {
+  transform: translateX(22px);
+  background: #fff;
+}

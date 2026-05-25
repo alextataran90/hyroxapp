@@ -7,6 +7,8 @@ const TESTS_KEY = "hyrox.tests";
 const DAY_OVERRIDES_KEY = "hyrox.dayOverrides";
 const OVERRIDES_KEY = "hyrox.overrides";
 const USER_BLOCKS_KEY = "hyrox.userblocks";
+const JOURNAL_KEY = "hyrox.journal";
+const SESSION_LOGS_KEY = "hyrox.sessionlogs";
 const PLAN_URL = "plan.json";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -163,6 +165,52 @@ function deleteUserBlock(weekNum, sessionId, blockId) {
   } catch {}
 }
 
+/* ---------- Session journal ---------- */
+
+function getJournalNote(weekNum, sessionId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(JOURNAL_KEY) || "{}");
+    return all[`W${weekNum}.${sessionId}`] || "";
+  } catch { return ""; }
+}
+
+function saveJournalNote(weekNum, sessionId, text) {
+  try {
+    const all = JSON.parse(localStorage.getItem(JOURNAL_KEY) || "{}");
+    if (text) all[`W${weekNum}.${sessionId}`] = text;
+    else delete all[`W${weekNum}.${sessionId}`];
+    localStorage.setItem(JOURNAL_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+/* ---------- Set-by-set logging ---------- */
+
+function getBlockLogs(weekNum, sessionId, blockIdx) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    return all[`W${weekNum}.${sessionId}.b${blockIdx}`] || [];
+  } catch { return []; }
+}
+
+function addBlockLog(weekNum, sessionId, blockIdx, entry) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+    if (!all[key]) all[key] = [];
+    all[key].push({ ...entry, id: "l" + Date.now() });
+    localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function deleteBlockLog(weekNum, sessionId, blockIdx, logId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+    if (all[key]) all[key] = all[key].filter((l) => l.id !== logId);
+    localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(all));
+  } catch {}
+}
+
 /* ---------- Ref lookup ---------- */
 
 function getRefValue(ref, settings) {
@@ -188,6 +236,71 @@ function formatKg(kg, rounding) {
   const r = rounding || 2.5;
   const v = Math.round(kg / r) * r;
   return `${v % 1 === 0 ? v : v.toFixed(1)} kg`;
+}
+
+function formatTotalSecs(sec) {
+  if (sec == null || isNaN(sec)) return "—";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.round(sec % 60);
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/* ---------- Race time projector ---------- */
+
+function calcProjectedTime(settings) {
+  const pace = settings.running?.raceHyroxTargetSecPerKm;
+  if (!pace) return null;
+  // 8 × 1km running legs
+  const runSec = 8 * pace;
+  // Station estimates based on Open Men format (seconds each)
+  const stationSec = [
+    190,  // SkiErg 1000m
+    270,  // Sled Push 50m
+    180,  // Sled Pull 25m
+    210,  // Burpee broad jumps 80m
+    330,  // Row 1000m
+    210,  // Farmers 200m
+    180,  // Sandbag lunges 100m
+    300,  // Wall balls 100 reps
+  ];
+  return runSec + stationSec.reduce((a, b) => a + b, 0);
+}
+
+function renderRaceProjectorHtml(settings, compact = false) {
+  const pace = settings.running?.raceHyroxTargetSecPerKm;
+  if (!pace) return "";
+  const proj = calcProjectedTime(settings);
+  const projStr = formatTotalSecs(proj);
+  const paceStr = formatSecToPace(pace);
+  const pbStr = PLAN.metadata?.lastPB?.total || "—";
+
+  if (compact) {
+    return `<div class="projector-compact">
+      <div class="projector-compact-inner">
+        <div class="projector-compact-label">Projected</div>
+        <div class="projector-compact-time">${projStr}</div>
+      </div>
+      <div class="projector-compact-inner">
+        <div class="projector-compact-label">Run pace</div>
+        <div class="projector-compact-time" style="color:var(--text)">${paceStr}/km</div>
+      </div>
+      <div class="projector-compact-inner">
+        <div class="projector-compact-label">PB</div>
+        <div class="projector-compact-time" style="color:var(--text-2);font-size:18px">${pbStr}</div>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="projector-card">
+    <div class="projector-header">Race time projector</div>
+    <div class="projector-time">${projStr}</div>
+    <div class="projector-detail">
+      <div><span class="projector-detail-label">Run pace</span><span class="projector-detail-val">${paceStr}/km</span></div>
+      <div><span class="projector-detail-label">PB</span><span class="projector-detail-val">${pbStr}</span></div>
+    </div>
+    <div class="projector-note">8 × 1 km @ target pace + station estimates</div>
+  </div>`;
 }
 
 /* Render a load spec from plan.json into display text. */
@@ -403,10 +516,35 @@ async function renderToday(app) {
   const doneCount = week.sessions.filter((s) => isSessionDone(weekNum, s.id)).length;
   const phase = getCurrentPhase(PLAN, weekNum);
 
+  // Detect missed session from yesterday
+  const yesterdayName = DAY_NAMES[((new Date().getDay() - 1 + 7) % 7)];
+  const missedYesterday = week.sessions.find((s) => {
+    const day = getSessionDay(weekNum, s.id, s.defaultDay);
+    return day === yesterdayName && !isSessionDone(weekNum, s.id);
+  });
+
   let html = `
     <h1 class="large-title">Today</h1>
     <div class="large-title-sub">${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
   `;
+
+  // Catch-up banner for missed yesterday session
+  if (missedYesterday && session && missedYesterday.id !== session.id) {
+    html += `<div class="catchup-banner">
+      <div class="catchup-info">
+        <div class="catchup-title">Missed yesterday</div>
+        <div class="catchup-name">${escapeHtml(missedYesterday.title)}</div>
+      </div>
+      <div class="catchup-actions">
+        <button class="catchup-btn" data-catchup-move="${escapeHtml(missedYesterday.id)}">Move here</button>
+        <button class="catchup-btn catchup-skip" data-catchup-skip="${escapeHtml(missedYesterday.id)}">Skip</button>
+      </div>
+    </div>`;
+  }
+
+  // Compact race projector (only if pace is set)
+  const projHtml = renderRaceProjectorHtml(getSettings(), true);
+  if (projHtml) html += projHtml;
 
   // Race week countdown
   if (weekNum >= PLAN.weeks.length - 1) {
@@ -456,6 +594,27 @@ async function renderToday(app) {
 
   app.innerHTML = html;
   attachSessionHandlers(weekNum);
+
+  // Catch-up banner actions
+  document.querySelectorAll("[data-catchup-move]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sid = btn.dataset.catchupMove;
+      const todayName = DAY_NAMES[new Date().getDay()];
+      // Swap today's session to yesterday's slot if needed
+      const todaySid = session && session.id;
+      if (todaySid && todaySid !== sid) {
+        setSessionDay(weekNum, todaySid, yesterdayName);
+      }
+      setSessionDay(weekNum, sid, todayName);
+      route();
+    });
+  });
+  document.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      toggleSessionDone(weekNum, btn.dataset.catchupSkip);
+      route();
+    });
+  });
 }
 
 function focusIcon(focus) {
@@ -551,6 +710,9 @@ function renderSessionCard(session, weekNum, expanded) {
         ${escapeHtml(session.testProtocol.instructions || "")}
       </div>` : ""}
 
+    <div class="section-header">Session notes</div>
+    <textarea class="journal-input" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" placeholder="How did it feel? Notes, PRs, things to remember…" rows="3">${escapeHtml(getJournalNote(weekNum, session.id))}</textarea>
+
     <div class="section-header">This week</div>
     <div class="day-picker">${dayChipsHtml}</div>
     <div class="section-footer">Tap any day to jump to that session.</div>
@@ -572,6 +734,7 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
 
   let trailingLoad = "";
   let inlineLoadHtml = "";
+  let displayKg = null;
 
   if (block.load) {
     if (isCompound) {
@@ -585,7 +748,7 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
         const r = settings.rounding || 2.5;
         const planKg = Math.round((max * block.load.pct) / r) * r;
         const override = getBlockOverride(weekNum, sessionId, blockIdx);
-        const displayKg = override != null ? override : planKg;
+        displayKg = override != null ? override : planKg;
         const isOverridden = override != null;
         trailingLoad = `<span class="block-load${isOverridden ? " overridden" : ""}" data-adjust="1" data-week="${weekNum}" data-sid="${escapeHtml(sessionId)}" data-bidx="${blockIdx}" data-plan-kg="${planKg}" data-block-name="${escapeHtml(block.name)}">${displayKg} kg</span>`;
       }
@@ -593,6 +756,26 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
       trailingLoad = renderLoadSimple(block.load, settings);
     }
   }
+
+  // Interval timer button
+  const parsedInterval = parseIntervalScheme(block.scheme);
+  const timerBtn = parsedInterval
+    ? `<button class="block-action-btn" data-action="start-timer" data-block="${escapeHtml(JSON.stringify({ name: block.name, scheme: block.scheme }))}" title="Start interval timer">▶ Timer</button>`
+    : "";
+
+  // Set log button (only for weighted strength blocks)
+  const logs = getBlockLogs(weekNum, sessionId, blockIdx);
+  const logBtn = (block.load && block.load.type === "pct" && displayKg != null)
+    ? `<button class="block-action-btn block-action-log" data-action="log-set" data-week="${weekNum}" data-sid="${escapeHtml(sessionId)}" data-bidx="${blockIdx}" data-name="${escapeHtml(block.name)}" data-kg="${displayKg}">+ Log set${logs.length > 0 ? ` (${logs.length})` : ""}</button>`
+    : "";
+
+  const logPillsHtml = logs.length > 0
+    ? `<div class="set-log-pills">${logs.map((l) => `<span class="set-log-pill">${[l.kg != null ? l.kg + "kg" : null, l.reps != null ? "×" + l.reps : null, l.rpe != null ? "RPE " + l.rpe : null].filter(Boolean).join(" ")}</span>`).join("")}</div>`
+    : "";
+
+  const actionsHtml = (timerBtn || logBtn)
+    ? `<div class="block-actions">${timerBtn}${logBtn}</div>`
+    : "";
 
   return `
     <div class="block ${done ? "done" : ""}">
@@ -607,6 +790,8 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
         ${block.scheme ? `<div class="block-scheme">${escapeHtml(block.scheme)}${block.rest ? ` · rest ${escapeHtml(block.rest)}` : ""}</div>` : ""}
         ${inlineLoadHtml}
         ${block.note ? `<div class="block-note">${escapeHtml(block.note)}</div>` : ""}
+        ${logPillsHtml}
+        ${actionsHtml}
       </div>
     </div>
   `;
@@ -772,6 +957,160 @@ async function renderWeek(app, params) {
   });
 }
 
+ROUTES.progress = renderProgress;
+async function renderProgress(app) {
+  const settings = getSettings();
+  const progress = getProgress();
+  const tests = getTests();
+
+  // Gather RPE data
+  const rpeData = Object.entries(progress.sessions || {})
+    .filter(([, v]) => v && v.rpe && v.completedAt)
+    .map(([key, v]) => ({ key, rpe: v.rpe, date: new Date(v.completedAt) }))
+    .sort((a, b) => a.date - b.date);
+
+  let html = `
+    <h1 class="large-title">Progress</h1>
+    <div class="large-title-sub">${rpeData.length} RPE entries · ${tests.items.length} test${tests.items.length !== 1 ? "s" : ""}</div>
+
+    ${renderRaceProjectorHtml(settings)}
+
+    <div class="section-header">Session effort (RPE)</div>
+  `;
+
+  if (rpeData.length === 0) {
+    html += `<div class="empty-state"><h3>No RPE data yet</h3><p>Mark sessions done and rate the effort — the chart builds here.</p></div>`;
+  } else {
+    html += `<div class="progress-chart-wrap"><canvas id="rpe-chart" height="140"></canvas></div>`;
+  }
+
+  // 1RM benchmarks
+  const hasLifts = Object.values(settings.lifts).some((v) => v != null);
+  if (hasLifts) {
+    html += `<div class="section-header">Strength benchmarks</div>
+      <div class="list">
+        ${Object.entries(settings.lifts).filter(([, v]) => v != null).map(([k, v]) => `
+          <div class="list-row" style="cursor:default">
+            <div class="list-row-main"><div class="list-row-title">${REF_LABELS[k] || k}</div></div>
+            <div class="list-row-trailing accent">${v} kg</div>
+          </div>`).join("")}
+      </div>`;
+  }
+
+  // Running paces
+  const hasPaces = Object.values(settings.running).some((v) => v != null);
+  if (hasPaces) {
+    html += `<div class="section-header">Running paces</div>
+      <div class="list">
+        ${Object.entries(settings.running).filter(([, v]) => v != null).map(([k, v]) => `
+          <div class="list-row" style="cursor:default">
+            <div class="list-row-main"><div class="list-row-title">${REF_LABELS[k] || k}</div></div>
+            <div class="list-row-trailing accent">${formatSecToPace(v)}/km</div>
+          </div>`).join("")}
+      </div>`;
+  }
+
+  // Test history
+  if (tests.items.length > 0) {
+    html += `<div class="section-header">Test history</div>
+      <div class="list">
+        ${tests.items.slice().reverse().map((t) => `
+          <a href="#/tests" class="list-row">
+            <div class="list-row-main">
+              <div class="list-row-title">${escapeHtml(t.summary || "Test")}</div>
+              <div class="list-row-sub">W${t.week || "?"} · ${escapeHtml(t.date)}</div>
+            </div>
+            <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </a>`).join("")}
+      </div>`;
+  }
+
+  app.innerHTML = html;
+
+  if (rpeData.length > 0) {
+    requestAnimationFrame(() => {
+      const canvas = document.getElementById("rpe-chart");
+      if (canvas) {
+        canvas.width = canvas.parentElement.clientWidth - 2;
+        drawRpeChart(canvas, rpeData);
+      }
+    });
+  }
+}
+
+function drawRpeChart(canvas, data) {
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width;
+  const H = canvas.height;
+  const PAD = { top: 12, right: 12, bottom: 28, left: 28 };
+  const pw = W - PAD.left - PAD.right;
+  const ph = H - PAD.top - PAD.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  for (let i = 2; i <= 10; i += 2) {
+    const y = PAD.top + ph - (i / 10) * ph;
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, y);
+    ctx.lineTo(W - PAD.right, y);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(235,235,245,0.3)";
+    ctx.font = "10px -apple-system, system-ui";
+    ctx.textAlign = "right";
+    ctx.fillText(i, PAD.left - 5, y + 4);
+  }
+
+  if (data.length === 1) {
+    const x = PAD.left + pw / 2;
+    const y = PAD.top + ph - (data[0].rpe / 10) * ph;
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff9500";
+    ctx.fill();
+    return;
+  }
+
+  const xOf = (i) => PAD.left + (i / (data.length - 1)) * pw;
+  const yOf = (rpe) => PAD.top + ph - (rpe / 10) * ph;
+
+  // Area
+  ctx.beginPath();
+  data.forEach((d, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(d.rpe)) : ctx.lineTo(xOf(i), yOf(d.rpe)); });
+  ctx.lineTo(xOf(data.length - 1), PAD.top + ph);
+  ctx.lineTo(PAD.left, PAD.top + ph);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(255,149,0,0.1)";
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(255,149,0,0.9)";
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  data.forEach((d, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(d.rpe)) : ctx.lineTo(xOf(i), yOf(d.rpe)); });
+  ctx.stroke();
+
+  // Dots
+  data.forEach((d, i) => {
+    ctx.beginPath();
+    ctx.arc(xOf(i), yOf(d.rpe), 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff9500";
+    ctx.fill();
+  });
+
+  // X-axis date labels for first and last
+  ctx.fillStyle = "rgba(235,235,245,0.3)";
+  ctx.font = "10px -apple-system, system-ui";
+  ctx.textAlign = "left";
+  const fmt = (d) => d.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  ctx.fillText(fmt(data[0]), PAD.left, H - 4);
+  ctx.textAlign = "right";
+  ctx.fillText(fmt(data[data.length - 1]), W - PAD.right, H - 4);
+}
+
 ROUTES.session = renderSession;
 async function renderSession(app, params) {
   const weekNum = Number(params[0]);
@@ -803,6 +1142,8 @@ async function renderPlan(app) {
       <div class="num">${days}</div>
       <div class="label">days to race · ${escapeHtml(PLAN.metadata.raceDate)}</div>
     </div>
+
+    ${renderRaceProjectorHtml(settings)}
   `;
 
   for (const phase of PLAN.phases) {
@@ -828,6 +1169,115 @@ async function renderPlan(app) {
   }
 
   app.innerHTML = html;
+}
+
+/* ---------- Smart test → settings ---------- */
+
+function suggestFromTest(notesText) {
+  const suggestions = {};
+  const text = notesText || "";
+
+  // Parse 3RM lifts → calculate 1RM (× 1.08)
+  const liftPatterns = [
+    { key: "backSquat1RM", re: /back\s*squat\s*3rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+    { key: "frontSquat1RM", re: /front\s*squat\s*3rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+    { key: "deadlift1RM", re: /deadlift\s*3rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+    { key: "bench1RM", re: /bench\s*(?:press)?\s*3rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+    { key: "ohp1RM", re: /(?:ohp|overhead\s*press)\s*3rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+  ];
+  liftPatterns.forEach(({ key, re }) => {
+    const m = text.match(re);
+    if (m) suggestions[key] = { val: Math.round(parseFloat(m[1]) * 1.08), label: REF_LABELS[key], unit: "kg", note: "from 3RM × 1.08" };
+  });
+
+  // Parse 1RM lifts directly
+  const rm1Patterns = [
+    { key: "backSquat1RM", re: /back\s*squat\s*1rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+    { key: "deadlift1RM", re: /deadlift\s*1rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+    { key: "bench1RM", re: /bench\s*(?:press)?\s*1rm[:\s]+(\d+(?:\.\d+)?)\s*kg/i },
+  ];
+  rm1Patterns.forEach(({ key, re }) => {
+    if (!suggestions[key]) {
+      const m = text.match(re);
+      if (m) suggestions[key] = { val: parseFloat(m[1]), label: REF_LABELS[key], unit: "kg" };
+    }
+  });
+
+  // Parse 5K time → pace per km
+  const fiveK = text.match(/5k\s*(?:time|run)?[:\s]+(\d+):(\d{2})/i);
+  if (fiveK) {
+    const totalSec = parseInt(fiveK[1]) * 60 + parseInt(fiveK[2]);
+    const secPerKm = Math.round(totalSec / 5);
+    suggestions.race5KSecPerKm = { val: secPerKm, label: REF_LABELS.race5KSecPerKm, unit: "/km", formatted: formatSecToPace(secPerKm) };
+  }
+
+  // Parse row 2K split
+  const row = text.match(/(?:2k\s*)?row(?:ing)?\s*(?:2k\s*)?split?[:\s]+(\d+):(\d{2})/i);
+  if (row) {
+    suggestions.row2KSplit = { val: parseInt(row[1]) * 60 + parseInt(row[2]), label: REF_LABELS.row2KSplit, unit: "/500m", formatted: `${row[1]}:${row[2]}` };
+  }
+
+  // Parse ski 1K split
+  const ski = text.match(/ski\s*(?:erg)?\s*(?:1k\s*)?split?[:\s]+(\d+):(\d{2})/i);
+  if (ski) {
+    suggestions.ski1KSplit = { val: parseInt(ski[1]) * 60 + parseInt(ski[2]), label: REF_LABELS.ski1KSplit, unit: "/500m", formatted: `${ski[1]}:${ski[2]}` };
+  }
+
+  return suggestions;
+}
+
+function showSettingsSuggestions(suggestions) {
+  const keys = Object.keys(suggestions);
+  if (!keys.length) return;
+
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">
+        Update settings from test?
+        <div class="action-sheet-title-sub">Found ${keys.length} value${keys.length !== 1 ? "s" : ""} in your notes</div>
+      </div>
+      <div class="action-sheet-group">
+        ${keys.map((k) => {
+          const s = suggestions[k];
+          const display = s.formatted || (s.val + " " + s.unit);
+          return `<div class="action-sheet-btn" style="cursor:default;justify-content:space-between">
+            <span>${s.label}</span>
+            <span class="action-sheet-sub" style="color:var(--accent)">${display}${s.note ? ` · ${s.note}` : ""}</span>
+          </div>`;
+        }).join("")}
+      </div>
+      <div style="padding:0 10px 10px;display:flex;gap:10px;margin-top:10px">
+        <button class="btn btn-secondary" data-cancel="1" style="flex:1">Skip</button>
+        <button class="btn" id="apply-suggestions" style="flex:1">Apply all</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+
+  function close() {
+    sheet.classList.remove("open");
+    setTimeout(() => sheet.remove(), 200);
+  }
+
+  sheet.querySelector("[data-cancel]").addEventListener("click", () => { close(); route(); });
+
+  document.getElementById("apply-suggestions").addEventListener("click", () => {
+    const s = getSettings();
+    const liftKeys = ["backSquat1RM","frontSquat1RM","deadlift1RM","bench1RM","ohp1RM","pushPress1RM","clean1RM","snatch1RM"];
+    const runKeys = ["easyPaceSecPerKm","thresholdPaceSecPerKm","race5KSecPerKm","raceHyroxTargetSecPerKm"];
+    const ergKeys = ["row2KSplit","ski1KSplit"];
+    keys.forEach((k) => {
+      if (liftKeys.includes(k)) s.lifts[k] = suggestions[k].val;
+      else if (runKeys.includes(k)) s.running[k] = suggestions[k].val;
+      else if (ergKeys.includes(k)) s.ergs[k] = suggestions[k].val;
+    });
+    saveJSON(SETTINGS_KEY, s);
+    close();
+    setTimeout(route, 220);
+  });
 }
 
 async function renderTests(app) {
@@ -890,16 +1340,23 @@ async function renderTests(app) {
   document.getElementById("test-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const notes = fd.get("notes") || "";
     const t = getTests();
     t.items.push({
       id: "t" + Date.now(),
       date: fd.get("date"),
       week: Number(fd.get("week")),
       summary: fd.get("summary"),
-      notes: fd.get("notes")
+      notes: notes
     });
     saveJSON(TESTS_KEY, t);
-    route();
+    // Auto-suggest settings from test notes
+    const suggestions = suggestFromTest(notes);
+    if (Object.keys(suggestions).length > 0) {
+      showSettingsSuggestions(suggestions);
+    } else {
+      route();
+    }
   });
 
   document.querySelectorAll("[data-copy]").forEach((btn) => {
@@ -1020,6 +1477,47 @@ async function renderSettings(app, params) {
         : `<button id="reset-progress" class="btn btn-secondary" style="margin-top:10px">Reset week progress</button>`}
     </div>
 
+    <div class="section-header">Notifications</div>
+    <div class="list">
+      <div class="form-row" style="cursor:pointer" id="notif-row">
+        <div style="flex:1;min-width:0">
+          <div class="form-label" style="max-width:none">Training reminders</div>
+          <div style="font-size:13px;color:var(--text-3);margin-top:2px" id="notif-sub">
+            ${!("Notification" in window) ? "Not supported on this device"
+              : Notification.permission === "granted" ? "Tap to send a test notification"
+              : "Tap to enable"}
+          </div>
+        </div>
+        ${"Notification" in window ? `<div class="toggle-pill ${Notification.permission === "granted" ? "on" : ""}" id="notif-toggle"></div>` : ""}
+      </div>
+    </div>
+
+    <div class="section-header">Data</div>
+    <div class="list">
+      <div class="list-row" style="cursor:default">
+        <div class="list-row-main">
+          <div class="list-row-title">Export backup</div>
+          <div class="list-row-sub">Download all hyrox data as JSON</div>
+        </div>
+        <button class="btn btn-tertiary" style="width:auto;flex:none" id="export-data">Export</button>
+      </div>
+      <div class="list-row" style="cursor:default">
+        <div class="list-row-main">
+          <div class="list-row-title">Import backup</div>
+          <div class="list-row-sub">Restore from a JSON file</div>
+        </div>
+        <button class="btn btn-tertiary" style="width:auto;flex:none;color:var(--info)" id="import-data-btn">Import</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" />
+      </div>
+      <div class="list-row" style="cursor:default">
+        <div class="list-row-main">
+          <div class="list-row-title" style="color:var(--danger)">Reset all data</div>
+          <div class="list-row-sub">Clears progress, notes, logs (keeps settings)</div>
+        </div>
+        <button class="btn btn-tertiary" style="width:auto;flex:none;color:var(--danger)" id="reset-all-data">Reset</button>
+      </div>
+    </div>
+
     <div class="section-header">About</div>
     <div class="list">
       <div class="form-row">
@@ -1101,6 +1599,73 @@ async function renderSettings(app, params) {
       route();
     });
   }
+
+  // Notifications
+  const notifRow = document.getElementById("notif-row");
+  if (notifRow && "Notification" in window) {
+    notifRow.addEventListener("click", async () => {
+      if (Notification.permission === "granted") {
+        new Notification("Hyrox Trainer 🏃", {
+          body: "Notifications are on! You're all set.",
+          icon: "icons/icon-192.png"
+        });
+      } else {
+        const perm = await Notification.requestPermission();
+        if (perm === "granted") {
+          new Notification("Hyrox Trainer 🏃", {
+            body: "Reminders enabled. Let's get after it. 💪",
+            icon: "icons/icon-192.png"
+          });
+          navigate("settings");
+        }
+      }
+    });
+  }
+
+  // Export data
+  document.getElementById("export-data")?.addEventListener("click", () => {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("hyrox.")) data[k] = localStorage.getItem(k);
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `hyrox-backup-${ymd(today())}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Import data
+  document.getElementById("import-data-btn")?.addEventListener("click", () => {
+    document.getElementById("import-file")?.click();
+  });
+
+  document.getElementById("import-file")?.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      let count = 0;
+      for (const [k, v] of Object.entries(data)) {
+        if (k.startsWith("hyrox.")) { localStorage.setItem(k, v); count++; }
+      }
+      alert(`Restored ${count} data entries. Reloading…`);
+      location.reload();
+    } catch (err) {
+      alert("Import failed: " + err.message);
+    }
+  });
+
+  // Reset all training data
+  document.getElementById("reset-all-data")?.addEventListener("click", () => {
+    if (!confirm("Clear all progress, notes, and set logs? Settings and tests are kept.")) return;
+    [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY].forEach((k) => localStorage.removeItem(k));
+    route();
+  });
 }
 
 function flashSaved() {
@@ -1121,12 +1686,257 @@ function paceToSec(str) {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
+/* ---------- RPE prompt ---------- */
+
+function showRpePrompt(weekNum, sessionId) {
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">
+        Session complete 🎉
+        <div class="action-sheet-title-sub">Rate the effort (1 = very easy · 10 = max)</div>
+      </div>
+      <div class="action-sheet-group" style="padding:16px 16px 20px">
+        <div class="rpe-grid">
+          ${[1,2,3,4,5,6,7,8,9,10].map((n) => {
+            const col = n <= 3 ? "var(--success)" : n <= 6 ? "var(--warn)" : "var(--danger)";
+            return `<button class="rpe-btn" data-rpe="${n}" style="--rpe-color:${col}">${n}</button>`;
+          }).join("")}
+        </div>
+      </div>
+      <button class="action-sheet-btn action-sheet-cancel" data-cancel="1">Skip</button>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+
+  function close() {
+    sheet.classList.remove("open");
+    setTimeout(() => sheet.remove(), 200);
+  }
+
+  sheet.addEventListener("click", (e) => {
+    if (e.target === sheet) { close(); return; }
+    if (e.target.closest("[data-cancel]")) { close(); return; }
+    const rpeBtn = e.target.closest("[data-rpe]");
+    if (rpeBtn) {
+      const rpe = Number(rpeBtn.dataset.rpe);
+      const p = getProgress();
+      const key = `W${weekNum}.${sessionId}`;
+      if (!p.sessions[key]) p.sessions[key] = { completedAt: new Date().toISOString() };
+      p.sessions[key].rpe = rpe;
+      saveJSON(PROGRESS_KEY, p);
+      close();
+    }
+  });
+}
+
+/* ---------- Interval timer ---------- */
+
+function parseIntervalScheme(scheme) {
+  if (!scheme) return null;
+  const m = scheme.match(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(min|sec|s)\b/i);
+  if (!m) return null;
+  const reps = parseInt(m[1]);
+  const duration = parseFloat(m[2]);
+  const unit = m[3].toLowerCase();
+  const workSec = unit.startsWith("min") ? duration * 60 : duration;
+
+  // Parse rest period
+  let restSec = 60;
+  const restM = scheme.match(/[\/|]\s*(\d+(?:\.\d+)?)\s*(min|sec|s)\b/i)
+             || scheme.match(/(\d+(?:\.\d+)?)\s*(min|sec|s)\s*(?:jog|rest|walk|rec)/i);
+  if (restM) {
+    const rv = parseFloat(restM[1]);
+    const ru = restM[2].toLowerCase();
+    restSec = ru.startsWith("min") ? rv * 60 : rv;
+  }
+  return { reps, workSec, restSec };
+}
+
+function beep(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (type === "start") { osc.frequency.value = 880; gain.gain.value = 0.35; }
+    else if (type === "end") { osc.frequency.value = 440; gain.gain.value = 0.45; }
+    else { osc.frequency.value = 660; gain.gain.value = 0.25; }
+    osc.start();
+    osc.stop(ctx.currentTime + (type === "end" ? 0.5 : 0.15));
+  } catch {}
+  try { if (navigator.vibrate) navigator.vibrate(type === "end" ? [80, 40, 80] : [40]); } catch {}
+}
+
+function showIntervalTimer(block, parsed) {
+  let currentRep = 0;
+  let isWork = true;
+  let remaining = parsed.workSec;
+  let paused = false;
+  let tid = null;
+
+  const overlay = document.createElement("div");
+  overlay.className = "timer-overlay";
+  document.body.appendChild(overlay);
+
+  function render() {
+    const mins = Math.floor(remaining / 60);
+    const secs = Math.round(remaining % 60);
+    const timeStr = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    const phase = isWork ? "WORK" : "REST";
+    const phaseClass = isWork ? "timer-phase-work" : "timer-phase-rest";
+    overlay.innerHTML = `
+      <div class="timer-content">
+        <button class="timer-close" id="timer-stop">✕</button>
+        <div class="timer-phase ${phaseClass}">${phase}</div>
+        <div class="timer-countdown">${timeStr}</div>
+        <div class="timer-rep-info">Set ${currentRep + 1} of ${parsed.reps}</div>
+        <div class="timer-name">${escapeHtml(block.name || "")}</div>
+        <div class="timer-row">
+          <button class="timer-btn" id="timer-pause">${paused ? "▶ Resume" : "⏸ Pause"}</button>
+        </div>
+        <div class="timer-progress">
+          ${Array.from({ length: parsed.reps }, (_, i) => `<div class="timer-pip ${i < currentRep ? "done" : i === currentRep ? "active" : ""}"></div>`).join("")}
+        </div>
+      </div>
+    `;
+    document.getElementById("timer-stop").addEventListener("click", stop);
+    document.getElementById("timer-pause").addEventListener("click", () => { paused = !paused; render(); });
+  }
+
+  function tick() {
+    if (paused) return;
+    remaining = Math.max(0, remaining - 1);
+    if (remaining <= 3 && remaining > 0) beep("warn");
+    if (remaining <= 0) {
+      if (isWork) {
+        if (currentRep >= parsed.reps - 1) {
+          stop();
+          setTimeout(() => alert(`All ${parsed.reps} reps done! 🔥 Great work.`), 100);
+          return;
+        }
+        isWork = false;
+        remaining = parsed.restSec;
+        beep("end");
+      } else {
+        currentRep++;
+        isWork = true;
+        remaining = parsed.workSec;
+        beep("start");
+      }
+    }
+    render();
+  }
+
+  function stop() {
+    clearInterval(tid);
+    overlay.classList.remove("open");
+    setTimeout(() => overlay.remove(), 300);
+  }
+
+  requestAnimationFrame(() => overlay.classList.add("open"));
+  render();
+  beep("start");
+  tid = setInterval(tick, 1000);
+}
+
+/* ---------- Set log sheet ---------- */
+
+function showLogSetSheet(weekNum, sessionId, blockIdx, blockName, defaultKg) {
+  const existing = getBlockLogs(weekNum, sessionId, blockIdx);
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  const pillsHtml = existing.length > 0
+    ? `<div class="set-log-pills">
+        ${existing.map((l) => `<span class="set-log-pill">
+          ${[l.kg != null ? l.kg + " kg" : null, l.reps != null ? "×" + l.reps : null, l.rpe != null ? "RPE " + l.rpe : null].filter(Boolean).join(" ")}
+          <span class="set-log-pill-del" data-logid="${escapeHtml(l.id)}">×</span>
+        </span>`).join("")}
+      </div>`
+    : "";
+
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">
+        Log set · ${escapeHtml(blockName)}
+        ${existing.length > 0 ? `<div class="action-sheet-title-sub">${existing.length} set${existing.length !== 1 ? "s" : ""} logged</div>` : ""}
+      </div>
+      <div class="action-sheet-group" style="padding:16px">
+        <div class="log-input-row">
+          <div class="log-input-col">
+            <div class="log-input-label">KG</div>
+            <input id="log-kg" class="log-input" type="number" step="2.5" min="0" value="${defaultKg || ""}" inputmode="decimal" />
+          </div>
+          <div class="log-input-col">
+            <div class="log-input-label">REPS</div>
+            <input id="log-reps" class="log-input" type="number" min="0" value="" inputmode="numeric" />
+          </div>
+          <div class="log-input-col">
+            <div class="log-input-label">RPE</div>
+            <input id="log-rpe" class="log-input" type="number" min="1" max="10" value="" inputmode="numeric" />
+          </div>
+        </div>
+        ${pillsHtml}
+      </div>
+      <div style="padding:0 10px 10px;display:flex;gap:10px">
+        <button class="btn btn-secondary" data-cancel="1" style="flex:1">Done</button>
+        <button class="btn" id="save-log-set" style="flex:1">+ Add set</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => {
+    sheet.classList.add("open");
+    setTimeout(() => document.getElementById("log-reps")?.focus(), 300);
+  });
+
+  function close() {
+    sheet.classList.remove("open");
+    setTimeout(() => sheet.remove(), 200);
+  }
+
+  sheet.querySelector("[data-cancel]").addEventListener("click", () => { close(); setTimeout(route, 220); });
+
+  document.getElementById("save-log-set").addEventListener("click", () => {
+    const kg = parseFloat(document.getElementById("log-kg")?.value);
+    const reps = parseInt(document.getElementById("log-reps")?.value);
+    const rpe = parseInt(document.getElementById("log-rpe")?.value);
+    if (isNaN(kg) && isNaN(reps)) return;
+    addBlockLog(weekNum, sessionId, blockIdx, {
+      kg: isNaN(kg) ? null : kg,
+      reps: isNaN(reps) ? null : reps,
+      rpe: isNaN(rpe) ? null : rpe,
+      at: new Date().toISOString()
+    });
+    close();
+    setTimeout(() => showLogSetSheet(weekNum, sessionId, blockIdx, blockName, isNaN(kg) ? defaultKg : kg), 250);
+  });
+
+  sheet.querySelectorAll(".set-log-pill-del").forEach((del) => {
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteBlockLog(weekNum, sessionId, blockIdx, del.dataset.logid);
+      close();
+      setTimeout(() => showLogSetSheet(weekNum, sessionId, blockIdx, blockName, defaultKg), 250);
+    });
+  });
+}
+
 /* ---------- Event delegation ---------- */
 
 function attachSessionHandlers(weekNum) {
   document.querySelectorAll("[data-action='toggle-done']").forEach((btn) => {
     btn.addEventListener("click", () => {
-      toggleSessionDone(weekNum, btn.dataset.session);
+      const sid = btn.dataset.session;
+      const wasDone = isSessionDone(weekNum, sid);
+      toggleSessionDone(weekNum, sid);
+      if (!wasDone) {
+        // Just marked done — ask for RPE
+        showRpePrompt(weekNum, sid);
+      }
       route();
     });
   });
@@ -1177,6 +1987,39 @@ function attachSessionHandlers(weekNum) {
       if (!confirm("Remove this exercise?")) return;
       deleteUserBlock(Number(btn.dataset.week), btn.dataset.sid, btn.dataset.ubid);
       route();
+    });
+  });
+
+  // Interval timer button
+  document.querySelectorAll("[data-action='start-timer']").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      try {
+        const block = JSON.parse(btn.dataset.block);
+        const parsed = parseIntervalScheme(block.scheme);
+        if (parsed) showIntervalTimer(block, parsed);
+      } catch {}
+    });
+  });
+
+  // Log set button
+  document.querySelectorAll("[data-action='log-set']").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showLogSetSheet(
+        Number(btn.dataset.week),
+        btn.dataset.sid,
+        Number(btn.dataset.bidx),
+        btn.dataset.name,
+        btn.dataset.kg ? Number(btn.dataset.kg) : null
+      );
+    });
+  });
+
+  // Session journal auto-save
+  document.querySelectorAll(".journal-input").forEach((ta) => {
+    ta.addEventListener("input", () => {
+      saveJournalNote(Number(ta.dataset.week), ta.dataset.sid, ta.value);
     });
   });
 }
