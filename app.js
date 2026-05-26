@@ -382,8 +382,9 @@ async function estimateItemNutrition(autoItems) {
   const list = autoItems.map((it, i) => `${i + 1}. ${it.name}${it.qty ? " — " + it.qty : ""}`).join("\n");
   const prompt = `You are a professional nutritionist. Estimate nutritional values for each food item below.\nReturn ONLY valid JSON (no markdown, no code fences) as an array with exactly ${autoItems.length} object(s) in this schema:\n[{"name":"string","kcal":number,"p":number,"c":number,"f":number}]\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Use the quantity given. Be accurate and realistic.\nItems:\n${list}\nReturn ONLY the JSON array.`;
 
+  // Text-only → gemini-3.1-flash-lite (500 RPD free, separate pool from photo model)
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -403,7 +404,11 @@ async function estimateItemNutrition(autoItems) {
   const data = await res.json();
   const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
   const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
-  return JSON.parse(clean);
+  const result = JSON.parse(clean);
+  // Track usage for the tier bar (resets when sessionStorage is cleared / new day)
+  const prev = parseInt(sessionStorage.getItem("hyrox.text.estimates.today") || "0", 10);
+  sessionStorage.setItem("hyrox.text.estimates.today", String(prev + autoItems.length));
+  return result;
 }
 
 /* ---------- Readiness check ---------- */
@@ -1760,10 +1765,14 @@ async function renderFuel(app) {
 
   const noKey = !tgt.geminiKey;
 
-  // Count today's photo analyses (meals with source="photo")
+  // Count today's usages by type (separate quota pools)
   const photoAnalysesToday = meals.filter((m) => m.source === "photo").length;
-  const FREE_TIER_DAILY = 20;
-  const tierPct = Math.min(100, Math.round(photoAnalysesToday / FREE_TIER_DAILY * 100));
+  const PHOTO_LIMIT = 20;   // gemini-2.5-flash RPD
+  const TEXT_LIMIT  = 500;  // gemini-3.1-flash-lite RPD
+  // Text estimates aren't stored per-meal so we track them in sessionStorage
+  const textEstimatesToday = parseInt(sessionStorage.getItem("hyrox.text.estimates.today") || "0", 10);
+  const photoPct = Math.min(100, Math.round(photoAnalysesToday / PHOTO_LIMIT * 100));
+  const textPct  = Math.min(100, Math.round(textEstimatesToday  / TEXT_LIMIT  * 100));
 
   app.innerHTML = `
     <h1 class="large-title">Fuel</h1>
@@ -1774,10 +1783,15 @@ async function renderFuel(app) {
       Add it in <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a> to enable photo analysis.
     </div>` : `<div class="fuel-tier-bar">
       <div class="fuel-tier-label">
-        <span>Gemini free tier</span>
-        <span class="fuel-tier-count">${photoAnalysesToday} / ${FREE_TIER_DAILY.toLocaleString()} analyses today</span>
+        <span>📷 Photos <span class="fuel-tier-model">2.5 Flash</span></span>
+        <span class="fuel-tier-count">${photoAnalysesToday} / ${PHOTO_LIMIT} today</span>
       </div>
-      <div class="fuel-tier-track"><div class="fuel-tier-fill" style="width:${tierPct}%"></div></div>
+      <div class="fuel-tier-track"><div class="fuel-tier-fill" style="width:${photoPct}%"></div></div>
+      <div class="fuel-tier-label" style="margin-top:8px">
+        <span>✨ Text estimates <span class="fuel-tier-model">3.1 Flash Lite</span></span>
+        <span class="fuel-tier-count">${textEstimatesToday} / ${TEXT_LIMIT} today</span>
+      </div>
+      <div class="fuel-tier-track"><div class="fuel-tier-fill fuel-tier-fill-text" style="width:${textPct}%"></div></div>
     </div>`}
 
     <div class="fuel-hero">

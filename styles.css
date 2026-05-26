@@ -2074,12 +2074,23 @@ textarea.form-input {
   overflow: hidden;
 }
 
+.fuel-tier-model {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-4);
+  margin-left: 4px;
+}
+
 .fuel-tier-fill {
   height: 100%;
   background: var(--success);
   border-radius: 2px;
   transition: width 0.3s ease;
   min-width: 2px;
+}
+
+.fuel-tier-fill-text {
+  background: var(--warn);
 }
 
 /* Hero block — kcal remaining + macro bars */

@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v23-gemini-2.5-flash";
+const APP_VERSION = "2026-05-26-v24-split-model-quotas";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
