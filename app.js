@@ -715,7 +715,7 @@ function toggleBlockDone(weekNum, sessionId, blockIdx) {
 let PLAN = null;
 let viewingWeekNum   = null; // week shown in train nav
 let selectedDayOverride = null; // day pill selection (null = smart default)
-let trainDayTab      = "training"; // "training" | "nutrition"
+let trainDayTab      = "training"; // "training" | "fitness"
 
 async function loadPlan() {
   const res = await fetch(PLAN_URL, { cache: "no-cache" });
@@ -972,11 +972,46 @@ async function renderTrain(app) {
       </div>
     </div>`;
 
-  /* ---- Training / Nutrition tab bar ---- */
-  const tabBarHtml = `
-    <div class="day-tab-bar">
-      <button class="day-tab${trainDayTab === "training"  ? " day-tab-active" : ""}" data-dtab="training">Training</button>
-      <button class="day-tab${trainDayTab === "nutrition" ? " day-tab-active" : ""}" data-dtab="nutrition">Nutrition</button>
+  /* ---- Day summary cards (Train / Fuel / Fitness) ---- */
+  const dayMeals  = getDayMeals(selDateStr);
+  const dayTotals = getDayTotals(dayMeals);
+  const tgt       = settings.nutrition;
+
+  // Train card: session title + meta or rest
+  const trainCardValue = selSession ? selSession.title : "Rest day";
+  const trainCardSub   = selSession
+    ? `${selSession.duration} min · ${({strength:"Strength",run:"Run",hybrid:"Hybrid",sim:"Hyrox sim",test:"Test"})[selSession.focus] || selSession.focus}`
+    : "Recovery";
+  const trainCardIcon  = selSession
+    ? ({strength:"💪",run:"🏃",hybrid:"⚡",sim:"🎯",test:"📊"})[selSession.focus] || "🏋️"
+    : "🛋️";
+
+  // Fuel card: kcal eaten vs target
+  const fuelKcal     = Math.round(dayTotals.kcal);
+  const fuelCardValue = fuelKcal > 0 ? `${fuelKcal.toLocaleString()} kcal` : "–";
+  const fuelPct       = tgt.kcalTarget > 0 ? Math.min(100, Math.round(fuelKcal / tgt.kcalTarget * 100)) : 0;
+  const fuelCardSub   = fuelKcal > 0 ? `${fuelPct}% of ${tgt.kcalTarget} target` : "Nothing logged";
+
+  const summaryCardsHtml = `
+    <div class="day-section-cards">
+      <button class="dsc${trainDayTab === "training" ? " dsc-active" : ""}" data-section="training">
+        <div class="dsc-icon">${trainCardIcon}</div>
+        <div class="dsc-label">Train</div>
+        <div class="dsc-value">${escapeHtml(trainCardValue)}</div>
+        <div class="dsc-meta">${escapeHtml(trainCardSub)}</div>
+      </button>
+      <button class="dsc dsc-fuel" data-section="fuel">
+        <div class="dsc-icon">🍎</div>
+        <div class="dsc-label">Fuel</div>
+        <div class="dsc-value">${fuelCardValue}</div>
+        <div class="dsc-meta">${escapeHtml(fuelCardSub)}</div>
+      </button>
+      <button class="dsc dsc-fitness-card" data-section="fitness" title="Coming soon">
+        <div class="dsc-icon">⌚</div>
+        <div class="dsc-label">Fitness</div>
+        <div class="dsc-value">–</div>
+        <div class="dsc-meta">Apple Watch</div>
+      </button>
     </div>`;
 
   /* ---- Day content ---- */
@@ -1015,13 +1050,13 @@ async function renderTrain(app) {
     }
 
     // Plan / Records quick links
-    const doneCount    = week.sessions.filter((s) => isSessionDone(wn, s.id)).length;
+    const doneCount     = week.sessions.filter((s) => isSessionDone(wn, s.id)).length;
     const totalSessions = week.sessions.length;
     dayContent += `
-      <div class="section-footer" style="text-align:center;margin-top:16px">
+      <div class="section-footer" style="text-align:center;margin-top:12px">
         Week ${wn} of ${PLAN.weeks.length}${phase ? " · " + escapeHtml(phase.name) : ""} · ${doneCount}/${totalSessions} done
       </div>
-      <div class="section-header" style="margin-top:20px">Plan &amp; Records</div>
+      <div class="section-header" style="margin-top:16px">Plan &amp; Records</div>
       <div class="list">
         <a href="#/plan" class="list-row">
           <div class="list-row-main"><div class="list-row-title">Training Plan</div><div class="list-row-sub">All phases and weeks</div></div>
@@ -1041,54 +1076,16 @@ async function renderTrain(app) {
         </a>
       </div>`;
 
-  } else {
-    // Nutrition tab for selected day
-    const dayMeals  = getDayMeals(selDateStr);
-    const dayTotals = getDayTotals(dayMeals);
-    const tgt       = settings.nutrition;
-
-    if (dayMeals.length > 0) {
-      const kcalLeft = tgt.kcalTarget - Math.round(dayTotals.kcal);
-      const isOver   = kcalLeft < 0;
-      const pPct = tgt.proteinTarget > 0 ? Math.min(100, Math.round(dayTotals.p / tgt.proteinTarget * 100)) : 0;
-      const cPct = tgt.carbTarget    > 0 ? Math.min(100, Math.round(dayTotals.c / tgt.carbTarget    * 100)) : 0;
-      const fPct = tgt.fatTarget     > 0 ? Math.min(100, Math.round(dayTotals.f / tgt.fatTarget     * 100)) : 0;
-      dayContent += `<div class="fuel-hero">
-        <div class="fuel-kcal-block">
-          <div class="fuel-kcal-num${isOver ? " fuel-over" : ""}">${Math.abs(kcalLeft)}</div>
-          <div class="fuel-kcal-label">${isOver ? "kcal over target" : "kcal remaining"}</div>
-          <div class="fuel-kcal-sub">${Math.round(dayTotals.kcal)} eaten · ${tgt.kcalTarget} target</div>
-        </div>
-        <div class="fuel-macro-stack">
-          <div class="fuel-macro-row"><span class="fuel-macro-name">Protein</span><div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-protein" style="width:${pPct}%"></div></div><span class="fuel-macro-gram">${Math.round(dayTotals.p)}<span class="fuel-macro-tgt">/${tgt.proteinTarget}g</span></span></div>
-          <div class="fuel-macro-row"><span class="fuel-macro-name">Carbs</span><div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-carb" style="width:${cPct}%"></div></div><span class="fuel-macro-gram">${Math.round(dayTotals.c)}<span class="fuel-macro-tgt">/${tgt.carbTarget}g</span></span></div>
-          <div class="fuel-macro-row"><span class="fuel-macro-name">Fat</span><div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-fat" style="width:${fPct}%"></div></div><span class="fuel-macro-gram">${Math.round(dayTotals.f)}<span class="fuel-macro-tgt">/${tgt.fatTarget}g</span></span></div>
-        </div>
+  } else if (trainDayTab === "fitness") {
+    dayContent += `
+      <div class="hero">
+        <div class="hero-eyebrow"><span>⌚</span><span>Apple Watch · Coming soon</span></div>
+        <div class="hero-title">Fitness summary</div>
+        <div class="hero-intent">Active energy, heart rate, steps, and workout data from Apple Health will appear here in a future update.</div>
       </div>`;
-    }
-
-    const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
-    if (dayMeals.length === 0) {
-      dayContent += `<div class="empty-state"><h3>Nothing logged</h3><p>${isSelToday ? "Tap + Log meal below." : "No meals recorded for " + escapeHtml(selDay) + "."}</p></div>`;
-    } else {
-      dayContent += dayMeals.map((meal) => `
-        <div class="meal-card">
-          <div class="meal-card-header">
-            <div><div class="meal-card-label">${escapeHtml(MEAL_LABELS[meal.label] || meal.label)}</div><div class="meal-card-time">${escapeHtml(meal.time)}</div></div>
-            <div style="text-align:right;flex:1;min-width:0"><div class="meal-card-kcal">${meal.total.kcal} kcal</div><div class="meal-card-macros">${meal.total.p}g P · ${meal.total.c}g C · ${meal.total.f}g F</div></div>
-            ${isSelToday ? `<button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}">×</button>` : ""}
-          </div>
-          <div class="meal-items-list">
-            ${meal.items.map((it) => `<div class="meal-item"><span class="meal-item-name">${escapeHtml(it.name)}</span><span class="meal-item-qty dim">${escapeHtml(it.qty)}</span><span class="meal-item-kcal">${it.kcal}</span></div>`).join("")}
-          </div>
-        </div>`).join("");
-    }
-    if (isSelToday) {
-      dayContent += `<button class="btn" id="day-log-meal-btn" style="margin-top:16px">+ Log meal</button>`;
-    }
   }
 
-  app.innerHTML = weekNavHtml + tabBarHtml + `<div id="day-content">${dayContent}</div>`;
+  app.innerHTML = weekNavHtml + summaryCardsHtml + `<div id="day-content">${dayContent}</div>`;
 
   /* ---- Bind events ---- */
   document.getElementById("tn-prev")?.addEventListener("click", () => {
@@ -1100,8 +1097,20 @@ async function renderTrain(app) {
   app.querySelectorAll(".tdp").forEach((btn) => {
     btn.addEventListener("click", () => { selectedDayOverride = btn.dataset.day; renderTrain(app); });
   });
-  app.querySelectorAll(".day-tab").forEach((btn) => {
-    btn.addEventListener("click", () => { trainDayTab = btn.dataset.dtab; renderTrain(app); });
+
+  // Summary card taps
+  app.querySelectorAll(".dsc").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const section = btn.dataset.section;
+      if (section === "fuel") {
+        // Navigate to Fuel tab, pre-set to the selected day
+        fuelViewDate = selDateStr === ymd(today()) ? null : selDateStr;
+        navigate("fuel");
+      } else {
+        trainDayTab = section;
+        renderTrain(app);
+      }
+    });
   });
 
   if (trainDayTab === "training" && selSession) {
@@ -1117,16 +1126,6 @@ async function renderTrain(app) {
     });
     app.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
       btn.addEventListener("click", () => { toggleSessionDone(wn, btn.dataset.catchupSkip); renderTrain(app); });
-    });
-  }
-
-  if (trainDayTab === "nutrition") {
-    document.getElementById("day-log-meal-btn")?.addEventListener("click", showLogMealSheet);
-    app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (confirm("Delete this meal?")) { deleteMeal(btn.dataset.mid); renderTrain(app); }
-      });
     });
   }
 }
