@@ -1532,6 +1532,11 @@ async function renderFuel(app) {
 
   const noKey = !tgt.geminiKey;
 
+  // Count today's photo analyses (meals with source="photo")
+  const photoAnalysesToday = meals.filter((m) => m.source === "photo").length;
+  const FREE_TIER_DAILY = 1500;
+  const tierPct = Math.min(100, Math.round(photoAnalysesToday / FREE_TIER_DAILY * 100));
+
   app.innerHTML = `
     <h1 class="large-title">Fuel</h1>
     <div class="large-title-sub">${new Date().toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long" })}</div>
@@ -1539,7 +1544,13 @@ async function renderFuel(app) {
     ${noKey ? `<div class="alert alert-warn">
       <strong>Gemini key missing</strong>
       Add it in <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a> to enable photo analysis.
-    </div>` : ""}
+    </div>` : `<div class="fuel-tier-bar">
+      <div class="fuel-tier-label">
+        <span>Gemini free tier</span>
+        <span class="fuel-tier-count">${photoAnalysesToday} / ${FREE_TIER_DAILY.toLocaleString()} analyses today</span>
+      </div>
+      <div class="fuel-tier-track"><div class="fuel-tier-fill" style="width:${tierPct}%"></div></div>
+    </div>`}
 
     <div class="fuel-hero">
       <div class="fuel-kcal-block">
@@ -3293,6 +3304,20 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
   });
 }
+
+/* ---------- Config file seed ---------- */
+// If config.js set window.HYROX_CONFIG, merge its key into Settings once.
+// This runs after config.js has loaded (it's a regular <script> above the module).
+(function seedConfig() {
+  try {
+    const cfg = window.HYROX_CONFIG;
+    if (!cfg || !cfg.geminiKey || !cfg.geminiKey.startsWith("AIza")) return;
+    const s = getSettings();
+    if ((s.nutrition?.geminiKey || "") === cfg.geminiKey) return; // already in sync
+    s.nutrition = { ...s.nutrition, geminiKey: cfg.geminiKey };
+    saveJSON(SETTINGS_KEY, s);
+  } catch {}
+})();
 
 /* ---------- Boot ---------- */
 

@@ -2042,6 +2042,46 @@ textarea.form-input {
    Fuel tab — meal tracker
    ============================================================ */
 
+/* Gemini free tier usage bar */
+.fuel-tier-bar {
+  background: var(--surface-1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.fuel-tier-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin-bottom: 7px;
+}
+
+.fuel-tier-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.fuel-tier-track {
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.fuel-tier-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  min-width: 2px;
+}
+
 /* Hero block — kcal remaining + macro bars */
 .fuel-hero {
   background: var(--surface-1);

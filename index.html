@@ -67,6 +67,14 @@
         onclick="(async()=>{const b=this.closest('#update-banner');b.hidden=true;try{const v=b.dataset.version;if(v)localStorage.setItem('hyrox.app.version',v)}catch(e){};if('serviceWorker' in navigator){try{const r=await navigator.serviceWorker.getRegistrations();for(const x of r)await x.unregister();}catch(e){};if(window.caches){try{const k=await caches.keys();for(const c of k)await caches.delete(c);}catch(e){}}};location.replace(location.pathname+'?v='+Date.now()+location.hash)})()">Reload</button>
     </div>
   </div>
+  <!-- config.js is gitignored; silently absent on GitHub Pages -->
+  <script>
+    (function() {
+      var s = document.createElement("script");
+      s.src = "config.js";
+      document.head.appendChild(s);
+    })();
+  </script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

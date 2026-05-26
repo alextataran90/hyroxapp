@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v16-fuel-meal-tracker";
+const APP_VERSION = "2026-05-26-v17-fuel-config-tier";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
