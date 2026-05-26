@@ -12,6 +12,7 @@ const SESSION_LOGS_KEY = "hyrox.sessionlogs";
 const READINESS_KEY = "hyrox.readiness";
 const PR_KEY = "hyrox.prs";
 const NUTRITION_KEY = "hyrox.nutrition";
+const FITNESS_KEY = "hyrox.fitness";
 const PLAN_URL = "plan.json";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -333,6 +334,58 @@ function deleteMeal(mealId, dateStr) {
 
 function makeMealId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+/* ---------- Fitness / Apple Watch ---------- */
+
+const APPLE_WORKOUT_MAP = {
+  "Running":                       { label: "Run",      icon: "🏃", focus: "run"      },
+  "Walking":                       { label: "Walk",     icon: "🚶", focus: "run"      },
+  "Hiking":                        { label: "Hike",     icon: "🥾", focus: "run"      },
+  "Cycling":                       { label: "Cycling",  icon: "🚴", focus: "hybrid"   },
+  "Swimming":                      { label: "Swim",     icon: "🏊", focus: "run"      },
+  "Functional Strength Training":  { label: "Strength", icon: "💪", focus: "strength" },
+  "Traditional Strength Training": { label: "Strength", icon: "💪", focus: "strength" },
+  "High Intensity Interval Training": { label: "HIIT",  icon: "⚡", focus: "hybrid"   },
+  "Cross Training":                { label: "Cross",    icon: "⚡", focus: "hybrid"   },
+  "Core Training":                 { label: "Core",     icon: "🔥", focus: "strength" },
+  "Other":                         { label: "Workout",  icon: "🏋️", focus: "hybrid"   },
+};
+
+function mapAppleWorkout(appleType) {
+  return APPLE_WORKOUT_MAP[appleType] || { label: appleType || "Workout", icon: "🏋️", focus: "hybrid" };
+}
+
+function getFitnessLog() {
+  try { return JSON.parse(localStorage.getItem(FITNESS_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function getDayWorkouts(dateStr) {
+  const log = getFitnessLog();
+  return (log[dateStr] && log[dateStr].workouts) ? log[dateStr].workouts : [];
+}
+
+function saveFitnessWorkout(workout, dateStr) {
+  const log = getFitnessLog();
+  const ds = dateStr || ymd(today());
+  if (!log[ds]) log[ds] = { workouts: [] };
+  const idx = log[ds].workouts.findIndex((w) => w.id === workout.id);
+  if (idx >= 0) log[ds].workouts[idx] = workout;
+  else log[ds].workouts.push(workout);
+  localStorage.setItem(FITNESS_KEY, JSON.stringify(log));
+}
+
+function deleteFitnessWorkout(workoutId, dateStr) {
+  const log = getFitnessLog();
+  const ds = dateStr || ymd(today());
+  if (!log[ds]) return;
+  log[ds].workouts = log[ds].workouts.filter((w) => w.id !== workoutId);
+  localStorage.setItem(FITNESS_KEY, JSON.stringify(log));
+}
+
+function makeWorkoutId() {
+  return "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
 /* ---------- Gemini Flash API ---------- */
@@ -780,6 +833,33 @@ async function route() {
   if (r.name === "session" && r.params[0]) viewingWeekNum = Number(r.params[0]);
   if (r.name === "week"    && r.params[0]) viewingWeekNum = Number(r.params[0]);
 
+  // Apple Watch import via Shortcut URL: #/fitness-import/date/type/dur/kcal/hr/hrmax/dist
+  if (r.name === "fitness-import") {
+    const [date, rawType, durStr, kcalStr, hrStr, hrmaxStr, distStr] = r.params;
+    // Clean the URL immediately so back-nav works
+    history.replaceState(null, "", location.pathname + "#/today");
+    document.querySelectorAll(".tab").forEach((el) => {
+      el.classList.toggle("active", el.dataset.tab === "today");
+    });
+    const app2 = document.getElementById("app");
+    try {
+      if (!PLAN) await loadPlan();
+      renderTopBar();
+      app2.innerHTML = "";
+      await renderTrain(app2);
+    } catch (e) { /* best-effort background render */ }
+    showFitnessImportSheet({
+      date:     date || ymd(today()),
+      type:     decodeURIComponent(rawType || "Other"),
+      duration: Math.round(parseFloat(durStr || "0")),
+      kcal:     Math.round(parseFloat(kcalStr || "0")),
+      hr:       Math.round(parseFloat(hrStr || "0")),
+      hrMax:    Math.round(parseFloat(hrmaxStr || "0")),
+      distance: Math.round(parseFloat(distStr || "0") * 10) / 10
+    });
+    return;
+  }
+
   const app = document.getElementById("app");
   try {
     if (!PLAN) await loadPlan();
@@ -992,6 +1072,17 @@ async function renderTrain(app) {
   const fuelPct       = tgt.kcalTarget > 0 ? Math.min(100, Math.round(fuelKcal / tgt.kcalTarget * 100)) : 0;
   const fuelCardSub   = fuelKcal > 0 ? `${fuelPct}% of ${tgt.kcalTarget} target` : "Nothing logged";
 
+  // Fitness card: real workout data if available
+  const dayWorkouts     = getDayWorkouts(selDateStr);
+  const hasWorkouts     = dayWorkouts.length > 0;
+  const fitTotalMin     = dayWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
+  const fitTotalKcal    = dayWorkouts.reduce((s, w) => s + (w.kcal || 0), 0);
+  const fitCardValue    = hasWorkouts ? `${fitTotalMin} min` : "–";
+  const fitCardSub      = hasWorkouts
+    ? `${fitTotalKcal > 0 ? fitTotalKcal + " kcal" : dayWorkouts[0].label}`
+    : "Apple Watch";
+  const fitCardActive   = trainDayTab === "fitness";
+
   const summaryCardsHtml = `
     <div class="day-section-cards">
       <button class="dsc${trainDayTab === "training" ? " dsc-active" : ""}" data-section="training">
@@ -1006,11 +1097,11 @@ async function renderTrain(app) {
         <div class="dsc-value">${fuelCardValue}</div>
         <div class="dsc-meta">${escapeHtml(fuelCardSub)}</div>
       </button>
-      <button class="dsc dsc-fitness-card" data-section="fitness" title="Coming soon">
+      <button class="dsc${fitCardActive ? " dsc-active" : ""}${hasWorkouts ? "" : " dsc-fitness-dim"}" data-section="fitness">
         <div class="dsc-icon">⌚</div>
         <div class="dsc-label">Fitness</div>
-        <div class="dsc-value">–</div>
-        <div class="dsc-meta">Apple Watch</div>
+        <div class="dsc-value">${fitCardValue}</div>
+        <div class="dsc-meta">${escapeHtml(fitCardSub)}</div>
       </button>
     </div>`;
 
@@ -1077,12 +1168,61 @@ async function renderTrain(app) {
       </div>`;
 
   } else if (trainDayTab === "fitness") {
-    dayContent += `
-      <div class="hero">
-        <div class="hero-eyebrow"><span>⌚</span><span>Apple Watch · Coming soon</span></div>
-        <div class="hero-title">Fitness summary</div>
-        <div class="hero-intent">Active energy, heart rate, steps, and workout data from Apple Health will appear here in a future update.</div>
-      </div>`;
+    if (dayWorkouts.length > 0) {
+      dayContent += dayWorkouts.map((w) => `
+        <div class="fi-card">
+          <div class="fi-card-header">
+            <span class="fi-card-icon">${w.icon || "🏋️"}</span>
+            <div class="fi-card-info">
+              <div class="fi-card-label">${escapeHtml(w.label || "Workout")}</div>
+              <div class="fi-card-source">${w.source === "shortcuts" ? "Apple Watch · Shortcuts" : "Manual"}</div>
+            </div>
+            <button class="fi-card-del" data-action="delete-workout" data-wid="${escapeHtml(w.id)}" data-date="${escapeHtml(selDateStr)}">×</button>
+          </div>
+          <div class="fi-card-stats">
+            <div class="fi-stat-chip"><div class="fi-sc-val">${w.duration}</div><div class="fi-sc-lbl">min</div></div>
+            ${w.kcal  ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.kcal}</div><div class="fi-sc-lbl">kcal</div></div>` : ""}
+            ${w.hr    ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.hr}</div><div class="fi-sc-lbl">avg bpm</div></div>` : ""}
+            ${w.hrMax ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.hrMax}</div><div class="fi-sc-lbl">max bpm</div></div>` : ""}
+            ${w.distance ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.distance.toFixed(1)}</div><div class="fi-sc-lbl">km</div></div>` : ""}
+          </div>
+        </div>`).join("");
+    } else {
+      dayContent += `
+        <div class="hero">
+          <div class="hero-eyebrow"><span>⌚</span><span>Apple Watch</span></div>
+          <div class="hero-title">No workout logged</div>
+          <div class="hero-intent">After your workout, run the Hyrox Trainer shortcut on your iPhone to import your Apple Watch data.</div>
+        </div>
+        <div class="section-header">Setup — 2 minutes</div>
+        <div class="list">
+          <div class="list-row">
+            <div class="list-row-main">
+              <div class="list-row-title">1. Build the Shortcut</div>
+              <div class="list-row-sub">Takes ~2 min in the Shortcuts app</div>
+            </div>
+          </div>
+          <div class="list-row" style="align-items:flex-start;padding:14px 16px">
+            <div class="list-row-main" style="font-size:13px;color:var(--text-2);line-height:1.6">
+              In Shortcuts: New shortcut → Add action <strong>Find Workouts</strong> (limit 1, sort by date desc) → Add action <strong>URL</strong>:<br>
+              <code class="fi-code">https://alextataran90.github.io/hyroxapp/#/fitness-import/<br>[Workout Date YYYY-MM-DD]/<br>[Workout Activity Type]/<br>[Workout Duration in minutes]/<br>[Workout Active Energy in kcal]/<br>[Workout Average Heart Rate]/<br>[Workout Maximum Heart Rate]/<br>[Workout Total Distance in km]</code><br>
+              → Add action <strong>Open URLs</strong>
+            </div>
+          </div>
+          <div class="list-row">
+            <div class="list-row-main">
+              <div class="list-row-title">2. Finish a workout on Apple Watch</div>
+              <div class="list-row-sub">Let it sync to iPhone Health (~30s)</div>
+            </div>
+          </div>
+          <div class="list-row">
+            <div class="list-row-main">
+              <div class="list-row-title">3. Run the Shortcut</div>
+              <div class="list-row-sub">Add it to your home screen for one-tap import</div>
+            </div>
+          </div>
+        </div>`;
+    }
   }
 
   app.innerHTML = weekNavHtml + summaryCardsHtml + `<div id="day-content">${dayContent}</div>`;
@@ -1126,6 +1266,18 @@ async function renderTrain(app) {
     });
     app.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
       btn.addEventListener("click", () => { toggleSessionDone(wn, btn.dataset.catchupSkip); renderTrain(app); });
+    });
+  }
+
+  if (trainDayTab === "fitness") {
+    app.querySelectorAll("[data-action='delete-workout']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("Delete this workout?")) {
+          deleteFitnessWorkout(btn.dataset.wid, btn.dataset.date);
+          renderTrain(app);
+        }
+      });
     });
   }
 }
@@ -2152,6 +2304,75 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr) {
   };
 
   renderSheet();
+}
+
+/* ---------- Fitness import confirmation sheet ---------- */
+
+function showFitnessImportSheet({ date, type, duration, kcal, hr, hrMax, distance }) {
+  const mapped   = mapAppleWorkout(type);
+  const vpParts  = date.split("-").map(Number);
+  const dateObj  = new Date(vpParts[0], vpParts[1] - 1, vpParts[2]);
+  const todayDs  = ymd(today());
+  const dateLabel = date === todayDs
+    ? "Today"
+    : dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  const close = (save) => {
+    overlay.classList.remove("open");
+    setTimeout(() => overlay.remove(), 280);
+    if (save) {
+      saveFitnessWorkout({
+        id:         makeWorkoutId(),
+        type:       mapped.focus,
+        appleType:  type,
+        label:      mapped.label,
+        icon:       mapped.icon,
+        duration,
+        kcal:       kcal || 0,
+        hr:         hr || 0,
+        hrMax:      hrMax || 0,
+        distance:   distance > 0 ? distance : null,
+        source:     "shortcuts",
+        importedAt: new Date().toISOString()
+      }, date);
+      // Switch to fitness tab so the user sees the result
+      trainDayTab = "fitness";
+    }
+  };
+
+  overlay.innerHTML = `
+    <div class="fuel-edit-sheet">
+      <div class="fuel-edit-topbar">
+        <button class="fuel-edit-cancel" id="fi-cancel">Cancel</button>
+        <span class="fuel-edit-title">Save workout?</span>
+        <button class="fuel-edit-save" id="fi-save">Save</button>
+      </div>
+      <div class="fuel-edit-scroll" style="padding:24px 20px">
+        <div class="fi-import-preview">
+          <div class="fi-import-icon">${mapped.icon}</div>
+          <div>
+            <div class="fi-import-label">${escapeHtml(mapped.label)}</div>
+            <div class="fi-import-date">${escapeHtml(dateLabel)} · Apple Watch</div>
+          </div>
+        </div>
+        <div class="fi-import-stats">
+          ${duration ? `<div class="fi-import-stat"><div class="fi-is-val">${duration}</div><div class="fi-is-lbl">min</div></div>` : ""}
+          ${kcal     ? `<div class="fi-import-stat"><div class="fi-is-val">${kcal.toLocaleString()}</div><div class="fi-is-lbl">kcal</div></div>` : ""}
+          ${hr       ? `<div class="fi-import-stat"><div class="fi-is-val">${hr}</div><div class="fi-is-lbl">avg bpm</div></div>` : ""}
+          ${hrMax    ? `<div class="fi-import-stat"><div class="fi-is-val">${hrMax}</div><div class="fi-is-lbl">max bpm</div></div>` : ""}
+          ${distance ? `<div class="fi-import-stat"><div class="fi-is-val">${distance.toFixed(1)}</div><div class="fi-is-lbl">km</div></div>` : ""}
+        </div>
+      </div>
+    </div>`;
+
+  overlay.querySelector("#fi-cancel").addEventListener("click", () => close(false));
+  overlay.querySelector("#fi-save").addEventListener("click", () => close(true));
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
 }
 
 function fuelItemRow(it, i) {
