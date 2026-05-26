@@ -1113,9 +1113,6 @@ async function renderTrain(app) {
     app.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
       btn.addEventListener("click", () => { toggleSessionDone(wn, btn.dataset.catchupSkip); renderTrain(app); });
     });
-    if (isSelToday && !getTodayReadiness() && !isSessionDone(wn, selSession.id)) {
-      setTimeout(() => showReadinessCheck(() => {}), 500);
-    }
   }
 
   if (trainDayTab === "nutrition") {
