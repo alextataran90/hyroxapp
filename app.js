@@ -372,6 +372,40 @@ async function analyzeFood(base64Data, mimeType) {
   return JSON.parse(clean);
 }
 
+/* ---------- AI nutrition estimation (text-only, no image) ---------- */
+
+async function estimateItemNutrition(autoItems) {
+  const s = getSettings();
+  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
+  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
+
+  const list = autoItems.map((it, i) => `${i + 1}. ${it.name}${it.qty ? " — " + it.qty : ""}`).join("\n");
+  const prompt = `You are a professional nutritionist. Estimate nutritional values for each food item below.\nReturn ONLY valid JSON (no markdown, no code fences) as an array with exactly ${autoItems.length} object(s) in this schema:\n[{"name":"string","kcal":number,"p":number,"c":number,"f":number}]\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Use the quantity given. Be accurate and realistic.\nItems:\n${list}\nReturn ONLY the JSON array.`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1 }
+      })
+    }
+  );
+
+  if (!res.ok) {
+    let msg = `Gemini error ${res.status}`;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
+  return JSON.parse(clean);
+}
+
 /* ---------- Readiness check ---------- */
 
 function getTodayReadiness() {
@@ -1874,7 +1908,8 @@ function showLogMealSheet() {
 /* ---------- Meal edit / confirm sheet ---------- */
 
 function showMealEditSheet(initItems, aiNotes, source) {
-  let items = initItems.map((it) => ({ name: it.name || "", qty: it.qty || "", kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0 }));
+  // auto:true means "estimate this item via Gemini" — not yet calculated
+  let items = initItems.map((it) => ({ name: it.name || "", qty: it.qty || "", kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0, auto: false }));
   const LABELS = ["breakfast", "lunch", "dinner", "snack"];
   const h = new Date().getHours();
   let selLabel = h < 10 ? "breakfast" : h < 14 ? "lunch" : h < 19 ? "dinner" : "snack";
@@ -1886,15 +1921,19 @@ function showMealEditSheet(initItems, aiNotes, source) {
 
   const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
 
-  const calcTotal = () => items.reduce((a, it) => ({
-    kcal: a.kcal + (Number(it.kcal) || 0),
-    p:    a.p    + (Number(it.p)    || 0),
-    c:    a.c    + (Number(it.c)    || 0),
-    f:    a.f    + (Number(it.f)    || 0)
-  }), { kcal: 0, p: 0, c: 0, f: 0 });
+  // Skip items pending estimation in the running total
+  const calcTotal = () => items
+    .filter((it) => !it.auto)
+    .reduce((a, it) => ({
+      kcal: a.kcal + (Number(it.kcal) || 0),
+      p:    a.p    + (Number(it.p)    || 0),
+      c:    a.c    + (Number(it.c)    || 0),
+      f:    a.f    + (Number(it.f)    || 0)
+    }), { kcal: 0, p: 0, c: 0, f: 0 });
 
   const renderSheet = () => {
     const tot = calcTotal();
+    const autoCount = items.filter((it) => it.auto).length;
     overlay.innerHTML = `
       <div class="fuel-edit-sheet">
         <div class="fuel-edit-topbar">
@@ -1910,10 +1949,11 @@ function showMealEditSheet(initItems, aiNotes, source) {
           <div id="fed-items">
             ${items.map((it, i) => fuelItemRow(it, i)).join("")}
           </div>
+          ${autoCount > 0 ? `<button class="fed-estimate-btn" id="fed-estimate">✨ Estimate nutrition for ${autoCount} item${autoCount > 1 ? "s" : ""}</button>` : ""}
           <button class="fuel-add-item" id="fed-add">+ Add item</button>
           <div class="fuel-edit-total">
             <div class="fuel-edit-total-row">
-              <span>Total</span>
+              <span>Total${autoCount > 0 ? `<span class="fed-total-note"> (${autoCount} pending)</span>` : ""}</span>
               <span id="fed-total-kcal" class="fuel-edit-total-kcal">${Math.round(tot.kcal)} kcal</span>
             </div>
             <div id="fed-total-macros" class="fuel-edit-total-macros">${Math.round(tot.p)}g P · ${Math.round(tot.c)}g C · ${Math.round(tot.f)}g F</div>
@@ -1921,6 +1961,13 @@ function showMealEditSheet(initItems, aiNotes, source) {
         </div>
       </div>`;
     bindSheet();
+  };
+
+  const syncDomToItems = () => {
+    overlay.querySelectorAll(".fed-field").forEach((inp) => {
+      const i = Number(inp.dataset.i);
+      if (i < items.length) items[i][inp.dataset.f] = inp.type === "number" ? (Number(inp.value) || 0) : inp.value;
+    });
   };
 
   const updateTotals = () => {
@@ -1944,12 +1991,59 @@ function showMealEditSheet(initItems, aiNotes, source) {
     });
 
     overlay.querySelectorAll(".fed-del").forEach((b) => b.addEventListener("click", () => {
+      syncDomToItems();
       items.splice(Number(b.dataset.i), 1);
       renderSheet();
     }));
 
+    // Auto-estimate toggle per item
+    overlay.querySelectorAll(".fed-auto-btn").forEach((b) => b.addEventListener("click", () => {
+      syncDomToItems();
+      const i = Number(b.dataset.autoI);
+      items[i].auto = !items[i].auto;
+      // If turning auto OFF, keep existing values (may be 0 — user can fill them)
+      renderSheet();
+    }));
+
+    // Batch Gemini estimate for all auto-flagged items
+    overlay.querySelector("#fed-estimate")?.addEventListener("click", async () => {
+      syncDomToItems();
+      const autoItems = items.filter((it) => it.auto && it.name.trim());
+      if (!autoItems.length) {
+        alert("Add a name to the items you want estimated, then tap Estimate.");
+        return;
+      }
+      const btn = overlay.querySelector("#fed-estimate");
+      btn.disabled = true;
+      btn.textContent = "Estimating…";
+      try {
+        const results = await estimateItemNutrition(autoItems);
+        // Map results back by order (same order as autoItems filter)
+        let rIdx = 0;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].auto && items[i].name.trim()) {
+            const r = results[rIdx++];
+            if (r) {
+              items[i].kcal = Math.round(r.kcal || 0);
+              items[i].p    = Math.round((r.p    || 0) * 10) / 10;
+              items[i].c    = Math.round((r.c    || 0) * 10) / 10;
+              items[i].f    = Math.round((r.f    || 0) * 10) / 10;
+              items[i].auto = false; // estimated — now fully editable
+            }
+          }
+        }
+        renderSheet();
+      } catch (err) {
+        btn.disabled = false;
+        const ac = items.filter((it) => it.auto).length;
+        btn.textContent = `✨ Estimate nutrition for ${ac} item${ac > 1 ? "s" : ""}`;
+        alert("Estimation failed: " + err.message);
+      }
+    });
+
     overlay.querySelector("#fed-add")?.addEventListener("click", () => {
-      items.push({ name: "", qty: "", kcal: 0, p: 0, c: 0, f: 0 });
+      syncDomToItems();
+      items.push({ name: "", qty: "", kcal: 0, p: 0, c: 0, f: 0, auto: false });
       renderSheet();
       const names = overlay.querySelectorAll(".fed-name");
       if (names.length) names[names.length - 1].focus();
@@ -1958,12 +2052,9 @@ function showMealEditSheet(initItems, aiNotes, source) {
     overlay.querySelector("#fed-cancel")?.addEventListener("click", close);
 
     overlay.querySelector("#fed-save")?.addEventListener("click", () => {
-      // Sync latest DOM values
-      overlay.querySelectorAll(".fed-field").forEach((inp) => {
-        const i = Number(inp.dataset.i);
-        if (i < items.length) items[i][inp.dataset.f] = inp.type === "number" ? (Number(inp.value) || 0) : inp.value;
-      });
-      const valid = items.filter((it) => it.name || it.kcal > 0);
+      syncDomToItems();
+      // Drop items still pending estimation (auto=true) — they have no meaningful values
+      const valid = items.filter((it) => !it.auto && (it.name || it.kcal > 0));
       if (!valid.length) { close(); return; }
       const tot = valid.reduce((a, it) => ({ kcal: a.kcal + it.kcal, p: a.p + it.p, c: a.c + it.c, f: a.f + it.f }), { kcal: 0, p: 0, c: 0, f: 0 });
       const now2 = new Date();
@@ -1985,18 +2076,22 @@ function showMealEditSheet(initItems, aiNotes, source) {
 }
 
 function fuelItemRow(it, i) {
-  return `<div class="fed-item">
+  return `<div class="fed-item${it.auto ? " fed-item-auto" : ""}">
     <div class="fed-item-top">
       <input class="fed-field fed-name" data-i="${i}" data-f="name" type="text" value="${escapeHtml(it.name)}" placeholder="Food name" />
-      <input class="fed-field fed-qty" data-i="${i}" data-f="qty" type="text" value="${escapeHtml(it.qty)}" placeholder="qty" />
+      <input class="fed-field fed-qty" data-i="${i}" data-f="qty" type="text" value="${escapeHtml(it.qty)}" placeholder="qty / g" />
+      <button class="fed-auto-btn${it.auto ? " fed-auto-on" : ""}" data-auto-i="${i}" title="${it.auto ? "Manual entry" : "Auto-estimate with AI"}">✨</button>
       <button class="fed-del" data-i="${i}" aria-label="Remove">×</button>
     </div>
-    <div class="fed-item-nums">
-      <div class="fed-num-col"><label>kcal</label><input class="fed-field fed-num" data-i="${i}" data-f="kcal" type="number" inputmode="decimal" value="${it.kcal}" /></div>
-      <div class="fed-num-col"><label>P (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="p" type="number" inputmode="decimal" value="${it.p}" /></div>
-      <div class="fed-num-col"><label>C (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="c" type="number" inputmode="decimal" value="${it.c}" /></div>
-      <div class="fed-num-col"><label>F (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="f" type="number" inputmode="decimal" value="${it.f}" /></div>
-    </div>
+    ${it.auto
+      ? `<div class="fed-auto-pending">AI will estimate kcal &amp; macros ✦ tap ✨ to enter manually</div>`
+      : `<div class="fed-item-nums">
+          <div class="fed-num-col"><label>kcal</label><input class="fed-field fed-num" data-i="${i}" data-f="kcal" type="number" inputmode="decimal" value="${it.kcal}" /></div>
+          <div class="fed-num-col"><label>P (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="p" type="number" inputmode="decimal" value="${it.p}" /></div>
+          <div class="fed-num-col"><label>C (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="c" type="number" inputmode="decimal" value="${it.c}" /></div>
+          <div class="fed-num-col"><label>F (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="f" type="number" inputmode="decimal" value="${it.f}" /></div>
+        </div>`
+    }
   </div>`;
 }
 
