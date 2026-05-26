@@ -313,21 +313,21 @@ function getDayTotals(meals) {
   }), { kcal: 0, p: 0, c: 0, f: 0 });
 }
 
-function saveMeal(meal) {
+function saveMeal(meal, dateStr) {
   const log = getNutritionLog();
-  const dateStr = ymd(today());
-  if (!log[dateStr]) log[dateStr] = { meals: [] };
-  const idx = log[dateStr].meals.findIndex((m) => m.id === meal.id);
-  if (idx >= 0) log[dateStr].meals[idx] = meal;
-  else log[dateStr].meals.push(meal);
+  const ds = dateStr || ymd(today());
+  if (!log[ds]) log[ds] = { meals: [] };
+  const idx = log[ds].meals.findIndex((m) => m.id === meal.id);
+  if (idx >= 0) log[ds].meals[idx] = meal;
+  else log[ds].meals.push(meal);
   localStorage.setItem(NUTRITION_KEY, JSON.stringify(log));
 }
 
-function deleteMeal(mealId) {
+function deleteMeal(mealId, dateStr) {
   const log = getNutritionLog();
-  const dateStr = ymd(today());
-  if (!log[dateStr]) return;
-  log[dateStr].meals = log[dateStr].meals.filter((m) => m.id !== mealId);
+  const ds = dateStr || ymd(today());
+  if (!log[ds]) return;
+  log[ds].meals = log[ds].meals.filter((m) => m.id !== mealId);
   localStorage.setItem(NUTRITION_KEY, JSON.stringify(log));
 }
 
@@ -1658,12 +1658,23 @@ ROUTES.fuel = renderFuel;
 
 // Module-level state for Fuel period picker
 let fuelSummaryPeriod = 0; // 0 = this week, 1 = last week
+let fuelViewDate = null; // null = today; "YYYY-MM-DD" for historical days
 
 async function renderFuel(app) {
-  const meals  = getTodayMeals();
+  const s   = getSettings();
+  const tgt = s.nutrition;
+
+  // Day navigation
+  const todayDs  = ymd(today());
+  const viewDs   = fuelViewDate || todayDs;
+  // Parse the viewed date in local time
+  const vpParts  = viewDs.split("-").map(Number);
+  const viewDate = new Date(vpParts[0], vpParts[1] - 1, vpParts[2]);
+  const isToday  = viewDs === todayDs;
+
+  const meals  = getDayMeals(viewDs);
   const totals = getDayTotals(meals);
-  const s      = getSettings();
-  const tgt    = s.nutrition;
+
   const kcalLeft = tgt.kcalTarget - Math.round(totals.kcal);
   const isOver   = kcalLeft < 0;
 
@@ -1671,10 +1682,44 @@ async function renderFuel(app) {
   const cPct = tgt.carbTarget    > 0 ? Math.min(100, Math.round(totals.c / tgt.carbTarget    * 100)) : 0;
   const fPct = tgt.fatTarget     > 0 ? Math.min(100, Math.round(totals.f / tgt.fatTarget     * 100)) : 0;
 
-  const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
+  // 7-day rolling average (7 days prior to viewDate, excluding viewDate itself)
+  let avgKcal = 0, avgP = 0, avgC = 0, avgF = 0, avgDays = 0;
+  for (let i = 1; i <= 7; i++) {
+    const d  = new Date(viewDate.getTime() - i * 86400000);
+    const ds = ymd(d);
+    const dm = getDayMeals(ds);
+    if (dm.length > 0) {
+      const t = getDayTotals(dm);
+      avgKcal += t.kcal; avgP += t.p; avgC += t.c; avgF += t.f;
+      avgDays++;
+    }
+  }
+  const has7dAvg = avgDays > 0;
+  if (has7dAvg) {
+    avgKcal = Math.round(avgKcal / avgDays);
+    avgP    = Math.round(avgP    / avgDays * 10) / 10;
+    avgC    = Math.round(avgC    / avgDays * 10) / 10;
+    avgF    = Math.round(avgF    / avgDays * 10) / 10;
+  }
+  const kcalDelta = Math.round(totals.kcal) - avgKcal;
+  const pDelta    = Math.round(totals.p * 10) / 10 - avgP;
+  const cDelta    = Math.round(totals.c * 10) / 10 - avgC;
+  const fDelta    = Math.round(totals.f * 10) / 10 - avgF;
 
+  // Nav constraints: can go back 90 days max
+  const minDate      = new Date(today().getTime() - 90 * 86400000);
+  const canGoBack    = viewDate > minDate;
+  const canGoForward = viewDs < todayDs;
+
+  // Date header label
+  const dateLabel = isToday
+    ? "Today"
+    : viewDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+
+  // Meal cards
+  const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
   const mealsHtml = meals.length === 0
-    ? `<div class="empty-state"><h3>Nothing logged yet</h3><p>Tap + Log meal to add your first meal today.</p></div>`
+    ? `<div class="empty-state"><h3>Nothing logged</h3><p>Tap + Log meal to add a meal${isToday ? " today" : " for this day"}.</p></div>`
     : meals.map((meal) => `
         <div class="meal-card">
           <div class="meal-card-header">
@@ -1686,7 +1731,7 @@ async function renderFuel(app) {
               <div class="meal-card-kcal">${meal.total.kcal} kcal</div>
               <div class="meal-card-macros">${meal.total.p}g P · ${meal.total.c}g C · ${meal.total.f}g F</div>
             </div>
-            <button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}">×</button>
+            <button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}" data-date="${escapeHtml(viewDs)}">×</button>
           </div>
           <div class="meal-items-list">
             ${meal.items.map((it) => `
@@ -1698,36 +1743,10 @@ async function renderFuel(app) {
           </div>
         </div>`).join("");
 
-  // 7-day bar chart data
-  const chartDays = [];
-  const d0 = today();
-  for (let i = 6; i >= 0; i--) {
-    const dd = new Date(d0.getTime() - i * 86400000);
-    const ds = ymd(dd);
-    const t  = getDayTotals(getDayMeals(ds));
-    chartDays.push({ label: DAY_NAMES[dd.getDay()].slice(0, 2), kcal: Math.round(t.kcal), isToday: i === 0 });
-  }
-  const maxBar = Math.max(...chartDays.map((d) => d.kcal), tgt.kcalTarget, 1);
-
-  const histHtml = chartDays.map((d) => {
-    const h    = Math.round((d.kcal / maxBar) * 52);
-    const tgtH = Math.round((tgt.kcalTarget / maxBar) * 52);
-    return `<div class="fuel-hist-col${d.isToday ? " fuel-hist-today" : ""}">
-      <div class="fuel-hist-bar-wrap" style="height:52px">
-        <div class="fuel-hist-target-line" style="bottom:${tgtH}px"></div>
-        <div class="fuel-hist-bar${d.kcal > tgt.kcalTarget ? " fuel-hist-over" : ""}" style="height:${h}px"></div>
-      </div>
-      <div class="fuel-hist-num">${d.kcal > 0 ? d.kcal : ""}</div>
-      <div class="fuel-hist-label">${d.label}</div>
-    </div>`;
-  }).join("");
-
   // Weekly summary
-  const wSumm  = getNutritionWeekSummary(fuelSummaryPeriod);
-  const todayDs = ymd(today());
+  const wSumm   = getNutritionWeekSummary(fuelSummaryPeriod);
   const wkTitle = fuelSummaryPeriod === 0 ? "This Week" : "Last Week";
-  const wkStart = wSumm.startDate.toLocaleDateString("en-GB", { day:"numeric", month:"short" });
-
+  const wkStart = wSumm.startDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   const weekStatHtml = wSumm.loggedDays === 0
     ? `<div class="empty-state" style="margin:0;padding:12px 0 4px"><p style="font-size:14px">No data logged for ${wkTitle.toLowerCase()}.</p></div>`
     : `<div class="fuel-week-stat-grid">
@@ -1754,8 +1773,8 @@ async function renderFuel(app) {
       </div>
       <div class="fuel-week-daily-row">
         ${wSumm.daily.map((day) => {
-          const isToday = day.ds === todayDs;
-          return `<div class="fuel-week-day-col${isToday ? " is-today" : ""}">
+          const isTodayCol = day.ds === todayDs;
+          return `<div class="fuel-week-day-col${isTodayCol ? " is-today" : ""}">
             <div class="fuel-week-day-label">${day.label}</div>
             <div class="fuel-week-day-dot${day.hasData ? " has-data" : ""}"></div>
             <div class="fuel-week-day-kcal">${day.hasData ? Math.round(day.kcal).toLocaleString() : ""}</div>
@@ -1763,36 +1782,24 @@ async function renderFuel(app) {
         }).join("")}
       </div>`;
 
+  // Quota tier bar
   const noKey = !tgt.geminiKey;
-
-  // Count today's usages by type (separate quota pools)
-  const photoAnalysesToday = meals.filter((m) => m.source === "photo").length;
-  const PHOTO_LIMIT = 20;   // gemini-2.5-flash RPD
-  const TEXT_LIMIT  = 500;  // gemini-3.1-flash-lite RPD
-  // Text estimates aren't stored per-meal so we track them in sessionStorage
+  const photoAnalysesToday = getDayMeals(todayDs).filter((m) => m.source === "photo").length;
+  const PHOTO_LIMIT = 20;
+  const TEXT_LIMIT  = 500;
   const textEstimatesToday = parseInt(sessionStorage.getItem("hyrox.text.estimates.today") || "0", 10);
   const photoPct = Math.min(100, Math.round(photoAnalysesToday / PHOTO_LIMIT * 100));
   const textPct  = Math.min(100, Math.round(textEstimatesToday  / TEXT_LIMIT  * 100));
 
   app.innerHTML = `
-    <h1 class="large-title">Fuel</h1>
-    <div class="large-title-sub">${new Date().toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long" })}</div>
-
-    ${noKey ? `<div class="alert alert-warn">
-      <strong>Gemini key missing</strong>
-      Add it in <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a> to enable photo analysis.
-    </div>` : `<div class="fuel-tier-bar">
-      <div class="fuel-tier-label">
-        <span>📷 Photos <span class="fuel-tier-model">2.5 Flash</span></span>
-        <span class="fuel-tier-count">${photoAnalysesToday} / ${PHOTO_LIMIT} today</span>
+    <div class="fuel-day-nav">
+      <button class="fuel-day-arrow" id="fuel-prev-day"${canGoBack ? "" : " disabled"}>‹</button>
+      <div class="fuel-day-center">
+        <div class="fuel-day-label">${dateLabel}</div>
+        ${!isToday ? `<button class="fuel-day-today-btn" id="fuel-goto-today">Today</button>` : ""}
       </div>
-      <div class="fuel-tier-track"><div class="fuel-tier-fill" style="width:${photoPct}%"></div></div>
-      <div class="fuel-tier-label" style="margin-top:8px">
-        <span>✨ Text estimates <span class="fuel-tier-model">3.1 Flash Lite</span></span>
-        <span class="fuel-tier-count">${textEstimatesToday} / ${TEXT_LIMIT} today</span>
-      </div>
-      <div class="fuel-tier-track"><div class="fuel-tier-fill fuel-tier-fill-text" style="width:${textPct}%"></div></div>
-    </div>`}
+      <button class="fuel-day-arrow" id="fuel-next-day"${canGoForward ? "" : " disabled"}>›</button>
+    </div>
 
     <div class="fuel-hero">
       <div class="fuel-kcal-block">
@@ -1819,14 +1826,21 @@ async function renderFuel(app) {
       </div>
     </div>
 
+    ${has7dAvg ? `<div class="fuel-avg-compare">
+      <span class="fuel-avg-label">vs 7d avg</span>
+      <span class="fuel-avg-item${kcalDelta > 0 ? " avg-pos" : kcalDelta < 0 ? " avg-neg" : ""}">${kcalDelta > 0 ? "+" : ""}${kcalDelta} kcal</span>
+      <span class="fuel-avg-sep">·</span>
+      <span class="fuel-avg-item${pDelta > 0 ? " avg-pos" : pDelta < 0 ? " avg-neg" : ""}">${pDelta > 0 ? "+" : ""}${pDelta}g P</span>
+      <span class="fuel-avg-sep">·</span>
+      <span class="fuel-avg-item${cDelta > 0 ? " avg-pos" : cDelta < 0 ? " avg-neg" : ""}">${cDelta > 0 ? "+" : ""}${cDelta}g C</span>
+      <span class="fuel-avg-sep">·</span>
+      <span class="fuel-avg-item${fDelta > 0 ? " avg-pos" : fDelta < 0 ? " avg-neg" : ""}">${fDelta > 0 ? "+" : ""}${fDelta}g F</span>
+    </div>` : ""}
+
     <button class="btn" id="log-meal-btn">+ Log meal</button>
 
-    <div class="section-header">Today's meals</div>
+    <div class="section-header">Meals</div>
     ${mealsHtml}
-
-    <div class="section-header">Last 7 days</div>
-    <div class="fuel-history">${histHtml}</div>
-    <div class="section-footer">Orange bar = over target. Dashed line = daily target (${tgt.kcalTarget} kcal).</div>
 
     <div class="section-header" style="margin-top:24px">Weekly summary</div>
     <div class="fuel-period-picker">
@@ -1837,16 +1851,51 @@ async function renderFuel(app) {
       <div class="fuel-week-summary-title">${wkTitle} · w/c ${wkStart} · ${wSumm.loggedDays}/7 days logged</div>
       ${weekStatHtml}
     </div>
+
+    ${noKey ? `<div class="alert alert-warn" style="margin-top:16px">
+      <strong>Gemini key missing</strong>
+      Add it in <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a> to enable photo analysis.
+    </div>` : `<div class="fuel-tier-bar">
+      <div class="fuel-tier-label">
+        <span>📷 Photos <span class="fuel-tier-model">2.5 Flash</span></span>
+        <span class="fuel-tier-count">${photoAnalysesToday} / ${PHOTO_LIMIT} today</span>
+      </div>
+      <div class="fuel-tier-track"><div class="fuel-tier-fill" style="width:${photoPct}%"></div></div>
+      <div class="fuel-tier-label" style="margin-top:8px">
+        <span>✨ Text estimates <span class="fuel-tier-model">3.1 Flash Lite</span></span>
+        <span class="fuel-tier-count">${textEstimatesToday} / ${TEXT_LIMIT} today</span>
+      </div>
+      <div class="fuel-tier-track"><div class="fuel-tier-fill fuel-tier-fill-text" style="width:${textPct}%"></div></div>
+    </div>`}
   `;
 
-  document.getElementById("log-meal-btn").addEventListener("click", showLogMealSheet);
+  // Day navigation event handlers
+  document.getElementById("fuel-prev-day")?.addEventListener("click", () => {
+    const cur = fuelViewDate ? new Date(fuelViewDate + "T00:00:00") : today();
+    const prev = new Date(cur.getTime() - 86400000);
+    fuelViewDate = ymd(prev);
+    renderFuel(app);
+  });
+  document.getElementById("fuel-next-day")?.addEventListener("click", () => {
+    const cur = fuelViewDate ? new Date(fuelViewDate + "T00:00:00") : today();
+    const next = new Date(cur.getTime() + 86400000);
+    const nextDs = ymd(next);
+    fuelViewDate = nextDs >= todayDs ? null : nextDs;
+    renderFuel(app);
+  });
+  document.getElementById("fuel-goto-today")?.addEventListener("click", () => {
+    fuelViewDate = null;
+    renderFuel(app);
+  });
+
+  document.getElementById("log-meal-btn").addEventListener("click", () => showLogMealSheet(viewDs));
 
   app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (confirm("Delete this meal?")) {
-        deleteMeal(btn.dataset.mid);
-        route();
+        deleteMeal(btn.dataset.mid, btn.dataset.date);
+        renderFuel(app);
       }
     });
   });
@@ -1881,7 +1930,7 @@ function showGeminiError(msg) {
 
 /* ---------- Log meal sheet (camera / library / manual) ---------- */
 
-function showLogMealSheet() {
+function showLogMealSheet(targetDateStr) {
   const sheet = document.createElement("div");
   sheet.className = "action-sheet-backdrop";
   sheet.innerHTML = `
@@ -1920,7 +1969,7 @@ function showLogMealSheet() {
       try {
         const result = await analyzeFood(b64, mime);
         loader.remove();
-        showMealEditSheet(result.items || [], result.notes || "", "photo");
+        showMealEditSheet(result.items || [], result.notes || "", "photo", targetDateStr);
       } catch (err) {
         loader.remove();
         showGeminiError(err.message);
@@ -1931,14 +1980,14 @@ function showLogMealSheet() {
 
   sheet.querySelector("#meal-cam").addEventListener("change", (e) => processFile(e.target.files[0]));
   sheet.querySelector("#meal-lib").addEventListener("change", (e) => processFile(e.target.files[0]));
-  sheet.querySelector("#meal-manual-btn").addEventListener("click", () => { close(); showMealEditSheet([], "", "manual"); });
+  sheet.querySelector("#meal-manual-btn").addEventListener("click", () => { close(); showMealEditSheet([], "", "manual", targetDateStr); });
   sheet.querySelector("#meal-sheet-cancel").addEventListener("click", close);
   sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
 }
 
 /* ---------- Meal edit / confirm sheet ---------- */
 
-function showMealEditSheet(initItems, aiNotes, source) {
+function showMealEditSheet(initItems, aiNotes, source, targetDateStr) {
   // auto:true means "estimate this item via Gemini" — not yet calculated
   let items = initItems.map((it) => ({ name: it.name || "", qty: it.qty || "", kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0, auto: false }));
   const LABELS = ["breakfast", "lunch", "dinner", "snack"];
@@ -2096,7 +2145,7 @@ function showMealEditSheet(initItems, aiNotes, source) {
         items: valid,
         total: { kcal: Math.round(tot.kcal), p: Math.round(tot.p * 10) / 10, c: Math.round(tot.c * 10) / 10, f: Math.round(tot.f * 10) / 10 },
         source: source || "manual"
-      });
+      }, targetDateStr);
       close();
       const rn = getRoute().name;
       if (rn === "fuel" || rn === "today") route();
