@@ -388,6 +388,213 @@ function makeWorkoutId() {
   return "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
+function getAllWorkouts() {
+  const log = getFitnessLog();
+  const all = [];
+  for (const [date, entry] of Object.entries(log)) {
+    if (entry && entry.workouts) {
+      entry.workouts.forEach((w) => all.push({ ...w, date }));
+    }
+  }
+  return all.sort((a, b) => (b.startTime || b.date).localeCompare(a.startTime || a.date));
+}
+
+/* ---------- HR zones ---------- */
+
+const HR_ZONES = [
+  { z: "z1", label: "Z1", name: "Recovery",  color: "#64a8ff" },
+  { z: "z2", label: "Z2", name: "Aerobic",   color: "#30d158" },
+  { z: "z3", label: "Z3", name: "Tempo",     color: "#ffd60a" },
+  { z: "z4", label: "Z4", name: "Threshold", color: "#ff9500" },
+  { z: "z5", label: "Z5", name: "VO2max",    color: "#ff3b30" },
+];
+
+function calcZones(hrSamples, maxHR) {
+  const zones = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
+  const ref = maxHR || 185;
+  for (const s of hrSamples) {
+    const pct = (s.avg || s.Avg || 0) / ref;
+    if      (pct < 0.60) zones.z1++;
+    else if (pct < 0.70) zones.z2++;
+    else if (pct < 0.80) zones.z3++;
+    else if (pct < 0.90) zones.z4++;
+    else                  zones.z5++;
+  }
+  return zones;
+}
+
+function buildZonesBar(zones) {
+  if (!zones) return "";
+  const total = HR_ZONES.reduce((s, z) => s + (zones[z.z] || 0), 0);
+  if (!total) return "";
+  const segs = HR_ZONES.filter((z) => zones[z.z] > 0).map((z) => {
+    const pct = ((zones[z.z] / total) * 100).toFixed(1);
+    return `<div class="fi-zone-seg" style="width:${pct}%;background:${z.color}" title="${z.label} ${z.name}: ${zones[z.z]} min"></div>`;
+  }).join("");
+  const legend = HR_ZONES.filter((z) => zones[z.z] > 0).map((z) =>
+    `<span class="fi-zone-chip" style="--zc:${z.color}">${z.label} ${zones[z.z]}m</span>`
+  ).join("");
+  return `<div class="fi-zones-bar">${segs}</div><div class="fi-zones-legend">${legend}</div>`;
+}
+
+function buildSparkline(hrSamples, maxHR) {
+  if (!hrSamples || hrSamples.length < 3) return "";
+  const avgs = hrSamples.map((s) => s.avg || s.Avg || 0).filter((v) => v > 0);
+  if (avgs.length < 3) return "";
+  const lo = Math.max(40, Math.min(...avgs) - 10);
+  const hi = Math.max(maxHR || 180, Math.max(...avgs) + 10);
+  const W = 100, H = 36;
+  const pts = avgs.map((v, i) => {
+    const x = (i / (avgs.length - 1)) * W;
+    const y = H - ((v - lo) / (hi - lo)) * H;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return `<svg class="fi-sparkline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+/* ---------- Health Auto Export ZIP parser ---------- */
+
+async function loadJSZip() {
+  if (window.JSZip) return window.JSZip;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    s.onload = () => resolve(window.JSZip);
+    s.onerror = () => reject(new Error("Could not load ZIP library. Check your connection."));
+    document.head.appendChild(s);
+  });
+}
+
+function parseCSVRows(text) {
+  const lines = text.trim().split("\n").filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim()).filter((h) => h);
+  return lines.slice(1).map((line) => {
+    const vals = line.split(",");
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (vals[i] || "").trim(); });
+    return obj;
+  });
+}
+
+async function parseHealthAutoExportZIP(file) {
+  const JSZip = await loadJSZip();
+  const zip   = await JSZip.loadAsync(file);
+  const names = Object.keys(zip.files);
+
+  // Find master workouts CSV
+  const wName = names.find((n) => /^Workouts-.*\.csv$/.test(n));
+  if (!wName) throw new Error("No Workouts-*.csv found. Make sure you exported from Health Auto Export.");
+
+  const wText = await zip.files[wName].async("string");
+  const rows  = parseCSVRows(wText);
+  const existing = getAllWorkouts();
+
+  const results = [];
+  for (const row of rows) {
+    const appleType  = row["Workout Type"];
+    const startStr   = row["Start"];           // "2026-05-26 07:17"
+    const endStr     = row["End"];
+    const durStr     = row["Duration"];        // "01:06:32"
+    const activeKJ   = parseFloat(row["Active Energy (kJ)"] || "0");
+    const distKm     = parseFloat(row["Distance (km)"] || "0");
+    const avgHR      = Math.round(parseFloat(row["Avg. Heart Rate (count/min)"] || "0"));
+    const maxHR      = Math.round(parseFloat(row["Max. Heart Rate (count/min)"] || "0"));
+
+    if (!appleType || !startStr) continue;
+
+    // Dedup: skip if already imported (same type + startTime)
+    if (existing.some((w) => w.startTime === startStr && w.appleType === appleType)) continue;
+
+    // Duration → minutes
+    const [hh, mm, ss] = (durStr || "0:0:0").split(":").map(Number);
+    const durationMin = Math.round((hh || 0) * 60 + (mm || 0) + (ss || 0) / 60);
+
+    // kJ → kcal
+    const kcal = Math.round(activeKJ / 4.184);
+
+    // Date
+    const date = startStr.slice(0, 10);
+
+    // Build timestamp key for filename matching: "2026-05-26 07:17" → "20260526_0717"
+    const [datePart, timePart] = startStr.split(" ");
+    const tsKey = datePart.replace(/-/g, "") + "_" + (timePart || "").replace(":", "").slice(0, 4);
+
+    // Find Heart Rate CSV for this workout
+    const hrName = names.find((n) =>
+      n.startsWith(appleType + "-Heart Rate-" + tsKey) && n.endsWith(".csv")
+    );
+
+    let hrSamples = [];
+    if (hrName) {
+      const hrText = await zip.files[hrName].async("string");
+      hrSamples = parseCSVRows(hrText)
+        .map((r) => ({
+          time: r["Date/Time"],
+          min:  Math.round(parseFloat(r["Min (count/min)"] || "0")),
+          max:  Math.round(parseFloat(r["Max (count/min)"] || "0")),
+          avg:  Math.round(parseFloat(r["Avg (count/min)"] || "0")),
+        }))
+        .filter((s) => s.avg > 0);
+    }
+
+    const effectiveMax = maxHR || Math.max(...hrSamples.map((s) => s.max), 0) || 185;
+    const zones = hrSamples.length > 0 ? calcZones(hrSamples, effectiveMax) : null;
+    const mapped = mapAppleWorkout(appleType);
+
+    results.push({
+      id:         makeWorkoutId(),
+      type:       mapped.focus,
+      appleType,
+      label:      appleType,
+      icon:       mapped.icon,
+      date,
+      startTime:  startStr,
+      endTime:    endStr,
+      duration:   durationMin,
+      kcal:       kcal || null,
+      distance:   distKm > 0.01 ? Math.round(distKm * 100) / 100 : null,
+      avgHR:      avgHR || null,
+      maxHR:      effectiveMax || null,
+      hrSamples,
+      zones,
+      source:     "health-auto-export",
+      importedAt: new Date().toISOString(),
+    });
+  }
+
+  return results;
+}
+
+function renderWorkoutCard(w, showDate = false) {
+  const spark  = buildSparkline(w.hrSamples, w.maxHR);
+  const zones  = buildZonesBar(w.zones);
+  const dateLabel = showDate
+    ? `<div class="fi-card-date">${new Date((w.date || w.startTime || "").slice(0,10) + "T00:00:00").toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" })}</div>`
+    : "";
+  return `
+    <div class="fi-card">
+      <div class="fi-card-header">
+        <span class="fi-card-icon">${w.icon || "🏋️"}</span>
+        <div class="fi-card-info">
+          <div class="fi-card-label">${escapeHtml(w.label || w.appleType || "Workout")}</div>
+          ${dateLabel}
+          <div class="fi-card-source">${w.source === "health-auto-export" ? "Apple Watch · Health Export" : w.source === "shortcuts" ? "Apple Watch · Shortcuts" : "Manual"}</div>
+        </div>
+        <button class="fi-card-del" data-action="delete-workout" data-wid="${escapeHtml(w.id)}" data-date="${escapeHtml(w.date)}">×</button>
+      </div>
+      <div class="fi-card-stats">
+        <div class="fi-stat-chip"><div class="fi-sc-val">${w.duration}</div><div class="fi-sc-lbl">min</div></div>
+        ${w.kcal     ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.kcal.toLocaleString()}</div><div class="fi-sc-lbl">kcal</div></div>` : ""}
+        ${w.avgHR    ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.avgHR}</div><div class="fi-sc-lbl">avg bpm</div></div>` : ""}
+        ${w.maxHR    ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.maxHR}</div><div class="fi-sc-lbl">max bpm</div></div>` : ""}
+        ${w.distance ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.distance.toFixed(1)}</div><div class="fi-sc-lbl">km</div></div>` : ""}
+      </div>
+      ${spark ? `<div class="fi-sparkline-wrap">${spark}</div>` : ""}
+      ${zones ? `<div class="fi-zones-wrap">${zones}</div>` : ""}
+    </div>`;
+}
+
 /* ---------- Gemini Flash API ---------- */
 
 async function analyzeFood(base64Data, mimeType) {
@@ -1168,57 +1375,48 @@ async function renderTrain(app) {
       </div>`;
 
   } else if (trainDayTab === "fitness") {
-    if (dayWorkouts.length > 0) {
-      dayContent += dayWorkouts.map((w) => `
-        <div class="fi-card">
-          <div class="fi-card-header">
-            <span class="fi-card-icon">${w.icon || "🏋️"}</span>
-            <div class="fi-card-info">
-              <div class="fi-card-label">${escapeHtml(w.label || "Workout")}</div>
-              <div class="fi-card-source">${w.source === "shortcuts" ? "Apple Watch · Shortcuts" : "Manual"}</div>
-            </div>
-            <button class="fi-card-del" data-action="delete-workout" data-wid="${escapeHtml(w.id)}" data-date="${escapeHtml(selDateStr)}">×</button>
-          </div>
-          <div class="fi-card-stats">
-            <div class="fi-stat-chip"><div class="fi-sc-val">${w.duration}</div><div class="fi-sc-lbl">min</div></div>
-            ${w.kcal  ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.kcal}</div><div class="fi-sc-lbl">kcal</div></div>` : ""}
-            ${w.hr    ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.hr}</div><div class="fi-sc-lbl">avg bpm</div></div>` : ""}
-            ${w.hrMax ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.hrMax}</div><div class="fi-sc-lbl">max bpm</div></div>` : ""}
-            ${w.distance ? `<div class="fi-stat-chip"><div class="fi-sc-val">${w.distance.toFixed(1)}</div><div class="fi-sc-lbl">km</div></div>` : ""}
-          </div>
-        </div>`).join("");
+    const allWorkouts = getAllWorkouts();
+    const importBarHtml = `
+      <div class="fi-import-bar">
+        <span class="fi-import-bar-title">Workouts</span>
+        <label class="fi-import-zip-btn" for="fi-zip-input" role="button" tabindex="0">
+          <svg viewBox="0 0 20 20" fill="none" width="13" height="13" aria-hidden="true">
+            <path d="M10 3v10M6 9l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 15h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Import ZIP
+        </label>
+        <input type="file" id="fi-zip-input" accept=".zip" style="display:none" aria-label="Import Health Auto Export ZIP">
+      </div>
+      <div id="fi-import-status" class="fi-import-status" style="display:none"></div>`;
+
+    if (allWorkouts.length > 0) {
+      dayContent += importBarHtml + allWorkouts.map((w) => renderWorkoutCard(w, true)).join("");
     } else {
-      dayContent += `
+      dayContent += importBarHtml + `
         <div class="hero">
           <div class="hero-eyebrow"><span>⌚</span><span>Apple Watch</span></div>
-          <div class="hero-title">No workout logged</div>
-          <div class="hero-intent">After your workout, run the Hyrox Trainer shortcut on your iPhone to import your Apple Watch data.</div>
+          <div class="hero-title">No workouts yet</div>
+          <div class="hero-intent">Export from the <strong>Health Auto Export</strong> app, then tap <strong>Import ZIP</strong> above to load your workouts with full HR data.</div>
         </div>
-        <div class="section-header">Setup — 2 minutes</div>
+        <div class="section-header">How to import</div>
         <div class="list">
           <div class="list-row">
             <div class="list-row-main">
-              <div class="list-row-title">1. Build the Shortcut</div>
-              <div class="list-row-sub">Takes ~2 min in the Shortcuts app</div>
-            </div>
-          </div>
-          <div class="list-row" style="align-items:flex-start;padding:14px 16px">
-            <div class="list-row-main" style="font-size:13px;color:var(--text-2);line-height:1.6">
-              In Shortcuts: New shortcut → Add action <strong>Find Workouts</strong> (limit 1, sort by date desc) → Add action <strong>URL</strong>:<br>
-              <code class="fi-code">https://alextataran90.github.io/hyroxapp/#/fitness-import/<br>[Workout Date YYYY-MM-DD]/<br>[Workout Activity Type]/<br>[Workout Duration in minutes]/<br>[Workout Active Energy in kcal]/<br>[Workout Average Heart Rate]/<br>[Workout Maximum Heart Rate]/<br>[Workout Total Distance in km]</code><br>
-              → Add action <strong>Open URLs</strong>
+              <div class="list-row-title">1. Install Health Auto Export</div>
+              <div class="list-row-sub">Free app on the App Store</div>
             </div>
           </div>
           <div class="list-row">
             <div class="list-row-main">
-              <div class="list-row-title">2. Finish a workout on Apple Watch</div>
-              <div class="list-row-sub">Let it sync to iPhone Health (~30s)</div>
+              <div class="list-row-title">2. Export as ZIP (CSV format)</div>
+              <div class="list-row-sub">Tap Export → CSV → Share ZIP to Files or yourself</div>
             </div>
           </div>
           <div class="list-row">
             <div class="list-row-main">
-              <div class="list-row-title">3. Run the Shortcut</div>
-              <div class="list-row-sub">Add it to your home screen for one-tap import</div>
+              <div class="list-row-title">3. Tap Import ZIP above</div>
+              <div class="list-row-sub">All workouts with HR zones appear here instantly</div>
             </div>
           </div>
         </div>`;
@@ -1279,6 +1477,35 @@ async function renderTrain(app) {
         }
       });
     });
+
+    // ZIP import
+    const zipInput = document.getElementById("fi-zip-input");
+    const statusEl = document.getElementById("fi-import-status");
+    if (zipInput && statusEl) {
+      zipInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        statusEl.style.display = "block";
+        statusEl.className = "fi-import-status fi-import-loading";
+        statusEl.textContent = "Parsing ZIP…";
+        try {
+          const workouts = await parseHealthAutoExportZIP(file);
+          if (workouts.length === 0) {
+            statusEl.className = "fi-import-status fi-import-warn";
+            statusEl.textContent = "No new workouts found — already imported or export was empty.";
+          } else {
+            workouts.forEach((w) => saveFitnessWorkout(w, w.date));
+            statusEl.className = "fi-import-status fi-import-ok";
+            statusEl.textContent = `Imported ${workouts.length} workout${workouts.length !== 1 ? "s" : ""} ✓`;
+            setTimeout(() => renderTrain(app), 1000);
+          }
+        } catch (err) {
+          statusEl.className = "fi-import-status fi-import-err";
+          statusEl.textContent = "Import failed: " + (err.message || "Unknown error");
+        }
+        zipInput.value = "";
+      });
+    }
   }
 }
 
