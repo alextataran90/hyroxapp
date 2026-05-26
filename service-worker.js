@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v17-fuel-config-tier";
+const APP_VERSION = "2026-05-26-v18-today-correct-day";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

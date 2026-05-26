@@ -832,11 +832,37 @@ async function renderToday(app) {
   }
 
   const todayName = DAY_NAMES[new Date().getDay()];
-  let session = week.sessions.find((s) => {
-    const day = getSessionDay(weekNum, s.id, s.defaultDay);
-    return day === todayName && !isSessionDone(weekNum, s.id);
-  });
-  if (!session) session = week.sessions.find((s) => !isSessionDone(weekNum, s.id));
+  const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const todayIdx = DAY_ORDER.indexOf(todayName);
+
+  // Map each calendar day → its scheduled session (respecting day overrides)
+  const sessionByDay = {};
+  for (const s of week.sessions) {
+    const d = getSessionDay(weekNum, s.id, s.defaultDay);
+    if (!sessionByDay[d]) sessionByDay[d] = s;
+  }
+
+  // Priority 1 — today's session (show it whether done or not — it's TODAY)
+  let session = sessionByDay[todayName] || null;
+
+  // Priority 2 — no session today (rest day): show the next upcoming undone session this week
+  if (!session) {
+    for (let i = todayIdx + 1; i < DAY_ORDER.length; i++) {
+      const s = sessionByDay[DAY_ORDER[i]];
+      if (s && !isSessionDone(weekNum, s.id)) { session = s; break; }
+    }
+  }
+
+  // Priority 3 — past the last session: walk back to find the most recent one this week
+  if (!session) {
+    for (let i = Math.min(todayIdx, DAY_ORDER.length - 1); i >= 0; i--) {
+      const s = sessionByDay[DAY_ORDER[i]];
+      if (s) { session = s; break; }
+    }
+  }
+
+  // Priority 4 — absolute fallback (shouldn't be reached)
+  if (!session && week.sessions.length) session = week.sessions[0];
 
   const totalSessions = week.sessions.length;
   const doneCount = week.sessions.filter((s) => isSessionDone(weekNum, s.id)).length;
