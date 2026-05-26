@@ -588,6 +588,43 @@ function getCurrentPhase(plan, weekNum) {
   return plan.phases.find((p) => p.weeks.includes(weekNum));
 }
 
+/* ---------- Date helpers ---------- */
+
+function getDateForDayInWeek(weekNum, dayName, settings) {
+  const planMonday = startOfWeek(parseDate(settings.startDate));
+  const weekMonday = new Date(planMonday.getTime() + (weekNum - 1) * 7 * 86400000);
+  const DAY_ORDER  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const idx = Math.max(0, DAY_ORDER.indexOf(dayName));
+  return new Date(weekMonday.getTime() + idx * 86400000);
+}
+
+function getNutritionWeekSummary(weeksAgo) {
+  const mon = startOfWeek(today());
+  const targetMon = new Date(mon.getTime() - weeksAgo * 7 * 86400000);
+  let loggedDays = 0, kcal = 0, p = 0, c = 0, f = 0;
+  const daily = [];
+  const DAY_ABBR = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  for (let i = 0; i < 7; i++) {
+    const d   = new Date(targetMon.getTime() + i * 86400000);
+    const ds  = ymd(d);
+    const meals = getDayMeals(ds);
+    const t   = getDayTotals(meals);
+    const hasData = meals.length > 0;
+    daily.push({ d, ds, label: DAY_ABBR[i], hasData, ...t });
+    if (hasData) { loggedDays++; kcal += t.kcal; p += t.p; c += t.c; f += t.f; }
+  }
+  const avg = (n) => loggedDays > 0 ? Math.round(n / loggedDays) : 0;
+  return {
+    startDate: targetMon,
+    loggedDays,
+    totalKcal: Math.round(kcal), avgKcal: avg(kcal),
+    totalP:    Math.round(p),    avgP:    avg(p),
+    totalC:    Math.round(c),    avgC:    avg(c),
+    totalF:    Math.round(f),    avgF:    avg(f),
+    daily
+  };
+}
+
 /* ---------- Session day mapping ---------- */
 
 function getSessionDay(weekNum, sessionId, defaultDay) {
@@ -637,7 +674,9 @@ function toggleBlockDone(weekNum, sessionId, blockIdx) {
 /* ---------- Plan loading ---------- */
 
 let PLAN = null;
-let viewingWeekNum = null; // week the strip is showing
+let viewingWeekNum   = null; // week shown in train nav
+let selectedDayOverride = null; // day pill selection (null = smart default)
+let trainDayTab      = "training"; // "training" | "nutrition"
 
 async function loadPlan() {
   const res = await fetch(PLAN_URL, { cache: "no-cache" });
@@ -668,7 +707,7 @@ function showUpdateBanner() {
 /* ---------- Router ---------- */
 
 const ROUTES = {
-  today: renderToday,
+  today: renderTrain,
   week: renderWeek,
   plan: renderPlan,
   tests: renderTests,
@@ -688,21 +727,24 @@ window.addEventListener("hashchange", route);
 
 async function route() {
   const r = getRoute();
-  const fn = ROUTES[r.name] || renderToday;
+  const fn = ROUTES[r.name] || renderTrain;
   document.querySelectorAll(".tab").forEach((el) => {
     el.classList.toggle("active", el.dataset.tab === r.name);
   });
 
-  // Sync viewingWeekNum from route so the strip follows navigation
+  // When navigating away from Train and back, reset day selection
+  if (r.name === "today") {
+    viewingWeekNum      = null;
+    selectedDayOverride = null;
+    // keep trainDayTab so user stays on Training/Nutrition whichever they last picked
+  }
   if (r.name === "session" && r.params[0]) viewingWeekNum = Number(r.params[0]);
-  else if (r.name === "week" && r.params[0]) viewingWeekNum = Number(r.params[0]);
-  else if (r.name === "today") viewingWeekNum = null; // resets to current week
+  if (r.name === "week"    && r.params[0]) viewingWeekNum = Number(r.params[0]);
 
   const app = document.getElementById("app");
   try {
     if (!PLAN) await loadPlan();
     renderTopBar();
-    renderWeekStrip();
     app.innerHTML = "";
     await fn(app, r.params);
   } catch (e) {
@@ -821,152 +863,236 @@ function renderTopBar() {
 
 /* ---------- Views ---------- */
 
-async function renderToday(app) {
-  const settings = getSettings();
-  const weekNum = getWeekIndex(settings);
-  const week = PLAN.weeks.find((w) => w.number === weekNum);
+async function renderTrain(app) {
+  const settings  = getSettings();
+  const curWeekNum = getWeekIndex(settings);
+  if (viewingWeekNum === null) viewingWeekNum = curWeekNum;
+  const wn    = viewingWeekNum;
+  const week  = PLAN.weeks.find((w) => w.number === wn);
+  const phase = getCurrentPhase(PLAN, wn);
 
   if (!week) {
-    app.innerHTML = `<div class="empty-state"><h3>No plan loaded</h3><p>Race day might have passed, or your start date is in the future.</p></div>`;
+    app.innerHTML = `<div class="empty-state"><h3>No plan loaded</h3><p>Race day may have passed or start date is in the future.</p></div>`;
     return;
   }
 
   const todayName = DAY_NAMES[new Date().getDay()];
   const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const todayIdx = DAY_ORDER.indexOf(todayName);
+  const todayIdx  = DAY_ORDER.indexOf(todayName);
 
-  // Map each calendar day → its scheduled session (respecting day overrides)
+  // Build day → session map
   const sessionByDay = {};
   for (const s of week.sessions) {
-    const d = getSessionDay(weekNum, s.id, s.defaultDay);
+    const d = getSessionDay(wn, s.id, s.defaultDay);
     if (!sessionByDay[d]) sessionByDay[d] = s;
   }
 
-  // Priority 1 — today's session (show it whether done or not — it's TODAY)
-  let session = sessionByDay[todayName] || null;
-
-  // Priority 2 — no session today (rest day): show the next upcoming undone session this week
-  if (!session) {
-    for (let i = todayIdx + 1; i < DAY_ORDER.length; i++) {
-      const s = sessionByDay[DAY_ORDER[i]];
-      if (s && !isSessionDone(weekNum, s.id)) { session = s; break; }
+  // Resolve selected day
+  let selDay = selectedDayOverride;
+  if (!selDay) {
+    if (wn === curWeekNum) {
+      selDay = todayName; // always default to actual today in current week
+    } else {
+      selDay = DAY_ORDER.find((d) => sessionByDay[d]) || DAY_ORDER[0];
     }
   }
 
-  // Priority 3 — past the last session: walk back to find the most recent one this week
-  if (!session) {
-    for (let i = Math.min(todayIdx, DAY_ORDER.length - 1); i >= 0; i--) {
-      const s = sessionByDay[DAY_ORDER[i]];
-      if (s) { session = s; break; }
-    }
-  }
+  const selSession = sessionByDay[selDay] || null;
+  const selDate    = getDateForDayInWeek(wn, selDay, settings);
+  const selDateStr = ymd(selDate);
+  const isSelToday = selDateStr === ymd(today());
 
-  // Priority 4 — absolute fallback (shouldn't be reached)
-  if (!session && week.sessions.length) session = week.sessions[0];
-
-  const totalSessions = week.sessions.length;
-  const doneCount = week.sessions.filter((s) => isSessionDone(weekNum, s.id)).length;
-  const phase = getCurrentPhase(PLAN, weekNum);
-
-  // Detect missed session from yesterday
-  const yesterdayName = DAY_NAMES[((new Date().getDay() - 1 + 7) % 7)];
-  const missedYesterday = week.sessions.find((s) => {
-    const day = getSessionDay(weekNum, s.id, s.defaultDay);
-    return day === yesterdayName && !isSessionDone(weekNum, s.id);
-  });
-
-  let html = `
-    <h1 class="large-title">Today</h1>
-    <div class="large-title-sub">${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
-  `;
-
-  // Catch-up banner for missed yesterday session
-  if (missedYesterday && session && missedYesterday.id !== session.id) {
-    html += `<div class="catchup-banner">
-      <div class="catchup-info">
-        <div class="catchup-title">Missed yesterday</div>
-        <div class="catchup-name">${escapeHtml(missedYesterday.title)}</div>
+  /* ---- Week navigation ---- */
+  const weekNavHtml = `
+    <div class="train-week-nav">
+      <div class="train-week-header">
+        <button class="train-week-arrow" id="tn-prev" ${wn <= 1 ? "disabled" : ""} aria-label="Previous week">‹</button>
+        <div class="train-week-info">
+          <span class="train-week-num">Week ${wn}</span>
+          ${phase ? `<span class="train-week-phase"> · ${escapeHtml(phase.name)}</span>` : ""}
+        </div>
+        <button class="train-week-arrow" id="tn-next" ${wn >= PLAN.weeks.length ? "disabled" : ""} aria-label="Next week">›</button>
       </div>
-      <div class="catchup-actions">
-        <button class="catchup-btn" data-catchup-move="${escapeHtml(missedYesterday.id)}">Move here</button>
-        <button class="catchup-btn catchup-skip" data-catchup-skip="${escapeHtml(missedYesterday.id)}">Skip</button>
+      <div class="train-day-pills">
+        ${DAY_ORDER.map((d) => {
+          const s = sessionByDay[d];
+          const isToday = d === todayName && wn === curWeekNum;
+          const isDone  = s && isSessionDone(wn, s.id);
+          const isSel   = d === selDay;
+          let cls = "tdp";
+          if (isSel)          cls += " tdp-sel";
+          else if (isToday)   cls += " tdp-today";
+          if (isDone)         cls += " tdp-done";
+          if (!s)             cls += " tdp-rest";
+          return `<button class="${cls}" data-day="${d}" aria-label="${d}">
+            <span class="tdp-label">${d.slice(0, 2)}</span>
+            ${s ? `<span class="tdp-dot dot dot-${s.focus}"></span>` : `<span class="tdp-dot"></span>`}
+            ${isDone && !isSel ? `<span class="tdp-check">✓</span>` : ""}
+          </button>`;
+        }).join("")}
       </div>
     </div>`;
-  }
 
-  // Compact race projector (only if pace is set)
-  const projHtml = renderRaceProjectorHtml(getSettings(), true);
-  if (projHtml) html += projHtml;
+  /* ---- Training / Nutrition tab bar ---- */
+  const tabBarHtml = `
+    <div class="day-tab-bar">
+      <button class="day-tab${trainDayTab === "training"  ? " day-tab-active" : ""}" data-dtab="training">Training</button>
+      <button class="day-tab${trainDayTab === "nutrition" ? " day-tab-active" : ""}" data-dtab="nutrition">Nutrition</button>
+    </div>`;
 
-  // Race week countdown
-  if (weekNum >= PLAN.weeks.length - 1) {
-    const days = daysBetween(today(), parseDate(settings.raceDate));
-    if (days >= 0 && days <= 14) {
-      html += `<div class="countdown-big">
-        <div class="num">${days}</div>
-        <div class="label">days to race</div>
+  /* ---- Day content ---- */
+  let dayContent = "";
+
+  if (trainDayTab === "training") {
+    // Missed-yesterday catch-up banner (only when viewing actual today)
+    if (isSelToday) {
+      const yName = DAY_NAMES[((new Date().getDay() - 1 + 7) % 7)];
+      const missed = week.sessions.find((s) => {
+        const d = getSessionDay(wn, s.id, s.defaultDay);
+        return d === yName && !isSessionDone(wn, s.id) && (!selSession || s.id !== selSession.id);
+      });
+      if (missed) {
+        dayContent += `<div class="catchup-banner">
+          <div class="catchup-info">
+            <div class="catchup-title">Missed yesterday</div>
+            <div class="catchup-name">${escapeHtml(missed.title)}</div>
+          </div>
+          <div class="catchup-actions">
+            <button class="catchup-btn" data-catchup-move="${escapeHtml(missed.id)}">Move here</button>
+            <button class="catchup-btn catchup-skip" data-catchup-skip="${escapeHtml(missed.id)}">Skip</button>
+          </div>
+        </div>`;
+      }
+    }
+
+    if (selSession) {
+      dayContent += renderSessionCard(selSession, wn, true);
+    } else {
+      dayContent += `<div class="hero">
+        <div class="hero-eyebrow"><span class="dot dot-test"></span><span>Rest day</span></div>
+        <div class="hero-title">Recovery 🛋️</div>
+        <div class="hero-intent">No session on ${escapeHtml(selDay)}. Rest is where adaptation happens.</div>
       </div>`;
+    }
+
+    // Plan / Records quick links
+    const doneCount    = week.sessions.filter((s) => isSessionDone(wn, s.id)).length;
+    const totalSessions = week.sessions.length;
+    dayContent += `
+      <div class="section-footer" style="text-align:center;margin-top:16px">
+        Week ${wn} of ${PLAN.weeks.length}${phase ? " · " + escapeHtml(phase.name) : ""} · ${doneCount}/${totalSessions} done
+      </div>
+      <div class="section-header" style="margin-top:20px">Plan &amp; Records</div>
+      <div class="list">
+        <a href="#/plan" class="list-row">
+          <div class="list-row-main"><div class="list-row-title">Training Plan</div><div class="list-row-sub">All phases and weeks</div></div>
+          <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </a>
+        <a href="#/tests" class="list-row">
+          <div class="list-row-main"><div class="list-row-title">Test Results</div><div class="list-row-sub">Log and review test sessions</div></div>
+          <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </a>
+        <a href="#/progress" class="list-row">
+          <div class="list-row-main"><div class="list-row-title">Progress &amp; Stats</div><div class="list-row-sub">RPE trends, benchmarks, history</div></div>
+          <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </a>
+        <a href="#/racesim" class="list-row">
+          <div class="list-row-main"><div class="list-row-title">Race Simulator</div><div class="list-row-sub">Full Hyrox race with live splits</div></div>
+          <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </a>
+      </div>`;
+
+  } else {
+    // Nutrition tab for selected day
+    const dayMeals  = getDayMeals(selDateStr);
+    const dayTotals = getDayTotals(dayMeals);
+    const tgt       = settings.nutrition;
+
+    if (dayMeals.length > 0) {
+      const kcalLeft = tgt.kcalTarget - Math.round(dayTotals.kcal);
+      const isOver   = kcalLeft < 0;
+      const pPct = tgt.proteinTarget > 0 ? Math.min(100, Math.round(dayTotals.p / tgt.proteinTarget * 100)) : 0;
+      const cPct = tgt.carbTarget    > 0 ? Math.min(100, Math.round(dayTotals.c / tgt.carbTarget    * 100)) : 0;
+      const fPct = tgt.fatTarget     > 0 ? Math.min(100, Math.round(dayTotals.f / tgt.fatTarget     * 100)) : 0;
+      dayContent += `<div class="fuel-hero">
+        <div class="fuel-kcal-block">
+          <div class="fuel-kcal-num${isOver ? " fuel-over" : ""}">${Math.abs(kcalLeft)}</div>
+          <div class="fuel-kcal-label">${isOver ? "kcal over target" : "kcal remaining"}</div>
+          <div class="fuel-kcal-sub">${Math.round(dayTotals.kcal)} eaten · ${tgt.kcalTarget} target</div>
+        </div>
+        <div class="fuel-macro-stack">
+          <div class="fuel-macro-row"><span class="fuel-macro-name">Protein</span><div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-protein" style="width:${pPct}%"></div></div><span class="fuel-macro-gram">${Math.round(dayTotals.p)}<span class="fuel-macro-tgt">/${tgt.proteinTarget}g</span></span></div>
+          <div class="fuel-macro-row"><span class="fuel-macro-name">Carbs</span><div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-carb" style="width:${cPct}%"></div></div><span class="fuel-macro-gram">${Math.round(dayTotals.c)}<span class="fuel-macro-tgt">/${tgt.carbTarget}g</span></span></div>
+          <div class="fuel-macro-row"><span class="fuel-macro-name">Fat</span><div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-fat" style="width:${fPct}%"></div></div><span class="fuel-macro-gram">${Math.round(dayTotals.f)}<span class="fuel-macro-tgt">/${tgt.fatTarget}g</span></span></div>
+        </div>
+      </div>`;
+    }
+
+    const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
+    if (dayMeals.length === 0) {
+      dayContent += `<div class="empty-state"><h3>Nothing logged</h3><p>${isSelToday ? "Tap + Log meal below." : "No meals recorded for " + escapeHtml(selDay) + "."}</p></div>`;
+    } else {
+      dayContent += dayMeals.map((meal) => `
+        <div class="meal-card">
+          <div class="meal-card-header">
+            <div><div class="meal-card-label">${escapeHtml(MEAL_LABELS[meal.label] || meal.label)}</div><div class="meal-card-time">${escapeHtml(meal.time)}</div></div>
+            <div style="text-align:right;flex:1;min-width:0"><div class="meal-card-kcal">${meal.total.kcal} kcal</div><div class="meal-card-macros">${meal.total.p}g P · ${meal.total.c}g C · ${meal.total.f}g F</div></div>
+            ${isSelToday ? `<button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}">×</button>` : ""}
+          </div>
+          <div class="meal-items-list">
+            ${meal.items.map((it) => `<div class="meal-item"><span class="meal-item-name">${escapeHtml(it.name)}</span><span class="meal-item-qty dim">${escapeHtml(it.qty)}</span><span class="meal-item-kcal">${it.kcal}</span></div>`).join("")}
+          </div>
+        </div>`).join("");
+    }
+    if (isSelToday) {
+      dayContent += `<button class="btn" id="day-log-meal-btn" style="margin-top:16px">+ Log meal</button>`;
     }
   }
 
-  if (!session) {
-    html += `<div class="hero">
-      <div class="hero-eyebrow"><span class="dot dot-test"></span><span>Week complete</span></div>
-      <div class="hero-title">Rest day</div>
-      <div class="hero-intent">All ${totalSessions} sessions ticked off this week. Nice work — recover.</div>
-    </div>
-    <a class="btn btn-secondary" href="#/week" style="display:flex;margin-top:8px">View week</a>`;
-    app.innerHTML = html;
-    return;
+  app.innerHTML = weekNavHtml + tabBarHtml + `<div id="day-content">${dayContent}</div>`;
+
+  /* ---- Bind events ---- */
+  document.getElementById("tn-prev")?.addEventListener("click", () => {
+    if (wn > 1) { viewingWeekNum = wn - 1; selectedDayOverride = null; renderTrain(app); }
+  });
+  document.getElementById("tn-next")?.addEventListener("click", () => {
+    if (wn < PLAN.weeks.length) { viewingWeekNum = wn + 1; selectedDayOverride = null; renderTrain(app); }
+  });
+  app.querySelectorAll(".tdp").forEach((btn) => {
+    btn.addEventListener("click", () => { selectedDayOverride = btn.dataset.day; renderTrain(app); });
+  });
+  app.querySelectorAll(".day-tab").forEach((btn) => {
+    btn.addEventListener("click", () => { trainDayTab = btn.dataset.dtab; renderTrain(app); });
+  });
+
+  if (trainDayTab === "training" && selSession) {
+    attachSessionHandlers(wn);
+    const yName = DAY_NAMES[((new Date().getDay() - 1 + 7) % 7)];
+    app.querySelectorAll("[data-catchup-move]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tod = DAY_NAMES[new Date().getDay()];
+        if (selSession && selSession.id !== btn.dataset.catchupMove) setSessionDay(wn, selSession.id, yName);
+        setSessionDay(wn, btn.dataset.catchupMove, tod);
+        renderTrain(app);
+      });
+    });
+    app.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
+      btn.addEventListener("click", () => { toggleSessionDone(wn, btn.dataset.catchupSkip); renderTrain(app); });
+    });
+    if (isSelToday && !getTodayReadiness() && !isSessionDone(wn, selSession.id)) {
+      setTimeout(() => showReadinessCheck(() => {}), 500);
+    }
   }
 
-  html += renderSessionCard(session, weekNum, true);
-
-  // "Coming up" block
-  const remaining = week.sessions.filter((s) => !isSessionDone(weekNum, s.id) && s.id !== session.id).slice(0, 3);
-  if (remaining.length) {
-    html += `<div class="section-header">Coming up this week</div>`;
-    html += `<div class="list">${remaining.map((s) => {
-      const day = getSessionDay(weekNum, s.id, s.defaultDay);
-      return `<a href="#/session/${weekNum}/${escapeHtml(s.id)}" class="list-row">
-        <span class="list-row-leading ${s.focus}">${focusIcon(s.focus)}</span>
-        <div class="list-row-main">
-          <div class="list-row-title">${escapeHtml(s.title)}</div>
-          <div class="list-row-sub">${escapeHtml(day)} · ${s.duration} min</div>
-        </div>
-        <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </a>`;
-    }).join("")}</div>`;
+  if (trainDayTab === "nutrition") {
+    document.getElementById("day-log-meal-btn")?.addEventListener("click", showLogMealSheet);
+    app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("Delete this meal?")) { deleteMeal(btn.dataset.mid); renderTrain(app); }
+      });
+    });
   }
-
-  // Week progress footer
-  html += `<div class="section-footer" style="text-align:center;margin-top:24px">
-    Week ${week.number} of ${PLAN.weeks.length} · ${phase ? phase.name : ""} · ${doneCount}/${totalSessions} done
-  </div>`;
-
-  app.innerHTML = html;
-  attachSessionHandlers(weekNum);
-
-  // Catch-up banner actions
-  document.querySelectorAll("[data-catchup-move]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const sid = btn.dataset.catchupMove;
-      const todayName = DAY_NAMES[new Date().getDay()];
-      // Swap today's session to yesterday's slot if needed
-      const todaySid = session && session.id;
-      if (todaySid && todaySid !== sid) {
-        setSessionDay(weekNum, todaySid, yesterdayName);
-      }
-      setSessionDay(weekNum, sid, todayName);
-      route();
-    });
-  });
-  document.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      toggleSessionDone(weekNum, btn.dataset.catchupSkip);
-      route();
-    });
-  });
 }
 
 function focusIcon(focus) {
@@ -1493,13 +1619,17 @@ async function renderHistory(app) {
    ============================================================ */
 
 ROUTES.fuel = renderFuel;
+
+// Module-level state for Fuel period picker
+let fuelSummaryPeriod = 0; // 0 = this week, 1 = last week
+
 async function renderFuel(app) {
-  const meals = getTodayMeals();
+  const meals  = getTodayMeals();
   const totals = getDayTotals(meals);
-  const s = getSettings();
-  const tgt = s.nutrition;
+  const s      = getSettings();
+  const tgt    = s.nutrition;
   const kcalLeft = tgt.kcalTarget - Math.round(totals.kcal);
-  const isOver = kcalLeft < 0;
+  const isOver   = kcalLeft < 0;
 
   const pPct = tgt.proteinTarget > 0 ? Math.min(100, Math.round(totals.p / tgt.proteinTarget * 100)) : 0;
   const cPct = tgt.carbTarget    > 0 ? Math.min(100, Math.round(totals.c / tgt.carbTarget    * 100)) : 0;
@@ -1538,13 +1668,13 @@ async function renderFuel(app) {
   for (let i = 6; i >= 0; i--) {
     const dd = new Date(d0.getTime() - i * 86400000);
     const ds = ymd(dd);
-    const t = getDayTotals(getDayMeals(ds));
+    const t  = getDayTotals(getDayMeals(ds));
     chartDays.push({ label: DAY_NAMES[dd.getDay()].slice(0, 2), kcal: Math.round(t.kcal), isToday: i === 0 });
   }
   const maxBar = Math.max(...chartDays.map((d) => d.kcal), tgt.kcalTarget, 1);
 
   const histHtml = chartDays.map((d) => {
-    const h = Math.round((d.kcal / maxBar) * 52);
+    const h    = Math.round((d.kcal / maxBar) * 52);
     const tgtH = Math.round((tgt.kcalTarget / maxBar) * 52);
     return `<div class="fuel-hist-col${d.isToday ? " fuel-hist-today" : ""}">
       <div class="fuel-hist-bar-wrap" style="height:52px">
@@ -1555,6 +1685,47 @@ async function renderFuel(app) {
       <div class="fuel-hist-label">${d.label}</div>
     </div>`;
   }).join("");
+
+  // Weekly summary
+  const wSumm  = getNutritionWeekSummary(fuelSummaryPeriod);
+  const todayDs = ymd(today());
+  const wkTitle = fuelSummaryPeriod === 0 ? "This Week" : "Last Week";
+  const wkStart = wSumm.startDate.toLocaleDateString("en-GB", { day:"numeric", month:"short" });
+
+  const weekStatHtml = wSumm.loggedDays === 0
+    ? `<div class="empty-state" style="margin:0;padding:12px 0 4px"><p style="font-size:14px">No data logged for ${wkTitle.toLowerCase()}.</p></div>`
+    : `<div class="fuel-week-stat-grid">
+        <div class="fuel-week-stat">
+          <div class="fuel-week-stat-num fuel-stat-kcal">${wSumm.avgKcal.toLocaleString()}</div>
+          <div class="fuel-week-stat-label">Avg kcal</div>
+          <div class="fuel-week-stat-sub">Total ${wSumm.totalKcal.toLocaleString()}</div>
+        </div>
+        <div class="fuel-week-stat">
+          <div class="fuel-week-stat-num fuel-stat-p">${wSumm.avgP}g</div>
+          <div class="fuel-week-stat-label">Avg P</div>
+          <div class="fuel-week-stat-sub">Total ${wSumm.totalP}g</div>
+        </div>
+        <div class="fuel-week-stat">
+          <div class="fuel-week-stat-num fuel-stat-c">${wSumm.avgC}g</div>
+          <div class="fuel-week-stat-label">Avg C</div>
+          <div class="fuel-week-stat-sub">Total ${wSumm.totalC}g</div>
+        </div>
+        <div class="fuel-week-stat">
+          <div class="fuel-week-stat-num fuel-stat-f">${wSumm.avgF}g</div>
+          <div class="fuel-week-stat-label">Avg F</div>
+          <div class="fuel-week-stat-sub">Total ${wSumm.totalF}g</div>
+        </div>
+      </div>
+      <div class="fuel-week-daily-row">
+        ${wSumm.daily.map((day) => {
+          const isToday = day.ds === todayDs;
+          return `<div class="fuel-week-day-col${isToday ? " is-today" : ""}">
+            <div class="fuel-week-day-label">${day.label}</div>
+            <div class="fuel-week-day-dot${day.hasData ? " has-data" : ""}"></div>
+            <div class="fuel-week-day-kcal">${day.hasData ? Math.round(day.kcal).toLocaleString() : ""}</div>
+          </div>`;
+        }).join("")}
+      </div>`;
 
   const noKey = !tgt.geminiKey;
 
@@ -1611,6 +1782,16 @@ async function renderFuel(app) {
     <div class="section-header">Last 7 days</div>
     <div class="fuel-history">${histHtml}</div>
     <div class="section-footer">Orange bar = over target. Dashed line = daily target (${tgt.kcalTarget} kcal).</div>
+
+    <div class="section-header" style="margin-top:24px">Weekly summary</div>
+    <div class="fuel-period-picker">
+      <button class="fuel-period-btn${fuelSummaryPeriod === 0 ? " fuel-period-btn-active" : ""}" data-period="0">This Week</button>
+      <button class="fuel-period-btn${fuelSummaryPeriod === 1 ? " fuel-period-btn-active" : ""}" data-period="1">Last Week</button>
+    </div>
+    <div class="fuel-week-summary">
+      <div class="fuel-week-summary-title">${wkTitle} · w/c ${wkStart} · ${wSumm.loggedDays}/7 days logged</div>
+      ${weekStatHtml}
+    </div>
   `;
 
   document.getElementById("log-meal-btn").addEventListener("click", showLogMealSheet);
@@ -1622,6 +1803,13 @@ async function renderFuel(app) {
         deleteMeal(btn.dataset.mid);
         route();
       }
+    });
+  });
+
+  app.querySelectorAll(".fuel-period-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      fuelSummaryPeriod = Number(btn.dataset.period);
+      renderFuel(app);
     });
   });
 }
@@ -1788,7 +1976,8 @@ function showMealEditSheet(initItems, aiNotes, source) {
         source: source || "manual"
       });
       close();
-      if (getRoute().name === "fuel") route();
+      const rn = getRoute().name;
+      if (rn === "fuel" || rn === "today") route();
     });
   };
 

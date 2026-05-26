@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v18-today-correct-day";
+const APP_VERSION = "2026-05-26-v19-train-nav-fuel-summary";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
