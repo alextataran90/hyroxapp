@@ -11,6 +11,7 @@ const JOURNAL_KEY = "hyrox.journal";
 const SESSION_LOGS_KEY = "hyrox.sessionlogs";
 const READINESS_KEY = "hyrox.readiness";
 const PR_KEY = "hyrox.prs";
+const NUTRITION_KEY = "hyrox.nutrition";
 const PLAN_URL = "plan.json";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -49,6 +50,13 @@ const DEFAULT_SETTINGS = {
   ergs: {
     row2KSplit: 110,
     ski1KSplit: 130
+  },
+  nutrition: {
+    geminiKey: "",
+    kcalTarget: 2800,
+    proteinTarget: 180,
+    carbTarget: 350,
+    fatTarget: 80
   }
 };
 
@@ -73,7 +81,12 @@ const REF_LABELS = {
   raceHyroxTargetSecPerKm: "Hyrox target pace",
   row2KSplit: "2K row split /500m",
   ski1KSplit: "1K SkiErg split /500m",
-  bodyWeight: "Body weight"
+  bodyWeight: "Body weight",
+  geminiKey: "Gemini API key",
+  kcalTarget: "Daily calorie target",
+  proteinTarget: "Protein target",
+  carbTarget: "Carb target",
+  fatTarget: "Fat target"
 };
 
 /* ---------- Storage helpers ---------- */
@@ -102,7 +115,8 @@ function getSettings() {
     lifts: { ...DEFAULT_SETTINGS.lifts, ...(stored.lifts || {}) },
     stations: { ...DEFAULT_SETTINGS.stations, ...(stored.stations || {}) },
     running: { ...DEFAULT_SETTINGS.running, ...(stored.running || {}) },
-    ergs: { ...DEFAULT_SETTINGS.ergs, ...(stored.ergs || {}) }
+    ergs: { ...DEFAULT_SETTINGS.ergs, ...(stored.ergs || {}) },
+    nutrition: { ...DEFAULT_SETTINGS.nutrition, ...(stored.nutrition || {}) }
   };
 }
 
@@ -272,6 +286,90 @@ function showPRToast(blockName, kg) {
     toast.classList.remove("visible");
     setTimeout(() => { toast.hidden = true; }, 350);
   }, 3000);
+}
+
+/* ---------- Nutrition helpers ---------- */
+
+function getNutritionLog() {
+  try { return JSON.parse(localStorage.getItem(NUTRITION_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function getTodayMeals() {
+  return getDayMeals(ymd(today()));
+}
+
+function getDayMeals(dateStr) {
+  const log = getNutritionLog();
+  return (log[dateStr] && log[dateStr].meals) ? log[dateStr].meals : [];
+}
+
+function getDayTotals(meals) {
+  return meals.reduce((a, m) => ({
+    kcal: a.kcal + (m.total ? m.total.kcal : 0),
+    p:    a.p    + (m.total ? m.total.p    : 0),
+    c:    a.c    + (m.total ? m.total.c    : 0),
+    f:    a.f    + (m.total ? m.total.f    : 0)
+  }), { kcal: 0, p: 0, c: 0, f: 0 });
+}
+
+function saveMeal(meal) {
+  const log = getNutritionLog();
+  const dateStr = ymd(today());
+  if (!log[dateStr]) log[dateStr] = { meals: [] };
+  const idx = log[dateStr].meals.findIndex((m) => m.id === meal.id);
+  if (idx >= 0) log[dateStr].meals[idx] = meal;
+  else log[dateStr].meals.push(meal);
+  localStorage.setItem(NUTRITION_KEY, JSON.stringify(log));
+}
+
+function deleteMeal(mealId) {
+  const log = getNutritionLog();
+  const dateStr = ymd(today());
+  if (!log[dateStr]) return;
+  log[dateStr].meals = log[dateStr].meals.filter((m) => m.id !== mealId);
+  localStorage.setItem(NUTRITION_KEY, JSON.stringify(log));
+}
+
+function makeMealId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+/* ---------- Gemini Flash API ---------- */
+
+async function analyzeFood(base64Data, mimeType) {
+  const s = getSettings();
+  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
+  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
+
+  const prompt = `You are a professional nutritionist. Analyse this meal photo carefully.\nReturn ONLY valid JSON (no markdown, no code fences) in this exact schema:\n{"items":[{"name":"string","qty":"string","kcal":number,"p":number,"c":number,"f":number}],"total":{"kcal":number,"p":number,"c":number,"f":number},"confidence":"high|medium|low","notes":"string"}\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Estimate portions from plate/bowl size and visual cues. Be realistic — do not underestimate. Return ONLY the JSON object.`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { text: prompt },
+          { inline_data: { mime_type: mimeType, data: base64Data } }
+        ]}],
+        generationConfig: { temperature: 0.1 }
+      })
+    }
+  );
+
+  if (!res.ok) {
+    let msg = `Gemini error ${res.status}`;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+  // Strip markdown fences if Gemini wraps anyway
+  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
+  return JSON.parse(clean);
 }
 
 /* ---------- Readiness check ---------- */
@@ -1364,6 +1462,318 @@ async function renderHistory(app) {
   app.innerHTML = html;
 }
 
+/* ============================================================
+   Fuel — meal tracker
+   ============================================================ */
+
+ROUTES.fuel = renderFuel;
+async function renderFuel(app) {
+  const meals = getTodayMeals();
+  const totals = getDayTotals(meals);
+  const s = getSettings();
+  const tgt = s.nutrition;
+  const kcalLeft = tgt.kcalTarget - Math.round(totals.kcal);
+  const isOver = kcalLeft < 0;
+
+  const pPct = tgt.proteinTarget > 0 ? Math.min(100, Math.round(totals.p / tgt.proteinTarget * 100)) : 0;
+  const cPct = tgt.carbTarget    > 0 ? Math.min(100, Math.round(totals.c / tgt.carbTarget    * 100)) : 0;
+  const fPct = tgt.fatTarget     > 0 ? Math.min(100, Math.round(totals.f / tgt.fatTarget     * 100)) : 0;
+
+  const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
+
+  const mealsHtml = meals.length === 0
+    ? `<div class="empty-state"><h3>Nothing logged yet</h3><p>Tap + Log meal to add your first meal today.</p></div>`
+    : meals.map((meal) => `
+        <div class="meal-card">
+          <div class="meal-card-header">
+            <div>
+              <div class="meal-card-label">${escapeHtml(MEAL_LABELS[meal.label] || meal.label)}</div>
+              <div class="meal-card-time">${escapeHtml(meal.time)}</div>
+            </div>
+            <div style="text-align:right;flex:1;min-width:0">
+              <div class="meal-card-kcal">${meal.total.kcal} kcal</div>
+              <div class="meal-card-macros">${meal.total.p}g P · ${meal.total.c}g C · ${meal.total.f}g F</div>
+            </div>
+            <button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}">×</button>
+          </div>
+          <div class="meal-items-list">
+            ${meal.items.map((it) => `
+              <div class="meal-item">
+                <span class="meal-item-name">${escapeHtml(it.name)}</span>
+                <span class="meal-item-qty dim">${escapeHtml(it.qty)}</span>
+                <span class="meal-item-kcal">${it.kcal}</span>
+              </div>`).join("")}
+          </div>
+        </div>`).join("");
+
+  // 7-day bar chart data
+  const chartDays = [];
+  const d0 = today();
+  for (let i = 6; i >= 0; i--) {
+    const dd = new Date(d0.getTime() - i * 86400000);
+    const ds = ymd(dd);
+    const t = getDayTotals(getDayMeals(ds));
+    chartDays.push({ label: DAY_NAMES[dd.getDay()].slice(0, 2), kcal: Math.round(t.kcal), isToday: i === 0 });
+  }
+  const maxBar = Math.max(...chartDays.map((d) => d.kcal), tgt.kcalTarget, 1);
+
+  const histHtml = chartDays.map((d) => {
+    const h = Math.round((d.kcal / maxBar) * 52);
+    const tgtH = Math.round((tgt.kcalTarget / maxBar) * 52);
+    return `<div class="fuel-hist-col${d.isToday ? " fuel-hist-today" : ""}">
+      <div class="fuel-hist-bar-wrap" style="height:52px">
+        <div class="fuel-hist-target-line" style="bottom:${tgtH}px"></div>
+        <div class="fuel-hist-bar${d.kcal > tgt.kcalTarget ? " fuel-hist-over" : ""}" style="height:${h}px"></div>
+      </div>
+      <div class="fuel-hist-num">${d.kcal > 0 ? d.kcal : ""}</div>
+      <div class="fuel-hist-label">${d.label}</div>
+    </div>`;
+  }).join("");
+
+  const noKey = !tgt.geminiKey;
+
+  app.innerHTML = `
+    <h1 class="large-title">Fuel</h1>
+    <div class="large-title-sub">${new Date().toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long" })}</div>
+
+    ${noKey ? `<div class="alert alert-warn">
+      <strong>Gemini key missing</strong>
+      Add it in <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a> to enable photo analysis.
+    </div>` : ""}
+
+    <div class="fuel-hero">
+      <div class="fuel-kcal-block">
+        <div class="fuel-kcal-num${isOver ? " fuel-over" : ""}">${Math.abs(kcalLeft)}</div>
+        <div class="fuel-kcal-label">${isOver ? "kcal over target" : "kcal remaining"}</div>
+        <div class="fuel-kcal-sub">${Math.round(totals.kcal)} eaten · ${tgt.kcalTarget} target</div>
+      </div>
+      <div class="fuel-macro-stack">
+        <div class="fuel-macro-row">
+          <span class="fuel-macro-name">Protein</span>
+          <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-protein" style="width:${pPct}%"></div></div>
+          <span class="fuel-macro-gram">${Math.round(totals.p)}<span class="fuel-macro-tgt">/${tgt.proteinTarget}g</span></span>
+        </div>
+        <div class="fuel-macro-row">
+          <span class="fuel-macro-name">Carbs</span>
+          <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-carb" style="width:${cPct}%"></div></div>
+          <span class="fuel-macro-gram">${Math.round(totals.c)}<span class="fuel-macro-tgt">/${tgt.carbTarget}g</span></span>
+        </div>
+        <div class="fuel-macro-row">
+          <span class="fuel-macro-name">Fat</span>
+          <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-fat" style="width:${fPct}%"></div></div>
+          <span class="fuel-macro-gram">${Math.round(totals.f)}<span class="fuel-macro-tgt">/${tgt.fatTarget}g</span></span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn" id="log-meal-btn">+ Log meal</button>
+
+    <div class="section-header">Today's meals</div>
+    ${mealsHtml}
+
+    <div class="section-header">Last 7 days</div>
+    <div class="fuel-history">${histHtml}</div>
+    <div class="section-footer">Orange bar = over target. Dashed line = daily target (${tgt.kcalTarget} kcal).</div>
+  `;
+
+  document.getElementById("log-meal-btn").addEventListener("click", showLogMealSheet);
+
+  app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (confirm("Delete this meal?")) {
+        deleteMeal(btn.dataset.mid);
+        route();
+      }
+    });
+  });
+}
+
+/* ---------- Log meal sheet (camera / library / manual) ---------- */
+
+function showLogMealSheet() {
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">Log meal<div class="action-sheet-title-sub">Photo analysis uses Gemini Flash (~0.01¢/photo)</div></div>
+      <div class="action-sheet-group">
+        <label class="action-sheet-btn" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+          📷 Take photo
+          <input type="file" accept="image/*" capture="environment" id="meal-cam" style="display:none" />
+        </label>
+        <label class="action-sheet-btn" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+          🖼️ Choose from library
+          <input type="file" accept="image/*" id="meal-lib" style="display:none" />
+        </label>
+        <button class="action-sheet-btn" id="meal-manual-btn">✏️ Add manually</button>
+      </div>
+      <button class="action-sheet-btn action-sheet-cancel" id="meal-sheet-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+
+  const close = () => { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 260); };
+
+  const processFile = (file) => {
+    if (!file) return;
+    close();
+    const loader = document.createElement("div");
+    loader.className = "fuel-loader";
+    loader.innerHTML = `<div class="fuel-loader-inner"><div class="fuel-spinner"></div><div class="fuel-loader-text">Analysing meal…</div><div class="fuel-loader-sub">Gemini Flash is estimating calories &amp; macros</div></div>`;
+    document.body.appendChild(loader);
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const b64 = ev.target.result.split(",")[1];
+      const mime = file.type || "image/jpeg";
+      try {
+        const result = await analyzeFood(b64, mime);
+        loader.remove();
+        showMealEditSheet(result.items || [], result.notes || "", "photo");
+      } catch (err) {
+        loader.remove();
+        alert("Analysis failed: " + err.message);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  sheet.querySelector("#meal-cam").addEventListener("change", (e) => processFile(e.target.files[0]));
+  sheet.querySelector("#meal-lib").addEventListener("change", (e) => processFile(e.target.files[0]));
+  sheet.querySelector("#meal-manual-btn").addEventListener("click", () => { close(); showMealEditSheet([], "", "manual"); });
+  sheet.querySelector("#meal-sheet-cancel").addEventListener("click", close);
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
+}
+
+/* ---------- Meal edit / confirm sheet ---------- */
+
+function showMealEditSheet(initItems, aiNotes, source) {
+  let items = initItems.map((it) => ({ name: it.name || "", qty: it.qty || "", kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0 }));
+  const LABELS = ["breakfast", "lunch", "dinner", "snack"];
+  const h = new Date().getHours();
+  let selLabel = h < 10 ? "breakfast" : h < 14 ? "lunch" : h < 19 ? "dinner" : "snack";
+
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
+
+  const calcTotal = () => items.reduce((a, it) => ({
+    kcal: a.kcal + (Number(it.kcal) || 0),
+    p:    a.p    + (Number(it.p)    || 0),
+    c:    a.c    + (Number(it.c)    || 0),
+    f:    a.f    + (Number(it.f)    || 0)
+  }), { kcal: 0, p: 0, c: 0, f: 0 });
+
+  const renderSheet = () => {
+    const tot = calcTotal();
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="fed-cancel">Cancel</button>
+          <span class="fuel-edit-title">Review meal</span>
+          <button class="fuel-edit-save" id="fed-save">Save</button>
+        </div>
+        <div class="fuel-edit-scroll">
+          <div class="fuel-label-row">
+            ${LABELS.map((l) => `<button class="fuel-label-pill${l === selLabel ? " selected" : ""}" data-lbl="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}
+          </div>
+          ${aiNotes ? `<div class="fuel-ai-note">💡 ${escapeHtml(aiNotes)}</div>` : ""}
+          <div id="fed-items">
+            ${items.map((it, i) => fuelItemRow(it, i)).join("")}
+          </div>
+          <button class="fuel-add-item" id="fed-add">+ Add item</button>
+          <div class="fuel-edit-total">
+            <div class="fuel-edit-total-row">
+              <span>Total</span>
+              <span id="fed-total-kcal" class="fuel-edit-total-kcal">${Math.round(tot.kcal)} kcal</span>
+            </div>
+            <div id="fed-total-macros" class="fuel-edit-total-macros">${Math.round(tot.p)}g P · ${Math.round(tot.c)}g C · ${Math.round(tot.f)}g F</div>
+          </div>
+        </div>
+      </div>`;
+    bindSheet();
+  };
+
+  const updateTotals = () => {
+    const tot = calcTotal();
+    const kcalEl = overlay.querySelector("#fed-total-kcal");
+    const macEl  = overlay.querySelector("#fed-total-macros");
+    if (kcalEl) kcalEl.textContent = Math.round(tot.kcal) + " kcal";
+    if (macEl)  macEl.textContent  = `${Math.round(tot.p)}g P · ${Math.round(tot.c)}g C · ${Math.round(tot.f)}g F`;
+  };
+
+  const bindSheet = () => {
+    overlay.querySelectorAll(".fuel-label-pill").forEach((b) => b.addEventListener("click", () => { selLabel = b.dataset.lbl; renderSheet(); }));
+
+    overlay.querySelectorAll(".fed-field").forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const i = Number(inp.dataset.i);
+        const f = inp.dataset.f;
+        items[i][f] = inp.type === "number" ? (Number(inp.value) || 0) : inp.value;
+        updateTotals();
+      });
+    });
+
+    overlay.querySelectorAll(".fed-del").forEach((b) => b.addEventListener("click", () => {
+      items.splice(Number(b.dataset.i), 1);
+      renderSheet();
+    }));
+
+    overlay.querySelector("#fed-add")?.addEventListener("click", () => {
+      items.push({ name: "", qty: "", kcal: 0, p: 0, c: 0, f: 0 });
+      renderSheet();
+      const names = overlay.querySelectorAll(".fed-name");
+      if (names.length) names[names.length - 1].focus();
+    });
+
+    overlay.querySelector("#fed-cancel")?.addEventListener("click", close);
+
+    overlay.querySelector("#fed-save")?.addEventListener("click", () => {
+      // Sync latest DOM values
+      overlay.querySelectorAll(".fed-field").forEach((inp) => {
+        const i = Number(inp.dataset.i);
+        if (i < items.length) items[i][inp.dataset.f] = inp.type === "number" ? (Number(inp.value) || 0) : inp.value;
+      });
+      const valid = items.filter((it) => it.name || it.kcal > 0);
+      if (!valid.length) { close(); return; }
+      const tot = valid.reduce((a, it) => ({ kcal: a.kcal + it.kcal, p: a.p + it.p, c: a.c + it.c, f: a.f + it.f }), { kcal: 0, p: 0, c: 0, f: 0 });
+      const now2 = new Date();
+      saveMeal({
+        id: makeMealId(),
+        label: selLabel,
+        time: `${String(now2.getHours()).padStart(2, "0")}:${String(now2.getMinutes()).padStart(2, "0")}`,
+        items: valid,
+        total: { kcal: Math.round(tot.kcal), p: Math.round(tot.p * 10) / 10, c: Math.round(tot.c * 10) / 10, f: Math.round(tot.f * 10) / 10 },
+        source: source || "manual"
+      });
+      close();
+      if (getRoute().name === "fuel") route();
+    });
+  };
+
+  renderSheet();
+}
+
+function fuelItemRow(it, i) {
+  return `<div class="fed-item">
+    <div class="fed-item-top">
+      <input class="fed-field fed-name" data-i="${i}" data-f="name" type="text" value="${escapeHtml(it.name)}" placeholder="Food name" />
+      <input class="fed-field fed-qty" data-i="${i}" data-f="qty" type="text" value="${escapeHtml(it.qty)}" placeholder="qty" />
+      <button class="fed-del" data-i="${i}" aria-label="Remove">×</button>
+    </div>
+    <div class="fed-item-nums">
+      <div class="fed-num-col"><label>kcal</label><input class="fed-field fed-num" data-i="${i}" data-f="kcal" type="number" inputmode="decimal" value="${it.kcal}" /></div>
+      <div class="fed-num-col"><label>P (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="p" type="number" inputmode="decimal" value="${it.p}" /></div>
+      <div class="fed-num-col"><label>C (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="c" type="number" inputmode="decimal" value="${it.c}" /></div>
+      <div class="fed-num-col"><label>F (g)</label><input class="fed-field fed-num" data-i="${i}" data-f="f" type="number" inputmode="decimal" value="${it.f}" /></div>
+    </div>
+  </div>`;
+}
+
 ROUTES.progress = renderProgress;
 async function renderProgress(app) {
   const settings = getSettings();
@@ -1893,6 +2303,19 @@ async function renderSettings(app, params) {
       ${paceRow("ergs", "ski1KSplit")}
     </div>
 
+    <div class="section-header">Nutrition</div>
+    <div class="list">
+      <div class="form-row">
+        <label class="form-label" for="setting-geminiKey">Gemini API key</label>
+        <input id="setting-geminiKey" class="form-input" type="password" data-section="nutrition" data-key="geminiKey" data-string="1" value="${escapeHtml(s.nutrition?.geminiKey || "")}" placeholder="AIzaSy…" autocomplete="off" autocorrect="off" spellcheck="false" />
+      </div>
+      ${numRow("nutrition", "kcalTarget", "kcal")}
+      ${numRow("nutrition", "proteinTarget", "g")}
+      ${numRow("nutrition", "carbTarget", "g")}
+      ${numRow("nutrition", "fatTarget", "g")}
+    </div>
+    <div class="section-footer">Get a free Gemini key at aistudio.google.com · Free tier: 1,500 photo analyses/day.</div>
+
     <div style="margin-top:24px">
       <button id="save-settings" class="btn">${returnTo ? "Save & return to workout" : "Save changes"}</button>
       ${returnTo
@@ -1983,6 +2406,7 @@ async function renderSettings(app, params) {
       const raw = (el.value || "").trim();
       let val;
       if (el.dataset.pace) val = paceToSec(raw);
+      else if (el.dataset.string) val = raw;
       else val = raw === "" ? null : Number(raw);
       if (!next[section]) next[section] = {};
       next[section][key] = val;

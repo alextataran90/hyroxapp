@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v15-weekstrip-10features";
+const APP_VERSION = "2026-05-26-v16-fuel-meal-tracker";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
