@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v21-remove-readiness-popup";
+const APP_VERSION = "2026-05-26-v22-gemini-flash-error-ux";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

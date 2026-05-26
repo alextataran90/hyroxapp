@@ -345,7 +345,7 @@ async function analyzeFood(base64Data, mimeType) {
   const prompt = `You are a professional nutritionist. Analyse this meal photo carefully.\nReturn ONLY valid JSON (no markdown, no code fences) in this exact schema:\n{"items":[{"name":"string","qty":"string","kcal":number,"p":number,"c":number,"f":number}],"total":{"kcal":number,"p":number,"c":number,"f":number},"confidence":"high|medium|low","notes":"string"}\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Estimate portions from plate/bowl size and visual cues. Be realistic — do not underestimate. Return ONLY the JSON object.`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -383,7 +383,7 @@ async function estimateItemNutrition(autoItems) {
   const prompt = `You are a professional nutritionist. Estimate nutritional values for each food item below.\nReturn ONLY valid JSON (no markdown, no code fences) as an array with exactly ${autoItems.length} object(s) in this schema:\n[{"name":"string","kcal":number,"p":number,"c":number,"f":number}]\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Use the quantity given. Be accurate and realistic.\nItems:\n${list}\nReturn ONLY the JSON array.`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1845,6 +1845,26 @@ async function renderFuel(app) {
   });
 }
 
+/* ---------- Gemini error toast ---------- */
+
+function showGeminiError(msg) {
+  // Surface a user-friendly banner instead of a raw browser alert
+  const isQuota = /quota|limit|billing|rate/i.test(msg);
+  const friendly = isQuota
+    ? "Daily Gemini quota reached (1,500 free requests/day). It resets at midnight Pacific time. You can still enter nutrition manually."
+    : "AI estimation failed: " + msg;
+
+  const toast = document.createElement("div");
+  toast.className = "gemini-error-toast";
+  toast.innerHTML = `<span class="gemini-error-icon">⚠️</span><span class="gemini-error-text">${escapeHtml(friendly)}</span><button class="gemini-error-close">×</button>`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+
+  const dismiss = () => { toast.classList.remove("visible"); setTimeout(() => toast.remove(), 300); };
+  toast.querySelector(".gemini-error-close").addEventListener("click", dismiss);
+  setTimeout(dismiss, 8000);
+}
+
 /* ---------- Log meal sheet (camera / library / manual) ---------- */
 
 function showLogMealSheet() {
@@ -1889,7 +1909,7 @@ function showLogMealSheet() {
         showMealEditSheet(result.items || [], result.notes || "", "photo");
       } catch (err) {
         loader.remove();
-        alert("Analysis failed: " + err.message);
+        showGeminiError(err.message);
       }
     };
     reader.readAsDataURL(file);
@@ -2007,7 +2027,7 @@ function showMealEditSheet(initItems, aiNotes, source) {
       syncDomToItems();
       const autoItems = items.filter((it) => it.auto && it.name.trim());
       if (!autoItems.length) {
-        alert("Add a name to the items you want estimated, then tap Estimate.");
+        showGeminiError("Add a name to the items you want estimated, then tap Estimate.");
         return;
       }
       const btn = overlay.querySelector("#fed-estimate");
@@ -2034,7 +2054,7 @@ function showMealEditSheet(initItems, aiNotes, source) {
         btn.disabled = false;
         const ac = items.filter((it) => it.auto).length;
         btn.textContent = `✨ Estimate nutrition for ${ac} item${ac > 1 ? "s" : ""}`;
-        alert("Estimation failed: " + err.message);
+        showGeminiError(err.message);
       }
     });
 
