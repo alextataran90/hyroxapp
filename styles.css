@@ -30,6 +30,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --tabbar-h: 64px;
   --nav-h: 50px;
+  --strip-h: 66px;
 
   /* Type ramp (iOS) */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
@@ -56,7 +57,7 @@ html, body {
 
 body {
   min-height: 100vh;
-  padding-top: calc(var(--safe-top) + var(--nav-h));
+  padding-top: calc(var(--safe-top) + var(--nav-h) + var(--strip-h));
   padding-bottom: calc(var(--safe-bottom) + var(--tabbar-h));
 }
 
@@ -1700,3 +1701,339 @@ textarea.form-input {
   transform: translateX(22px);
   background: #fff;
 }
+
+/* ============================================================
+   Week strip — persistent fixed navigation
+   ============================================================ */
+
+#weekstrip {
+  position: fixed;
+  top: calc(var(--safe-top) + var(--nav-h));
+  left: 0;
+  right: 0;
+  height: var(--strip-h);
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--separator);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.ws-inner {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.ws-days {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.ws-arrow {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: color 0.12s, opacity 0.12s;
+  flex-shrink: 0;
+}
+
+.ws-arrow:active { color: var(--text); }
+.ws-arrow:disabled { opacity: 0.2; pointer-events: none; }
+
+.ws-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 2px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background-color 0.12s;
+  cursor: pointer;
+  min-height: 44px;
+  position: relative;
+}
+
+.ws-day:active { background: var(--surface-2); }
+
+.ws-day-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+  line-height: 1;
+}
+
+/* Has a session but not today / active */
+.ws-day.ws-active .ws-day-label,
+.ws-day.ws-today .ws-day-label {
+  color: var(--text);
+}
+
+/* Today highlight */
+.ws-day.ws-today {
+  background: var(--accent-bg);
+}
+
+.ws-day.ws-today .ws-day-label {
+  color: var(--accent);
+}
+
+/* Currently viewing */
+.ws-day.ws-active {
+  background: var(--surface-2);
+}
+
+/* Rest day with no session */
+.ws-day.ws-rest .ws-day-label {
+  color: var(--text-4);
+}
+
+/* Today that is a rest day */
+.ws-day.ws-today-rest .ws-day-label {
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+/* Done sessions */
+.ws-day.ws-done .ws-day-label {
+  color: var(--text-2);
+}
+
+/* Session type dot */
+.ws-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ws-dot-strength  { background: var(--danger); }
+.ws-dot-run       { background: var(--success); }
+.ws-dot-hybrid    { background: var(--accent); }
+.ws-dot-sim       { background: #bf5af2; }
+.ws-dot-test      { background: var(--warn); }
+.ws-dot-empty     { background: transparent; }
+
+/* Checkmark for completed day */
+.ws-check {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 9px;
+  color: var(--success);
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Strip bottom label (week # / phase) */
+.ws-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  padding: 0 12px 2px;
+  gap: 2px;
+}
+
+.ws-wk { color: var(--text-3); }
+.ws-phase { color: var(--text-4); }
+
+/* ============================================================
+   PR toast notification
+   ============================================================ */
+
+#pr-toast {
+  position: fixed;
+  top: calc(var(--safe-top) + var(--nav-h) + var(--strip-h) + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  background: linear-gradient(135deg, #ff9500, #ff6b00);
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  padding: 10px 20px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(255, 149, 0, 0.4);
+  z-index: 500;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#pr-toast[hidden] { display: none !important; }
+
+#pr-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ============================================================
+   Floating timer pill (minimized state)
+   ============================================================ */
+
+#timer-pill {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + var(--tabbar-h) + 16px);
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 28px;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  z-index: 390;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  transition: transform 0.12s, opacity 0.12s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#timer-pill[hidden] { display: none !important; }
+#timer-pill:active { transform: scale(0.94); }
+
+#timer-pill.pill-work {
+  background: rgba(255,69,58,0.92);
+  color: #fff;
+}
+
+#timer-pill.pill-rest {
+  background: rgba(48,209,88,0.92);
+  color: #000;
+}
+
+.pill-phase {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+
+.pill-time {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.pill-rep {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* ============================================================
+   Timer minimize button (— button inside timer overlay)
+   ============================================================ */
+
+.timer-minimize {
+  position: absolute;
+  top: -20px;
+  right: 36px;
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 8px;
+  line-height: 1;
+  font-family: inherit;
+  transition: color 0.12s;
+}
+
+.timer-minimize:active { color: var(--text); }
+
+/* ============================================================
+   Readiness check (sleep / soreness / energy)
+   ============================================================ */
+
+.readiness-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.readiness-label {
+  font-size: 16px;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  min-width: 120px;
+}
+
+.readiness-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.readiness-pill {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 2px solid transparent;
+  color: var(--text-2);
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+}
+
+.readiness-pill:active { opacity: 0.7; transform: scale(0.92); }
+
+.readiness-pill.selected {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ============================================================
+   Race sim timer pips (run vs station variants)
+   ============================================================ */
+
+.timer-pip.sim-run {
+  background: var(--surface-2);
+  border-radius: 4px;
+  width: 12px;
+  height: 10px;
+}
+
+.timer-pip.sim-run.done    { background: var(--success); }
+.timer-pip.sim-run.active  { background: var(--accent); }
+
+.timer-pip.sim-station {
+  background: var(--surface-2);
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+}
+
+.timer-pip.sim-station.done   { background: #bf5af2; }
+.timer-pip.sim-station.active { background: #bf5af2; opacity: 1; }

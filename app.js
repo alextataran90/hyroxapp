@@ -9,6 +9,8 @@ const OVERRIDES_KEY = "hyrox.overrides";
 const USER_BLOCKS_KEY = "hyrox.userblocks";
 const JOURNAL_KEY = "hyrox.journal";
 const SESSION_LOGS_KEY = "hyrox.sessionlogs";
+const READINESS_KEY = "hyrox.readiness";
+const PR_KEY = "hyrox.prs";
 const PLAN_URL = "plan.json";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -199,6 +201,17 @@ function addBlockLog(weekNum, sessionId, blockIdx, entry) {
     if (!all[key]) all[key] = [];
     all[key].push({ ...entry, id: "l" + Date.now() });
     localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(all));
+
+    // Check for PR
+    if (entry.kg != null && entry.blockName) {
+      const prev = getStoredPR(entry.blockName);
+      if (prev === null) {
+        updateStoredPR(entry.blockName, entry.kg);
+      } else if (entry.kg > prev) {
+        updateStoredPR(entry.blockName, entry.kg);
+        setTimeout(() => showPRToast(entry.blockName, entry.kg), 350);
+      }
+    }
   } catch {}
 }
 
@@ -209,6 +222,120 @@ function deleteBlockLog(weekNum, sessionId, blockIdx, logId) {
     if (all[key]) all[key] = all[key].filter((l) => l.id !== logId);
     localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(all));
   } catch {}
+}
+
+/* ---------- Smart log defaults (last logged kg for a block name) ---------- */
+
+function getLastLoggedKgForBlock(blockName) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    let lastKg = null;
+    let lastTime = 0;
+    for (const logs of Object.values(all)) {
+      if (!Array.isArray(logs)) continue;
+      for (const l of logs) {
+        if (l.blockName === blockName && l.kg != null && l.at) {
+          const t = new Date(l.at).getTime();
+          if (t > lastTime) { lastTime = t; lastKg = l.kg; }
+        }
+      }
+    }
+    return lastKg;
+  } catch { return null; }
+}
+
+/* ---------- PR tracking ---------- */
+
+function getStoredPR(blockName) {
+  try {
+    const prs = JSON.parse(localStorage.getItem(PR_KEY) || "{}");
+    return prs[blockName] ?? null;
+  } catch { return null; }
+}
+
+function updateStoredPR(blockName, kg) {
+  try {
+    const prs = JSON.parse(localStorage.getItem(PR_KEY) || "{}");
+    prs[blockName] = kg;
+    localStorage.setItem(PR_KEY, JSON.stringify(prs));
+  } catch {}
+}
+
+function showPRToast(blockName, kg) {
+  const toast = document.getElementById("pr-toast");
+  if (!toast) return;
+  toast.textContent = `🏆 New PR — ${blockName}: ${kg} kg!`;
+  toast.hidden = false;
+  toast.classList.add("visible");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => { toast.hidden = true; }, 350);
+  }, 3000);
+}
+
+/* ---------- Readiness check ---------- */
+
+function getTodayReadiness() {
+  try {
+    const all = JSON.parse(localStorage.getItem(READINESS_KEY) || "{}");
+    return all[ymd(today())] || null;
+  } catch { return null; }
+}
+
+function saveReadiness(data) {
+  try {
+    const all = JSON.parse(localStorage.getItem(READINESS_KEY) || "{}");
+    all[ymd(today())] = { ...data, date: ymd(today()) };
+    localStorage.setItem(READINESS_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function showReadinessCheck(onDone) {
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  const makeRow = (id, label, emoji) => `
+    <div class="readiness-row">
+      <div class="readiness-label">${emoji} ${label}</div>
+      <div class="readiness-pills" data-rid="${id}">
+        ${[1,2,3,4,5].map((n) => `<button class="readiness-pill" data-val="${n}">${n}</button>`).join("")}
+      </div>
+    </div>`;
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">
+        How are you feeling?
+        <div class="action-sheet-title-sub">Quick check-in before training (1 = low · 5 = great)</div>
+      </div>
+      <div class="action-sheet-group" style="padding:16px">
+        ${makeRow("sleep", "Sleep quality", "😴")}
+        ${makeRow("soreness", "Muscle soreness", "💪")}
+        ${makeRow("energy", "Energy level", "⚡")}
+      </div>
+      <div style="padding:0 10px 10px;display:flex;gap:10px">
+        <button class="btn btn-secondary" data-cancel="1" style="flex:1">Skip</button>
+        <button class="btn" id="save-readiness" style="flex:1">Let's go 🔥</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+
+  const ratings = {};
+  sheet.querySelectorAll(".readiness-pill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const rid = btn.closest("[data-rid]")?.dataset.rid;
+      if (!rid) return;
+      ratings[rid] = Number(btn.dataset.val);
+      btn.closest("[data-rid]").querySelectorAll(".readiness-pill").forEach((b) => b.classList.toggle("selected", b === btn));
+    });
+  });
+
+  function close() { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 200); }
+  sheet.querySelector("[data-cancel]").addEventListener("click", () => { close(); onDone && onDone(); });
+  document.getElementById("save-readiness").addEventListener("click", () => {
+    if (Object.keys(ratings).length > 0) saveReadiness(ratings);
+    close(); onDone && onDone();
+  });
 }
 
 /* ---------- Ref lookup ---------- */
@@ -412,6 +539,7 @@ function toggleBlockDone(weekNum, sessionId, blockIdx) {
 /* ---------- Plan loading ---------- */
 
 let PLAN = null;
+let viewingWeekNum = null; // week the strip is showing
 
 async function loadPlan() {
   const res = await fetch(PLAN_URL, { cache: "no-cache" });
@@ -466,16 +594,116 @@ async function route() {
   document.querySelectorAll(".tab").forEach((el) => {
     el.classList.toggle("active", el.dataset.tab === r.name);
   });
+
+  // Sync viewingWeekNum from route so the strip follows navigation
+  if (r.name === "session" && r.params[0]) viewingWeekNum = Number(r.params[0]);
+  else if (r.name === "week" && r.params[0]) viewingWeekNum = Number(r.params[0]);
+  else if (r.name === "today") viewingWeekNum = null; // resets to current week
+
   const app = document.getElementById("app");
   try {
     if (!PLAN) await loadPlan();
     renderTopBar();
+    renderWeekStrip();
     app.innerHTML = "";
     await fn(app, r.params);
   } catch (e) {
     console.error(e);
     app.innerHTML = `<div class="alert alert-warn">Error: ${escapeHtml(e.message)}</div>`;
   }
+}
+
+/* ---------- Week strip ---------- */
+
+function getViewingWeekNum() {
+  if (!PLAN) return 1;
+  if (viewingWeekNum === null) {
+    const settings = getSettings();
+    viewingWeekNum = getWeekIndex(settings);
+  }
+  return Math.max(1, Math.min(PLAN.weeks.length, viewingWeekNum));
+}
+
+function renderWeekStrip() {
+  const strip = document.getElementById("weekstrip");
+  if (!strip || !PLAN) return;
+
+  const settings = getSettings();
+  const wn = getViewingWeekNum();
+  const week = PLAN.weeks.find((w) => w.number === wn);
+  const phase = getCurrentPhase(PLAN, wn);
+  const todayName = DAY_NAMES[new Date().getDay()];
+  const curWeekNum = getWeekIndex(settings);
+  const dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  // Determine which day is currently active (from route)
+  const r = getRoute();
+  let activeDayName = null;
+  if ((r.name === "session" || r.name === "today") && week) {
+    const sid = r.name === "session" ? r.params[1] : null;
+    if (sid) {
+      const s = week.sessions.find((s) => s.id === sid);
+      if (s) activeDayName = getSessionDay(wn, s.id, s.defaultDay);
+    } else if (r.name === "today") {
+      // Highlight today's day
+      activeDayName = todayName;
+    }
+  }
+
+  const dayMap = {};
+  if (week) {
+    for (const s of week.sessions) {
+      const d = getSessionDay(wn, s.id, s.defaultDay);
+      if (!dayMap[d]) dayMap[d] = s;
+    }
+  }
+
+  const daysHtml = dayOrder.map((d) => {
+    const s = dayMap[d];
+    const isToday = d === todayName && wn === curWeekNum;
+    const isActive = d === activeDayName;
+    const isDone = s && isSessionDone(wn, s.id);
+
+    let cls = "ws-day";
+    if (isActive && s) cls += " ws-active";
+    else if (isToday && s) cls += " ws-today";
+    else if (isToday && !s) cls += " ws-today-rest";
+    if (!s) cls += " ws-rest";
+    if (isDone && !isActive) cls += " ws-done";
+
+    const focusDot = s ? `<span class="ws-dot ws-dot-${s.focus}"></span>` : `<span class="ws-dot ws-dot-empty"></span>`;
+    const checkMark = isDone ? `<span class="ws-check">✓</span>` : "";
+    const inner = `<span class="ws-day-label">${d.slice(0, 2)}</span>${focusDot}${checkMark}`;
+
+    if (s) {
+      return `<a href="#/session/${wn}/${escapeHtml(s.id)}" class="${cls}" title="${escapeHtml(s.title)}">${inner}</a>`;
+    }
+    return `<div class="${cls}">${inner}</div>`;
+  }).join("");
+
+  const isTestWeek = week && week.test;
+  const phaseLabel = phase ? phase.name : "";
+
+  strip.innerHTML = `
+    <div class="ws-inner">
+      <button class="ws-arrow" id="ws-prev" ${wn <= 1 ? "disabled" : ""} aria-label="Previous week">‹</button>
+      <div class="ws-days">${daysHtml}</div>
+      <button class="ws-arrow" id="ws-next" ${wn >= PLAN.weeks.length ? "disabled" : ""} aria-label="Next week">›</button>
+    </div>
+    <div class="ws-label">
+      <span class="ws-wk">Wk ${wn}/${PLAN.weeks.length}${isTestWeek ? " · TEST" : ""}</span>
+      ${phaseLabel ? `<span class="ws-phase"> · ${escapeHtml(phaseLabel)}</span>` : ""}
+    </div>
+  `;
+
+  document.getElementById("ws-prev")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (wn > 1) { viewingWeekNum = wn - 1; renderWeekStrip(); }
+  });
+  document.getElementById("ws-next")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (wn < PLAN.weeks.length) { viewingWeekNum = wn + 1; renderWeekStrip(); }
+  });
 }
 
 /* ---------- Top bar ---------- */
@@ -712,10 +940,6 @@ function renderSessionCard(session, weekNum, expanded) {
 
     <div class="section-header">Session notes</div>
     <textarea class="journal-input" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" placeholder="How did it feel? Notes, PRs, things to remember…" rows="3">${escapeHtml(getJournalNote(weekNum, session.id))}</textarea>
-
-    <div class="section-header">This week</div>
-    <div class="day-picker">${dayChipsHtml}</div>
-    <div class="section-footer">Tap any day to jump to that session.</div>
 
     <button class="btn-reschedule" data-action="reschedule" data-session="${escapeHtml(session.id)}">Move to another day…</button>
 
@@ -957,6 +1181,189 @@ async function renderWeek(app, params) {
   });
 }
 
+/* ---------- Race Simulation Mode ---------- */
+
+ROUTES.racesim = renderRaceSim;
+async function renderRaceSim(app) {
+  const settings = getSettings();
+  app.innerHTML = `
+    <h1 class="large-title">Race Simulation</h1>
+    <div class="large-title-sub">Full 8+8 timer vs your targets</div>
+    <div class="alert alert-info" style="margin-top:0">
+      <strong>How it works</strong>
+      Start the timer and run each segment. Tap <em>Done → Next</em> when you finish each leg or station. See live splits vs target at the end.
+    </div>
+    <div class="projector-card">
+      <div class="projector-header">Target finish</div>
+      <div class="projector-time">${renderRaceProjectorHtml(settings) ? formatTotalSecs(calcProjectedTime(settings)) : "Set paces in Settings"}</div>
+      <div class="projector-note">Run pace: ${formatSecToPace(settings.running?.raceHyroxTargetSecPerKm || 0)}/km · 16 segments total</div>
+    </div>
+    <button class="btn" id="start-sim-btn" style="margin-top:8px">🏁 Start Race Sim</button>
+    <a class="btn btn-secondary" href="#/settings" style="display:flex;margin-top:10px">Adjust target pace →</a>
+  `;
+  document.getElementById("start-sim-btn")?.addEventListener("click", () => showRaceSimTimer(settings));
+}
+
+function showRaceSimTimer(settings) {
+  const pace = settings.running?.raceHyroxTargetSecPerKm || 250;
+  const segments = [
+    { name: "Run 1 · 1km", type: "run", target: pace },
+    { name: "SkiErg · 1000m", type: "station", target: 190 },
+    { name: "Run 2 · 1km", type: "run", target: pace },
+    { name: "Sled Push · 50m", type: "station", target: 270 },
+    { name: "Run 3 · 1km", type: "run", target: pace },
+    { name: "Sled Pull · 25m", type: "station", target: 180 },
+    { name: "Run 4 · 1km", type: "run", target: pace },
+    { name: "Burpee Jumps · 80m", type: "station", target: 210 },
+    { name: "Run 5 · 1km", type: "run", target: pace },
+    { name: "Row · 1000m", type: "station", target: 330 },
+    { name: "Run 6 · 1km", type: "run", target: pace },
+    { name: "Farmers · 200m", type: "station", target: 210 },
+    { name: "Run 7 · 1km", type: "run", target: pace },
+    { name: "Sandbag Lunges · 100m", type: "station", target: 180 },
+    { name: "Run 8 · 1km", type: "run", target: pace },
+    { name: "Wall Balls · 100 reps", type: "station", target: 300 },
+  ];
+  let idx = 0, elapsed = 0, totalElapsed = 0, running = false;
+  const splits = [];
+  let tid = null;
+
+  const overlay = document.createElement("div");
+  overlay.className = "timer-overlay";
+  document.body.appendChild(overlay);
+
+  function render() {
+    const seg = segments[idx];
+    const diff = elapsed - seg.target;
+    const diffColor = diff > 15 ? "var(--danger)" : diff > 0 ? "var(--warn)" : "var(--success)";
+    const diffStr = diff === 0 ? "on target" : (diff > 0 ? `+${diff}s behind` : `${Math.abs(diff)}s ahead`);
+    const typeClass = seg.type === "run" ? "timer-phase-rest" : "timer-phase-work";
+    overlay.innerHTML = `
+      <div class="timer-content">
+        <button class="timer-close" id="sim-close">✕</button>
+        <div class="timer-phase ${typeClass}">${seg.type === "run" ? "RUN" : "STATION"}</div>
+        <div class="timer-name" style="font-size:18px;font-weight:700;margin:4px 0">${escapeHtml(seg.name)}</div>
+        <div class="timer-countdown" style="font-size:72px">${String(Math.floor(elapsed/60)).padStart(2,"0")}:${String(elapsed%60).padStart(2,"0")}</div>
+        <div style="font-size:14px;color:var(--text-3)">Target: ${String(Math.floor(seg.target/60)).padStart(2,"0")}:${String(seg.target%60).padStart(2,"0")}</div>
+        <div style="font-size:14px;color:${diffColor};margin-top:4px">${diffStr}</div>
+        <div style="margin-top:16px;font-size:13px;color:var(--text-4)">Total: ${formatTotalSecs(totalElapsed)} · Seg ${idx+1}/${segments.length}</div>
+        <div class="timer-row" style="margin-top:16px;gap:10px">
+          <button class="timer-btn" id="sim-pause" style="flex:0.8">${running ? "⏸" : "▶"}</button>
+          <button class="timer-btn" id="sim-next" style="flex:1.4;background:var(--accent);color:#000">Done → Next</button>
+        </div>
+        <div class="timer-progress" style="margin-top:12px">
+          ${segments.map((s, i) => `<div class="timer-pip ${s.type === "run" ? "sim-run" : "sim-station"} ${i < idx ? "done" : i === idx ? "active" : ""}"></div>`).join("")}
+        </div>
+      </div>`;
+    document.getElementById("sim-close").addEventListener("click", stop);
+    document.getElementById("sim-pause").addEventListener("click", () => { running = !running; render(); });
+    document.getElementById("sim-next").addEventListener("click", nextSeg);
+  }
+
+  function nextSeg() {
+    splits.push({ name: segments[idx].name, elapsed, target: segments[idx].target });
+    idx++; elapsed = 0;
+    if (idx >= segments.length) { stop(); showSimSummary(splits, totalElapsed); return; }
+    beep("start"); render();
+  }
+
+  function tick() { if (!running) return; elapsed++; totalElapsed++; render(); }
+  function stop() { clearInterval(tid); overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 300); }
+
+  requestAnimationFrame(() => overlay.classList.add("open"));
+  running = true; render(); beep("start");
+  tid = setInterval(tick, 1000);
+}
+
+function showSimSummary(splits, totalSec) {
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  const rows = splits.map((s) => {
+    const diff = s.elapsed - s.target;
+    const col = diff > 15 ? "var(--danger)" : diff > 0 ? "var(--warn)" : "var(--success)";
+    return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--separator);font-variant-numeric:tabular-nums">
+      <span style="font-size:13px;color:var(--text-2)">${escapeHtml(s.name)}</span>
+      <span style="font-size:13px;color:${col}">${String(Math.floor(s.elapsed/60)).padStart(2,"0")}:${String(s.elapsed%60).padStart(2,"0")} (${diff>0?"+":""}${diff}s)</span>
+    </div>`;
+  }).join("");
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">Race Sim Complete 🏁<div class="action-sheet-title-sub">Total: ${formatTotalSecs(totalSec)}</div></div>
+      <div class="action-sheet-group" style="padding:12px 16px;max-height:55vh;overflow-y:auto">${rows}</div>
+      <div style="padding:0 10px 10px"><button class="btn" data-cancel="1">Done</button></div>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+  sheet.querySelector("[data-cancel]").addEventListener("click", () => {
+    sheet.classList.remove("open"); setTimeout(() => { sheet.remove(); route(); }, 200);
+  });
+}
+
+/* ---------- Workout History ---------- */
+
+ROUTES.history = renderHistory;
+async function renderHistory(app) {
+  const progress = getProgress();
+  const allLogs = (() => { try { return JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}"); } catch { return {}; } })();
+  const journals = (() => { try { return JSON.parse(localStorage.getItem(JOURNAL_KEY) || "{}"); } catch { return {}; } })();
+
+  const completed = Object.entries(progress.sessions || {})
+    .filter(([key, v]) => v && v.completedAt && !key.includes(".b"))
+    .map(([key, v]) => {
+      const parts = key.split(".");
+      const wn = parseInt(parts[0].replace("W", ""));
+      const sId = parts.slice(1).join(".");
+      const week = PLAN.weeks.find((w) => w.number === wn);
+      const session = week && week.sessions.find((s) => s.id === sId);
+      if (!session) return null;
+      const setCount = Object.entries(allLogs)
+        .filter(([k]) => k.startsWith(`${key}.b`))
+        .reduce((sum, [, logs]) => sum + (Array.isArray(logs) ? logs.length : 0), 0);
+      return { key, wn, sId, session, completedAt: new Date(v.completedAt), rpe: v.rpe, journal: journals[key] || "", setCount };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.completedAt - a.completedAt);
+
+  let html = `
+    <h1 class="large-title">History</h1>
+    <div class="large-title-sub">${completed.length} sessions logged</div>`;
+
+  if (!completed.length) {
+    html += `<div class="empty-state"><h3>No sessions yet</h3><p>Complete your first session to build history.</p></div>`;
+    app.innerHTML = html; return;
+  }
+
+  // Group by week
+  const byWeek = {};
+  completed.forEach((d) => { if (!byWeek[d.wn]) byWeek[d.wn] = []; byWeek[d.wn].push(d); });
+
+  for (const [wn, sessions] of Object.entries(byWeek).sort((a, b) => b[0] - a[0])) {
+    const phase = getCurrentPhase(PLAN, Number(wn));
+    html += `<div class="section-header">Week ${wn}${phase ? " · " + phase.name : ""}</div><div class="list">`;
+    for (const d of sessions) {
+      const rpeColor = !d.rpe ? "" : d.rpe <= 5 ? "var(--success)" : d.rpe <= 7 ? "var(--warn)" : "var(--danger)";
+      const meta = [
+        d.completedAt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+        d.setCount > 0 ? `${d.setCount} sets` : null,
+        d.journal ? "notes" : null
+      ].filter(Boolean).join(" · ");
+      html += `<a href="#/session/${d.wn}/${escapeHtml(d.sId)}" class="list-row">
+        <span class="list-row-leading ${d.session.focus}">${focusIcon(d.session.focus)}</span>
+        <div class="list-row-main">
+          <div class="list-row-title">${escapeHtml(d.session.title)}</div>
+          <div class="list-row-sub">${escapeHtml(meta)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          ${d.rpe ? `<span style="font-size:12px;font-weight:700;color:${rpeColor}">RPE ${d.rpe}</span>` : ""}
+          <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+      </a>`;
+    }
+    html += `</div>`;
+  }
+  app.innerHTML = html;
+}
+
 ROUTES.progress = renderProgress;
 async function renderProgress(app) {
   const settings = getSettings();
@@ -974,6 +1381,17 @@ async function renderProgress(app) {
     <div class="large-title-sub">${rpeData.length} RPE entries · ${tests.items.length} test${tests.items.length !== 1 ? "s" : ""}</div>
 
     ${renderRaceProjectorHtml(settings)}
+
+    <div class="list" style="margin-bottom:16px">
+      <a href="#/history" class="list-row">
+        <div class="list-row-main"><div class="list-row-title">Session History</div><div class="list-row-sub">All completed workouts &amp; logs</div></div>
+        <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </a>
+      <a href="#/racesim" class="list-row">
+        <div class="list-row-main"><div class="list-row-title">Race Simulator</div><div class="list-row-sub">Full Hyrox race with live splits</div></div>
+        <svg class="chevron" viewBox="0 0 9 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </a>
+    </div>
 
     <div class="section-header">Session effort (RPE)</div>
   `;
@@ -1127,6 +1545,11 @@ async function renderSession(app, params) {
   ` + renderSessionCard(session, weekNum, true);
 
   attachSessionHandlers(weekNum);
+
+  // Show readiness check once per day if session not already done
+  if (!getTodayReadiness() && !isSessionDone(weekNum, sessionId)) {
+    setTimeout(() => showReadinessCheck(() => {}), 500);
+  }
 }
 
 async function renderPlan(app) {
@@ -1776,23 +2199,52 @@ function showIntervalTimer(block, parsed) {
   let isWork = true;
   let remaining = parsed.workSec;
   let paused = false;
-  let tid = null;
+  let mainTid = null;
+  let countdownVal = 3;
+  let inCountdown = true;
+  let minimized = false;
 
   const overlay = document.createElement("div");
   overlay.className = "timer-overlay";
   document.body.appendChild(overlay);
 
-  function render() {
+  const pill = document.getElementById("timer-pill");
+
+  function updatePill() {
+    if (!pill) return;
+    if (inCountdown || !minimized) { pill.hidden = true; return; }
     const mins = Math.floor(remaining / 60);
     const secs = Math.round(remaining % 60);
-    const timeStr = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    const phase = isWork ? "WORK" : "REST";
+    pill.innerHTML = `<span class="pill-phase">${phase}</span><span class="pill-time">${String(mins).padStart(2,"0")}:${String(secs).padStart(2,"0")}</span><span class="pill-rep">${currentRep+1}/${parsed.reps}</span>`;
+    pill.className = isWork ? "pill-work" : "pill-rest";
+    pill.hidden = false;
+  }
+
+  function renderOverlay() {
+    if (inCountdown) {
+      overlay.innerHTML = `
+        <div class="timer-content">
+          <button class="timer-close" id="timer-stop">✕</button>
+          <div class="timer-phase timer-phase-rest" style="font-size:14px;letter-spacing:0.1em">GET READY</div>
+          <div class="timer-countdown" style="color:var(--warn);font-size:110px">${countdownVal}</div>
+          <div class="timer-name">${escapeHtml(block.name || "")}</div>
+          <div class="timer-rep-info" style="color:var(--text-4)">${parsed.reps} × ${Math.round(parsed.workSec)}s / ${Math.round(parsed.restSec)}s rest</div>
+        </div>`;
+      document.getElementById("timer-stop").addEventListener("click", stop);
+      return;
+    }
+
+    const mins = Math.floor(remaining / 60);
+    const secs = Math.round(remaining % 60);
     const phase = isWork ? "WORK" : "REST";
     const phaseClass = isWork ? "timer-phase-work" : "timer-phase-rest";
     overlay.innerHTML = `
       <div class="timer-content">
+        <button class="timer-minimize" id="timer-min">—</button>
         <button class="timer-close" id="timer-stop">✕</button>
         <div class="timer-phase ${phaseClass}">${phase}</div>
-        <div class="timer-countdown">${timeStr}</div>
+        <div class="timer-countdown">${String(mins).padStart(2,"0")}:${String(secs).padStart(2,"0")}</div>
         <div class="timer-rep-info">Set ${currentRep + 1} of ${parsed.reps}</div>
         <div class="timer-name">${escapeHtml(block.name || "")}</div>
         <div class="timer-row">
@@ -1801,11 +2253,26 @@ function showIntervalTimer(block, parsed) {
         <div class="timer-progress">
           ${Array.from({ length: parsed.reps }, (_, i) => `<div class="timer-pip ${i < currentRep ? "done" : i === currentRep ? "active" : ""}"></div>`).join("")}
         </div>
-      </div>
-    `;
+      </div>`;
     document.getElementById("timer-stop").addEventListener("click", stop);
-    document.getElementById("timer-pause").addEventListener("click", () => { paused = !paused; render(); });
+    document.getElementById("timer-min").addEventListener("click", minimize);
+    document.getElementById("timer-pause").addEventListener("click", () => { paused = !paused; renderOverlay(); });
   }
+
+  function minimize() {
+    minimized = true;
+    overlay.classList.remove("open");
+    updatePill();
+  }
+
+  function maximize() {
+    minimized = false;
+    overlay.classList.add("open");
+    renderOverlay();
+    if (pill) pill.hidden = true;
+  }
+
+  if (pill) pill.onclick = () => { if (minimized) maximize(); };
 
   function tick() {
     if (paused) return;
@@ -1815,7 +2282,7 @@ function showIntervalTimer(block, parsed) {
       if (isWork) {
         if (currentRep >= parsed.reps - 1) {
           stop();
-          setTimeout(() => alert(`All ${parsed.reps} reps done! 🔥 Great work.`), 100);
+          setTimeout(() => alert(`All ${parsed.reps} reps done! 🔥`), 100);
           return;
         }
         isWork = false;
@@ -1828,24 +2295,136 @@ function showIntervalTimer(block, parsed) {
         beep("start");
       }
     }
-    render();
+    renderOverlay();
+    updatePill();
   }
 
   function stop() {
-    clearInterval(tid);
+    clearInterval(mainTid);
     overlay.classList.remove("open");
+    if (pill) { pill.hidden = true; pill.onclick = null; }
     setTimeout(() => overlay.remove(), 300);
   }
 
+  // 3-2-1 countdown
   requestAnimationFrame(() => overlay.classList.add("open"));
-  render();
-  beep("start");
-  tid = setInterval(tick, 1000);
+  renderOverlay();
+  beep("warn");
+  const cdTid = setInterval(() => {
+    countdownVal--;
+    if (countdownVal <= 0) {
+      clearInterval(cdTid);
+      inCountdown = false;
+      remaining = parsed.workSec;
+      beep("start");
+      renderOverlay();
+      mainTid = setInterval(tick, 1000);
+    } else {
+      renderOverlay();
+    }
+  }, 1000);
+}
+
+/* ---------- Auto-complete session prompt ---------- */
+
+function showAutoCompletePrompt(weekNum, sessionId) {
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">
+        All blocks done! 💪
+        <div class="action-sheet-title-sub">Mark session complete and log your RPE?</div>
+      </div>
+      <div class="action-sheet-group">
+        <button class="action-sheet-btn" style="color:var(--success)" id="autocomplete-yes">Yes — mark complete</button>
+        <button class="action-sheet-btn" data-cancel="1">Not yet</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+  function close() { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 200); }
+  sheet.querySelector("[data-cancel]").addEventListener("click", close);
+  document.getElementById("autocomplete-yes").addEventListener("click", () => {
+    const wasDone = isSessionDone(weekNum, sessionId);
+    if (!wasDone) toggleSessionDone(weekNum, sessionId);
+    close();
+    setTimeout(() => showRpePrompt(weekNum, sessionId), 300);
+  });
+}
+
+/* ---------- Long-press block quick menu ---------- */
+
+function attachLongPress(blockEl, weekNum) {
+  let pressTimer = null;
+  let startX = 0, startY = 0;
+
+  const onStart = (e) => {
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startY = e.touches ? e.touches[0].clientY : e.clientY;
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      try { navigator.vibrate && navigator.vibrate(35); } catch {}
+      showBlockQuickMenu(blockEl, weekNum);
+    }, 450);
+  };
+  const onMove = (e) => {
+    if (!pressTimer) return;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    if (Math.hypot(x - startX, y - startY) > 8) { clearTimeout(pressTimer); pressTimer = null; }
+  };
+  const onEnd = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+
+  blockEl.addEventListener("touchstart", onStart, { passive: true });
+  blockEl.addEventListener("touchmove", onMove, { passive: true });
+  blockEl.addEventListener("touchend", onEnd);
+  blockEl.addEventListener("mousedown", onStart);
+  blockEl.addEventListener("mousemove", onMove);
+  blockEl.addEventListener("mouseup", onEnd);
+}
+
+function showBlockQuickMenu(blockEl, weekNum) {
+  const checkEl = blockEl.querySelector("[data-action='toggle-block']");
+  const adjustEl = blockEl.querySelector("[data-adjust]");
+  const logBtn = blockEl.querySelector("[data-action='log-set']");
+  const timerBtn = blockEl.querySelector("[data-action='start-timer']");
+  const isDone = blockEl.classList.contains("done");
+
+  const items = [];
+  if (checkEl) items.push({ label: isDone ? "✓ Mark not done" : "✓ Mark done", color: isDone ? "var(--text-3)" : "var(--success)", fn: () => checkEl.click() });
+  if (adjustEl) items.push({ label: "⚖ Adjust weight", color: "var(--accent)", fn: () => adjustEl.click() });
+  if (logBtn) items.push({ label: "📊 Log set", color: "var(--info)", fn: () => logBtn.click() });
+  if (timerBtn) items.push({ label: "▶ Start timer", color: "var(--accent)", fn: () => timerBtn.click() });
+  if (!items.length) return;
+
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">Quick actions</div>
+      <div class="action-sheet-group">
+        ${items.map((it, i) => `<button class="action-sheet-btn" data-qi="${i}" style="color:${it.color}">${it.label}</button>`).join("")}
+      </div>
+      <button class="action-sheet-btn action-sheet-cancel" data-cancel="1">Cancel</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+  function close() { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 200); }
+  sheet.addEventListener("click", (e) => {
+    if (e.target === sheet) { close(); return; }
+    if (e.target.closest("[data-cancel]")) { close(); return; }
+    const btn = e.target.closest("[data-qi]");
+    if (btn) { close(); setTimeout(() => items[Number(btn.dataset.qi)].fn(), 220); }
+  });
 }
 
 /* ---------- Set log sheet ---------- */
 
 function showLogSetSheet(weekNum, sessionId, blockIdx, blockName, defaultKg) {
+  // Smart default: use last logged kg for this exercise if available
+  const smartKg = getLastLoggedKgForBlock(blockName) ?? defaultKg;
+  defaultKg = smartKg;
   const existing = getBlockLogs(weekNum, sessionId, blockIdx);
   const sheet = document.createElement("div");
   sheet.className = "action-sheet-backdrop";
@@ -1906,6 +2485,7 @@ function showLogSetSheet(weekNum, sessionId, blockIdx, blockName, defaultKg) {
     const rpe = parseInt(document.getElementById("log-rpe")?.value);
     if (isNaN(kg) && isNaN(reps)) return;
     addBlockLog(weekNum, sessionId, blockIdx, {
+      blockName,
       kg: isNaN(kg) ? null : kg,
       reps: isNaN(reps) ? null : reps,
       rpe: isNaN(rpe) ? null : rpe,
@@ -1954,6 +2534,14 @@ function attachSessionHandlers(weekNum) {
       toggleBlockDone(weekNum, sessionId, idx);
       const blockEl = el.closest(".block");
       if (blockEl) blockEl.classList.toggle("done");
+
+      // Auto-complete: check if all plan blocks are now done
+      const w = PLAN.weeks.find((w) => w.number === weekNum);
+      const sess = w && w.sessions.find((s) => s.id === sessionId);
+      if (sess && sess.blocks && !isSessionDone(weekNum, sessionId)) {
+        const allDone = sess.blocks.every((_, i) => isBlockDone(weekNum, sessionId, i));
+        if (allDone) setTimeout(() => showAutoCompletePrompt(weekNum, sessionId), 350);
+      }
     });
   });
 
@@ -2021,6 +2609,11 @@ function attachSessionHandlers(weekNum) {
     ta.addEventListener("input", () => {
       saveJournalNote(Number(ta.dataset.week), ta.dataset.sid, ta.value);
     });
+  });
+
+  // Long-press for quick menu on every block
+  document.querySelectorAll(".block, .block-custom").forEach((blockEl) => {
+    attachLongPress(blockEl, weekNum);
   });
 }
 
