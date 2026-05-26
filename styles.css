@@ -113,6 +113,24 @@ button, input, select, textarea {
   color: var(--text-2);
 }
 
+.topbar-settings-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-3);
+  transition: color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.topbar-settings-link:active,
+.topbar-settings-link.active {
+  color: var(--accent);
+  background: rgba(255,149,0,0.12);
+}
+
 #topbar-left > * + *::before {
   content: "·";
   margin-right: 8px;
@@ -124,7 +142,7 @@ button, input, select, textarea {
    ============================================================ */
 
 #tabbar {
-  position: fixed;
+  display: none;
   bottom: 0; left: 0; right: 0;
   height: calc(var(--tabbar-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
@@ -163,10 +181,10 @@ button, input, select, textarea {
    ============================================================ */
 
 #app {
-  /* Scroll container — sits between fixed topbar and fixed tabbar */
+  /* Scroll container — sits below fixed topbar, goes to bottom of screen */
   position: fixed;
   top: calc(var(--safe-top) + var(--nav-h));
-  bottom: calc(var(--safe-bottom) + var(--tabbar-h));
+  bottom: var(--safe-bottom, 0px);
   left: 0;
   right: 0;
   overflow-y: auto;
@@ -3548,4 +3566,220 @@ textarea.form-input {
   padding: 3px 9px;
   letter-spacing: 0.03em;
   white-space: nowrap;
+}
+
+/* ============================================================
+   4-tab strip (Overview / Training / Nutrition / Fitness)
+   ============================================================ */
+
+.day-tab-strip {
+  display: flex;
+  gap: 2px;
+  padding: 8px 16px 4px;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.dts {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 4px;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+  letter-spacing: -0.01em;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dts-a {
+  color: var(--accent);
+  background: rgba(255,149,0,0.10);
+}
+
+.dts:active {
+  opacity: 0.65;
+}
+
+/* ============================================================
+   Overview tab
+   ============================================================ */
+
+.overview-date-label {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 16px 16px 10px;
+  color: var(--text-1);
+}
+
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.osc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  background: var(--surface-1);
+  border-radius: 14px;
+  padding: 12px 10px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  text-align: left;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  min-height: 100px;
+}
+
+.osc:active {
+  background: var(--surface-2);
+}
+
+.osc-done {
+  background: rgba(48,209,88,0.08);
+}
+
+.osc-dim {
+  opacity: 0.45;
+}
+
+.osc-icon {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.osc-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.osc-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.osc-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.3;
+}
+
+.osc-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #30d158;
+}
+
+/* Overview macros grid */
+.overview-macro-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.omg-item {
+  text-align: center;
+}
+
+.omg-val {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.omg-bar {
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  margin: 4px 0;
+  overflow: hidden;
+}
+
+.omg-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.omg-p { background: #30d158; }
+.omg-c { background: #64a8ff; }
+.omg-f { background: #ffd60a; }
+
+.omg-lbl {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Fitness chips in overview */
+.overview-fi-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-1);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 16px 8px;
+}
+
+.ofc-icon { font-size: 18px; }
+
+.ofc-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  flex: 1;
+}
+
+.ofc-stat {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Meal edit button */
+.meal-card-edit {
+  background: none;
+  border: none;
+  font-size: 16px;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: var(--text-3);
+  border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.12s;
+  flex-shrink: 0;
+}
+
+.meal-card-edit:active {
+  color: var(--accent);
 }

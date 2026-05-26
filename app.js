@@ -975,7 +975,7 @@ function toggleBlockDone(weekNum, sessionId, blockIdx) {
 let PLAN = null;
 let viewingWeekNum   = null; // week shown in train nav
 let selectedDayOverride = null; // day pill selection (null = smart default)
-let trainDayTab      = "training"; // "training" | "fitness"
+let dayTab = "overview"; // "overview" | "training" | "nutrition" | "fitness"
 
 async function loadPlan() {
   const res = await fetch(PLAN_URL, { cache: "no-cache" });
@@ -1006,7 +1006,7 @@ function showUpdateBanner() {
 /* ---------- Router ---------- */
 
 const ROUTES = {
-  today: renderTrain,
+  today: renderMain,
   week: renderWeek,
   plan: renderPlan,
   tests: renderTests,
@@ -1026,7 +1026,7 @@ window.addEventListener("hashchange", route);
 
 async function route() {
   const r = getRoute();
-  const fn = ROUTES[r.name] || renderTrain;
+  const fn = ROUTES[r.name] || renderMain;
   document.querySelectorAll(".tab").forEach((el) => {
     el.classList.toggle("active", el.dataset.tab === r.name);
   });
@@ -1035,7 +1035,7 @@ async function route() {
   if (r.name === "today") {
     viewingWeekNum      = null;
     selectedDayOverride = null;
-    // keep trainDayTab so user stays on Training/Nutrition whichever they last picked
+    // keep dayTab so user stays on whichever tab they last picked
   }
   if (r.name === "session" && r.params[0]) viewingWeekNum = Number(r.params[0]);
   if (r.name === "week"    && r.params[0]) viewingWeekNum = Number(r.params[0]);
@@ -1053,7 +1053,7 @@ async function route() {
       if (!PLAN) await loadPlan();
       renderTopBar();
       app2.innerHTML = "";
-      await renderTrain(app2);
+      await renderMain(app2);
     } catch (e) { /* best-effort background render */ }
     showFitnessImportSheet({
       date:     date || ymd(today()),
@@ -1189,7 +1189,7 @@ function renderTopBar() {
 
 /* ---------- Views ---------- */
 
-async function renderTrain(app) {
+async function renderMain(app) {
   const settings  = getSettings();
   const curWeekNum = getWeekIndex(settings);
   if (viewingWeekNum === null) viewingWeekNum = curWeekNum;
@@ -1204,31 +1204,24 @@ async function renderTrain(app) {
 
   const todayName = DAY_NAMES[new Date().getDay()];
   const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const todayIdx  = DAY_ORDER.indexOf(todayName);
 
-  // Build day → session map
   const sessionByDay = {};
   for (const s of week.sessions) {
     const d = getSessionDay(wn, s.id, s.defaultDay);
     if (!sessionByDay[d]) sessionByDay[d] = s;
   }
 
-  // Resolve selected day
   let selDay = selectedDayOverride;
   if (!selDay) {
-    if (wn === curWeekNum) {
-      selDay = todayName; // always default to actual today in current week
-    } else {
-      selDay = DAY_ORDER.find((d) => sessionByDay[d]) || DAY_ORDER[0];
-    }
+    selDay = (wn === curWeekNum) ? todayName : (DAY_ORDER.find((d) => sessionByDay[d]) || DAY_ORDER[0]);
   }
 
-  const selSession = sessionByDay[selDay] || null;
-  const selDate    = getDateForDayInWeek(wn, selDay, settings);
-  const selDateStr = ymd(selDate);
-  const isSelToday = selDateStr === ymd(today());
+  const selSession  = sessionByDay[selDay] || null;
+  const selDate     = getDateForDayInWeek(wn, selDay, settings);
+  const selDateStr  = ymd(selDate);
+  const isSelToday  = selDateStr === ymd(today());
 
-  /* ---- Week navigation ---- */
+  /* ---- Week navigation (always visible) ---- */
   const weekNavHtml = `
     <div class="train-week-nav">
       <div class="train-week-header">
@@ -1246,10 +1239,10 @@ async function renderTrain(app) {
           const isDone  = s && isSessionDone(wn, s.id);
           const isSel   = d === selDay;
           let cls = "tdp";
-          if (isSel)          cls += " tdp-sel";
-          else if (isToday)   cls += " tdp-today";
-          if (isDone)         cls += " tdp-done";
-          if (!s)             cls += " tdp-rest";
+          if (isSel)        cls += " tdp-sel";
+          else if (isToday) cls += " tdp-today";
+          if (isDone)       cls += " tdp-done";
+          if (!s)           cls += " tdp-rest";
           return `<button class="${cls}" data-day="${d}" aria-label="${d}">
             <span class="tdp-label">${d.slice(0, 2)}</span>
             ${s ? `<span class="tdp-dot dot dot-${s.focus}"></span>` : `<span class="tdp-dot"></span>`}
@@ -1259,64 +1252,97 @@ async function renderTrain(app) {
       </div>
     </div>`;
 
-  /* ---- Day summary cards (Train / Fuel / Fitness) ---- */
-  const dayMeals  = getDayMeals(selDateStr);
-  const dayTotals = getDayTotals(dayMeals);
-  const tgt       = settings.nutrition;
-
-  // Train card: session title + meta or rest
-  const trainCardValue = selSession ? selSession.title : "Rest day";
-  const trainCardSub   = selSession
-    ? `${selSession.duration} min · ${({strength:"Strength",run:"Run",hybrid:"Hybrid",sim:"Hyrox sim",test:"Test"})[selSession.focus] || selSession.focus}`
-    : "Recovery";
-  const trainCardIcon  = selSession
-    ? ({strength:"💪",run:"🏃",hybrid:"⚡",sim:"🎯",test:"📊"})[selSession.focus] || "🏋️"
-    : "🛋️";
-
-  // Fuel card: kcal eaten vs target
-  const fuelKcal     = Math.round(dayTotals.kcal);
-  const fuelCardValue = fuelKcal > 0 ? `${fuelKcal.toLocaleString()} kcal` : "–";
-  const fuelPct       = tgt.kcalTarget > 0 ? Math.min(100, Math.round(fuelKcal / tgt.kcalTarget * 100)) : 0;
-  const fuelCardSub   = fuelKcal > 0 ? `${fuelPct}% of ${tgt.kcalTarget} target` : "Nothing logged";
-
-  // Fitness card: real workout data if available
-  const dayWorkouts     = getDayWorkouts(selDateStr);
-  const hasWorkouts     = dayWorkouts.length > 0;
-  const fitTotalMin     = dayWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
-  const fitTotalKcal    = dayWorkouts.reduce((s, w) => s + (w.kcal || 0), 0);
-  const fitCardValue    = hasWorkouts ? `${fitTotalMin} min` : "–";
-  const fitCardSub      = hasWorkouts
-    ? `${fitTotalKcal > 0 ? fitTotalKcal + " kcal" : dayWorkouts[0].label}`
-    : "Apple Watch";
-  const fitCardActive   = trainDayTab === "fitness";
-
-  const summaryCardsHtml = `
-    <div class="day-section-cards">
-      <button class="dsc${trainDayTab === "training" ? " dsc-active" : ""}" data-section="training">
-        <div class="dsc-icon">${trainCardIcon}</div>
-        <div class="dsc-label">Train</div>
-        <div class="dsc-value">${escapeHtml(trainCardValue)}</div>
-        <div class="dsc-meta">${escapeHtml(trainCardSub)}</div>
-      </button>
-      <button class="dsc dsc-fuel" data-section="fuel">
-        <div class="dsc-icon">🍎</div>
-        <div class="dsc-label">Fuel</div>
-        <div class="dsc-value">${fuelCardValue}</div>
-        <div class="dsc-meta">${escapeHtml(fuelCardSub)}</div>
-      </button>
-      <button class="dsc${fitCardActive ? " dsc-active" : ""}${hasWorkouts ? "" : " dsc-fitness-dim"}" data-section="fitness">
-        <div class="dsc-icon">⌚</div>
-        <div class="dsc-label">Fitness</div>
-        <div class="dsc-value">${fitCardValue}</div>
-        <div class="dsc-meta">${escapeHtml(fitCardSub)}</div>
-      </button>
+  /* ---- 4-tab strip ---- */
+  const TABS = [
+    { id: "overview",  label: "Overview" },
+    { id: "training",  label: "Training" },
+    { id: "nutrition", label: "Nutrition" },
+    { id: "fitness",   label: "Fitness" },
+  ];
+  const tabStripHtml = `
+    <div class="day-tab-strip">
+      ${TABS.map((t) => `<button class="dts${dayTab === t.id ? " dts-a" : ""}" data-tab="${t.id}">${t.label}</button>`).join("")}
     </div>`;
 
-  /* ---- Day content ---- */
-  let dayContent = "";
+  /* ---- Shared data for all tabs ---- */
+  const dayMeals    = getDayMeals(selDateStr);
+  const dayTotals   = getDayTotals(dayMeals);
+  const dayWorkouts = getDayWorkouts(selDateStr);
+  const tgt         = settings.nutrition;
 
-  if (trainDayTab === "training") {
-    // Missed-yesterday catch-up banner (only when viewing actual today)
+  /* ---- Tab content ---- */
+  let tabContent = "";
+
+  if (dayTab === "overview") {
+    const kcal     = Math.round(dayTotals.kcal);
+    const kcalPct  = tgt.kcalTarget > 0 ? Math.min(100, Math.round(kcal / tgt.kcalTarget * 100)) : 0;
+    const pPct     = tgt.proteinTarget > 0 ? Math.min(100, Math.round(dayTotals.p / tgt.proteinTarget * 100)) : 0;
+    const cPct     = tgt.carbTarget    > 0 ? Math.min(100, Math.round(dayTotals.c / tgt.carbTarget    * 100)) : 0;
+    const fPct     = tgt.fatTarget     > 0 ? Math.min(100, Math.round(dayTotals.f / tgt.fatTarget     * 100)) : 0;
+    const trainIcon = selSession
+      ? ({strength:"💪",run:"🏃",hybrid:"⚡",sim:"🎯",test:"📊"})[selSession.focus] || "🏋️"
+      : "🛋️";
+    const trainDone = selSession && isSessionDone(wn, selSession.id);
+    const fitMin    = dayWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
+    const fitKcal   = dayWorkouts.reduce((s, w) => s + (w.kcal || 0), 0);
+    const selDayLabel = isSelToday
+      ? "Today"
+      : `${selDay}, ${selDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+
+    tabContent = `
+      <div class="overview-date-label">${escapeHtml(selDayLabel)}</div>
+      <div class="overview-cards">
+        <button class="osc${trainDone ? " osc-done" : ""}" data-jump="training">
+          <div class="osc-icon">${trainIcon}</div>
+          <div class="osc-label">Training</div>
+          <div class="osc-value">${escapeHtml(selSession ? selSession.title : "Rest")}</div>
+          <div class="osc-meta">${escapeHtml(selSession ? `${selSession.duration}m · ${selSession.focus}` : "Recovery day")}</div>
+          ${trainDone ? `<div class="osc-badge">✓</div>` : ""}
+        </button>
+        <button class="osc" data-jump="nutrition">
+          <div class="osc-icon">🍎</div>
+          <div class="osc-label">Nutrition</div>
+          <div class="osc-value">${kcal > 0 ? kcal.toLocaleString() + " kcal" : "–"}</div>
+          <div class="osc-meta">${kcal > 0 ? kcalPct + "% of target" : "Nothing logged"}</div>
+        </button>
+        <button class="osc${dayWorkouts.length === 0 ? " osc-dim" : ""}" data-jump="fitness">
+          <div class="osc-icon">⌚</div>
+          <div class="osc-label">Fitness</div>
+          <div class="osc-value">${fitMin > 0 ? fitMin + " min" : "–"}</div>
+          <div class="osc-meta">${fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? dayWorkouts[0].label : "No workout"}</div>
+        </button>
+      </div>
+      ${kcal > 0 || dayTotals.p > 0 ? `
+      <div class="section-header">Macros</div>
+      <div class="overview-macro-grid">
+        <div class="omg-item">
+          <div class="omg-val">${Math.round(dayTotals.p)}g</div>
+          <div class="omg-bar"><div class="omg-fill omg-p" style="width:${pPct}%"></div></div>
+          <div class="omg-lbl">Protein</div>
+        </div>
+        <div class="omg-item">
+          <div class="omg-val">${Math.round(dayTotals.c)}g</div>
+          <div class="omg-bar"><div class="omg-fill omg-c" style="width:${cPct}%"></div></div>
+          <div class="omg-lbl">Carbs</div>
+        </div>
+        <div class="omg-item">
+          <div class="omg-val">${Math.round(dayTotals.f)}g</div>
+          <div class="omg-bar"><div class="omg-fill omg-f" style="width:${fPct}%"></div></div>
+          <div class="omg-lbl">Fat</div>
+        </div>
+      </div>` : ""}
+      ${dayWorkouts.length > 0 ? `
+      <div class="section-header">Fitness</div>
+      ${dayWorkouts.map((w) => `
+        <div class="overview-fi-chip">
+          <span class="ofc-icon">${w.icon || "🏋️"}</span>
+          <span class="ofc-label">${escapeHtml(w.label || w.appleType || "Workout")}</span>
+          <span class="ofc-stat">${w.duration}m</span>
+          ${w.avgHR ? `<span class="ofc-stat">${w.avgHR} bpm</span>` : ""}
+          ${w.kcal  ? `<span class="ofc-stat">${w.kcal} kcal</span>` : ""}
+        </div>`).join("")}` : ""}`;
+
+  } else if (dayTab === "training") {
     if (isSelToday) {
       const yName = DAY_NAMES[((new Date().getDay() - 1 + 7) % 7)];
       const missed = week.sessions.find((s) => {
@@ -1324,7 +1350,7 @@ async function renderTrain(app) {
         return d === yName && !isSessionDone(wn, s.id) && (!selSession || s.id !== selSession.id);
       });
       if (missed) {
-        dayContent += `<div class="catchup-banner">
+        tabContent += `<div class="catchup-banner">
           <div class="catchup-info">
             <div class="catchup-title">Missed yesterday</div>
             <div class="catchup-name">${escapeHtml(missed.title)}</div>
@@ -1336,21 +1362,18 @@ async function renderTrain(app) {
         </div>`;
       }
     }
-
     if (selSession) {
-      dayContent += renderSessionCard(selSession, wn, true);
+      tabContent += renderSessionCard(selSession, wn, true);
     } else {
-      dayContent += `<div class="hero">
+      tabContent += `<div class="hero">
         <div class="hero-eyebrow"><span class="dot dot-test"></span><span>Rest day</span></div>
         <div class="hero-title">Recovery 🛋️</div>
         <div class="hero-intent">No session on ${escapeHtml(selDay)}. Rest is where adaptation happens.</div>
       </div>`;
     }
-
-    // Plan / Records quick links
     const doneCount     = week.sessions.filter((s) => isSessionDone(wn, s.id)).length;
     const totalSessions = week.sessions.length;
-    dayContent += `
+    tabContent += `
       <div class="section-footer" style="text-align:center;margin-top:12px">
         Week ${wn} of ${PLAN.weeks.length}${phase ? " · " + escapeHtml(phase.name) : ""} · ${doneCount}/${totalSessions} done
       </div>
@@ -1374,7 +1397,137 @@ async function renderTrain(app) {
         </a>
       </div>`;
 
-  } else if (trainDayTab === "fitness") {
+  } else if (dayTab === "nutrition") {
+    const meals  = dayMeals;
+    const totals = dayTotals;
+    const kcalLeft = tgt.kcalTarget - Math.round(totals.kcal);
+    const isOver   = kcalLeft < 0;
+    const pPct = tgt.proteinTarget > 0 ? Math.min(100, Math.round(totals.p / tgt.proteinTarget * 100)) : 0;
+    const cPct = tgt.carbTarget    > 0 ? Math.min(100, Math.round(totals.c / tgt.carbTarget    * 100)) : 0;
+    const fPct = tgt.fatTarget     > 0 ? Math.min(100, Math.round(totals.f / tgt.fatTarget     * 100)) : 0;
+
+    // 7-day rolling average (7 days before selDate)
+    let avgKcal = 0, avgP = 0, avgC = 0, avgF = 0, avgDays = 0;
+    for (let i = 1; i <= 7; i++) {
+      const d  = new Date(selDate.getTime() - i * 86400000);
+      const ds = ymd(d);
+      const dm = getDayMeals(ds);
+      if (dm.length > 0) {
+        const t = getDayTotals(dm);
+        avgKcal += t.kcal; avgP += t.p; avgC += t.c; avgF += t.f;
+        avgDays++;
+      }
+    }
+    const has7dAvg = avgDays > 0;
+    let kcalDelta = 0, pDelta = 0, cDelta = 0, fDelta = 0;
+    if (has7dAvg) {
+      avgKcal = Math.round(avgKcal / avgDays);
+      avgP    = Math.round(avgP / avgDays * 10) / 10;
+      avgC    = Math.round(avgC / avgDays * 10) / 10;
+      avgF    = Math.round(avgF / avgDays * 10) / 10;
+      kcalDelta = Math.round(totals.kcal) - avgKcal;
+      pDelta    = Math.round(totals.p * 10) / 10 - avgP;
+      cDelta    = Math.round(totals.c * 10) / 10 - avgC;
+      fDelta    = Math.round(totals.f * 10) / 10 - avgF;
+    }
+
+    const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
+    const mealsHtml = meals.length === 0
+      ? `<div class="empty-state"><h3>Nothing logged</h3><p>Tap + Log meal to add a meal${isSelToday ? " today" : " for this day"}.</p></div>`
+      : meals.map((meal) => `
+          <div class="meal-card">
+            <div class="meal-card-header">
+              <div>
+                <div class="meal-card-label">${escapeHtml(MEAL_LABELS[meal.label] || meal.label)}</div>
+                <div class="meal-card-time">${escapeHtml(meal.time)}</div>
+              </div>
+              <div style="text-align:right;flex:1;min-width:0">
+                <div class="meal-card-kcal">${meal.total.kcal} kcal</div>
+                <div class="meal-card-macros">${meal.total.p}g P · ${meal.total.c}g C · ${meal.total.f}g F</div>
+              </div>
+              <button class="meal-card-edit" data-action="edit-meal" data-mid="${escapeHtml(meal.id)}" data-date="${escapeHtml(selDateStr)}" aria-label="Edit">✏️</button>
+              <button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}" data-date="${escapeHtml(selDateStr)}">×</button>
+            </div>
+            <div class="meal-items-list">
+              ${meal.items.map((it) => `
+                <div class="meal-item">
+                  <span class="meal-item-name">${escapeHtml(it.name)}</span>
+                  <span class="meal-item-qty dim">${escapeHtml(it.qty)}</span>
+                  <span class="meal-item-kcal">${it.kcal}</span>
+                </div>`).join("")}
+            </div>
+          </div>`).join("");
+
+    // Weekly summary
+    const wSumm   = getNutritionWeekSummary(fuelSummaryPeriod);
+    const wkTitle = fuelSummaryPeriod === 0 ? "This Week" : "Last Week";
+    const todayDs  = ymd(today());
+    const wkStart  = wSumm.startDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const weekStatHtml = wSumm.loggedDays === 0
+      ? `<div class="empty-state" style="margin:0;padding:12px 0 4px"><p style="font-size:14px">No data logged for ${wkTitle.toLowerCase()}.</p></div>`
+      : `<div class="fuel-week-stat-grid">
+          <div class="fuel-week-stat"><div class="fuel-week-stat-num fuel-stat-kcal">${wSumm.avgKcal.toLocaleString()}</div><div class="fuel-week-stat-label">Avg kcal</div><div class="fuel-week-stat-sub">Total ${wSumm.totalKcal.toLocaleString()}</div></div>
+          <div class="fuel-week-stat"><div class="fuel-week-stat-num fuel-stat-p">${wSumm.avgP}g</div><div class="fuel-week-stat-label">Avg P</div><div class="fuel-week-stat-sub">Total ${wSumm.totalP}g</div></div>
+          <div class="fuel-week-stat"><div class="fuel-week-stat-num fuel-stat-c">${wSumm.avgC}g</div><div class="fuel-week-stat-label">Avg C</div><div class="fuel-week-stat-sub">Total ${wSumm.totalC}g</div></div>
+          <div class="fuel-week-stat"><div class="fuel-week-stat-num fuel-stat-f">${wSumm.avgF}g</div><div class="fuel-week-stat-label">Avg F</div><div class="fuel-week-stat-sub">Total ${wSumm.totalF}g</div></div>
+        </div>
+        <div class="fuel-week-daily-row">
+          ${wSumm.daily.map((day) => `<div class="fuel-week-day-col${day.ds === todayDs ? " is-today" : ""}">
+            <div class="fuel-week-day-label">${day.label}</div>
+            <div class="fuel-week-day-dot${day.hasData ? " has-data" : ""}"></div>
+            <div class="fuel-week-day-kcal">${day.hasData ? Math.round(day.kcal).toLocaleString() : ""}</div>
+          </div>`).join("")}
+        </div>`;
+
+    tabContent = `
+      <div class="fuel-hero">
+        <div class="fuel-kcal-block">
+          <div class="fuel-kcal-num${isOver ? " fuel-over" : ""}">${Math.abs(kcalLeft)}</div>
+          <div class="fuel-kcal-label">${isOver ? "kcal over target" : "kcal remaining"}</div>
+          <div class="fuel-kcal-sub">${Math.round(totals.kcal)} eaten · ${tgt.kcalTarget} target</div>
+        </div>
+        <div class="fuel-macro-stack">
+          <div class="fuel-macro-row">
+            <span class="fuel-macro-name">Protein</span>
+            <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-protein" style="width:${pPct}%"></div></div>
+            <span class="fuel-macro-gram">${Math.round(totals.p)}<span class="fuel-macro-tgt">/${tgt.proteinTarget}g</span></span>
+          </div>
+          <div class="fuel-macro-row">
+            <span class="fuel-macro-name">Carbs</span>
+            <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-carb" style="width:${cPct}%"></div></div>
+            <span class="fuel-macro-gram">${Math.round(totals.c)}<span class="fuel-macro-tgt">/${tgt.carbTarget}g</span></span>
+          </div>
+          <div class="fuel-macro-row">
+            <span class="fuel-macro-name">Fat</span>
+            <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-fat" style="width:${fPct}%"></div></div>
+            <span class="fuel-macro-gram">${Math.round(totals.f)}<span class="fuel-macro-tgt">/${tgt.fatTarget}g</span></span>
+          </div>
+        </div>
+      </div>
+      ${has7dAvg ? `<div class="fuel-avg-compare">
+        <span class="fuel-avg-label">vs 7d avg</span>
+        <span class="fuel-avg-item${kcalDelta > 0 ? " avg-pos" : kcalDelta < 0 ? " avg-neg" : ""}">${kcalDelta > 0 ? "+" : ""}${kcalDelta} kcal</span>
+        <span class="fuel-avg-sep">·</span>
+        <span class="fuel-avg-item${pDelta > 0 ? " avg-pos" : pDelta < 0 ? " avg-neg" : ""}">${pDelta > 0 ? "+" : ""}${pDelta}g P</span>
+        <span class="fuel-avg-sep">·</span>
+        <span class="fuel-avg-item${cDelta > 0 ? " avg-pos" : cDelta < 0 ? " avg-neg" : ""}">${cDelta > 0 ? "+" : ""}${cDelta}g C</span>
+        <span class="fuel-avg-sep">·</span>
+        <span class="fuel-avg-item${fDelta > 0 ? " avg-pos" : fDelta < 0 ? " avg-neg" : ""}">${fDelta > 0 ? "+" : ""}${fDelta}g F</span>
+      </div>` : ""}
+      <button class="btn" id="log-meal-btn">+ Log meal</button>
+      <div class="section-header">Meals</div>
+      ${mealsHtml}
+      <div class="section-header" style="margin-top:24px">Weekly Summary</div>
+      <div class="fuel-period-picker">
+        <button class="fuel-period-btn${fuelSummaryPeriod === 0 ? " fuel-period-btn-active" : ""}" data-period="0">This Week</button>
+        <button class="fuel-period-btn${fuelSummaryPeriod === 1 ? " fuel-period-btn-active" : ""}" data-period="1">Last Week</button>
+      </div>
+      <div class="fuel-week-summary">
+        <div class="fuel-week-summary-title">${wkTitle} · w/c ${wkStart} · ${wSumm.loggedDays}/7 days logged</div>
+        ${weekStatHtml}
+      </div>`;
+
+  } else if (dayTab === "fitness") {
     const allWorkouts = getDayWorkouts(selDateStr);
     const importBarHtml = `
       <div class="fi-import-bar">
@@ -1391,67 +1544,52 @@ async function renderTrain(app) {
       <div id="fi-import-status" class="fi-import-status" style="display:none"></div>`;
 
     if (allWorkouts.length > 0) {
-      dayContent += importBarHtml + allWorkouts.map((w) => renderWorkoutCard(w, false)).join("");
+      tabContent = importBarHtml + allWorkouts.map((w) => renderWorkoutCard(w, false)).join("");
     } else {
-      dayContent += importBarHtml + `
+      tabContent = importBarHtml + `
         <div class="hero">
           <div class="hero-eyebrow"><span>⌚</span><span>Apple Watch</span></div>
           <div class="hero-title">No workouts yet</div>
-          <div class="hero-intent">Export from the <strong>Health Auto Export</strong> app, then tap <strong>Import ZIP</strong> above to load your workouts with full HR data.</div>
+          <div class="hero-intent">Export from the <strong>Health Auto Export</strong> app, then tap <strong>Import ZIP</strong> above.</div>
         </div>
         <div class="section-header">How to import</div>
         <div class="list">
-          <div class="list-row">
-            <div class="list-row-main">
-              <div class="list-row-title">1. Install Health Auto Export</div>
-              <div class="list-row-sub">Free app on the App Store</div>
-            </div>
-          </div>
-          <div class="list-row">
-            <div class="list-row-main">
-              <div class="list-row-title">2. Export as ZIP (CSV format)</div>
-              <div class="list-row-sub">Tap Export → CSV → Share ZIP to Files or yourself</div>
-            </div>
-          </div>
-          <div class="list-row">
-            <div class="list-row-main">
-              <div class="list-row-title">3. Tap Import ZIP above</div>
-              <div class="list-row-sub">All workouts with HR zones appear here instantly</div>
-            </div>
-          </div>
+          <div class="list-row"><div class="list-row-main"><div class="list-row-title">1. Install Health Auto Export</div><div class="list-row-sub">Free app on the App Store</div></div></div>
+          <div class="list-row"><div class="list-row-main"><div class="list-row-title">2. Export as ZIP (CSV format)</div><div class="list-row-sub">Tap Export → CSV → Share ZIP to Files</div></div></div>
+          <div class="list-row"><div class="list-row-main"><div class="list-row-title">3. Tap Import ZIP above</div><div class="list-row-sub">Workouts with HR zones appear instantly</div></div></div>
         </div>`;
     }
   }
 
-  app.innerHTML = weekNavHtml + summaryCardsHtml + `<div id="day-content">${dayContent}</div>`;
+  /* ---- Render ---- */
+  app.innerHTML = weekNavHtml + tabStripHtml + `<div id="tab-content">${tabContent}</div>`;
 
-  /* ---- Bind events ---- */
+  /* ---- Event bindings ---- */
+
+  // Week prev/next
   document.getElementById("tn-prev")?.addEventListener("click", () => {
-    if (wn > 1) { viewingWeekNum = wn - 1; selectedDayOverride = null; renderTrain(app); }
+    if (wn > 1) { viewingWeekNum = wn - 1; selectedDayOverride = null; renderMain(app); }
   });
   document.getElementById("tn-next")?.addEventListener("click", () => {
-    if (wn < PLAN.weeks.length) { viewingWeekNum = wn + 1; selectedDayOverride = null; renderTrain(app); }
+    if (wn < PLAN.weeks.length) { viewingWeekNum = wn + 1; selectedDayOverride = null; renderMain(app); }
   });
+
+  // Day pills
   app.querySelectorAll(".tdp").forEach((btn) => {
-    btn.addEventListener("click", () => { selectedDayOverride = btn.dataset.day; renderTrain(app); });
+    btn.addEventListener("click", () => { selectedDayOverride = btn.dataset.day; renderMain(app); });
   });
 
-  // Summary card taps
-  app.querySelectorAll(".dsc").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const section = btn.dataset.section;
-      if (section === "fuel") {
-        // Navigate to Fuel tab, pre-set to the selected day
-        fuelViewDate = selDateStr === ymd(today()) ? null : selDateStr;
-        navigate("fuel");
-      } else {
-        trainDayTab = section;
-        renderTrain(app);
-      }
-    });
+  // Tab strip
+  app.querySelectorAll(".dts[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => { dayTab = btn.dataset.tab; renderMain(app); });
   });
 
-  if (trainDayTab === "training" && selSession) {
+  // Overview jump-to-tab cards
+  app.querySelectorAll("[data-jump]").forEach((btn) => {
+    btn.addEventListener("click", () => { dayTab = btn.dataset.jump; renderMain(app); });
+  });
+
+  if (dayTab === "training" && selSession) {
     attachSessionHandlers(wn);
     const yName = DAY_NAMES[((new Date().getDay() - 1 + 7) % 7)];
     app.querySelectorAll("[data-catchup-move]").forEach((btn) => {
@@ -1459,26 +1597,46 @@ async function renderTrain(app) {
         const tod = DAY_NAMES[new Date().getDay()];
         if (selSession && selSession.id !== btn.dataset.catchupMove) setSessionDay(wn, selSession.id, yName);
         setSessionDay(wn, btn.dataset.catchupMove, tod);
-        renderTrain(app);
+        renderMain(app);
       });
     });
     app.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
-      btn.addEventListener("click", () => { toggleSessionDone(wn, btn.dataset.catchupSkip); renderTrain(app); });
+      btn.addEventListener("click", () => { toggleSessionDone(wn, btn.dataset.catchupSkip); renderMain(app); });
     });
   }
 
-  if (trainDayTab === "fitness") {
+  if (dayTab === "nutrition") {
+    document.getElementById("log-meal-btn")?.addEventListener("click", () => showLogMealSheet(selDateStr));
+    app.querySelectorAll("[data-action='edit-meal']").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const meal = dayMeals.find((m) => m.id === btn.dataset.mid);
+        if (meal) showMealEditSheet(meal.items, "", meal.source || "manual", btn.dataset.date, meal);
+      });
+    });
+    app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("Delete this meal?")) {
+          deleteMeal(btn.dataset.mid, btn.dataset.date);
+          renderMain(app);
+        }
+      });
+    });
+    app.querySelectorAll(".fuel-period-btn").forEach((btn) => {
+      btn.addEventListener("click", () => { fuelSummaryPeriod = Number(btn.dataset.period); renderMain(app); });
+    });
+  }
+
+  if (dayTab === "fitness") {
     app.querySelectorAll("[data-action='delete-workout']").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (confirm("Delete this workout?")) {
           deleteFitnessWorkout(btn.dataset.wid, btn.dataset.date);
-          renderTrain(app);
+          renderMain(app);
         }
       });
     });
-
-    // ZIP import
     const zipInput = document.getElementById("fi-zip-input");
     const statusEl = document.getElementById("fi-import-status");
     if (zipInput && statusEl) {
@@ -1497,7 +1655,7 @@ async function renderTrain(app) {
             workouts.forEach((w) => saveFitnessWorkout(w, w.date));
             statusEl.className = "fi-import-status fi-import-ok";
             statusEl.textContent = `Imported ${workouts.length} workout${workouts.length !== 1 ? "s" : ""} ✓`;
-            setTimeout(() => renderTrain(app), 1000);
+            setTimeout(() => renderMain(app), 1000);
           }
         } catch (err) {
           statusEl.className = "fi-import-status fi-import-err";
@@ -2032,7 +2190,8 @@ async function renderHistory(app) {
    Fuel — meal tracker
    ============================================================ */
 
-ROUTES.fuel = renderFuel;
+// #/fuel URL redirects to today with nutrition tab active
+ROUTES.fuel = async (app) => { dayTab = "nutrition"; await renderMain(app); };
 
 // Module-level state for Fuel period picker
 let fuelSummaryPeriod = 0; // 0 = this week, 1 = last week
@@ -2365,12 +2524,12 @@ function showLogMealSheet(targetDateStr) {
 
 /* ---------- Meal edit / confirm sheet ---------- */
 
-function showMealEditSheet(initItems, aiNotes, source, targetDateStr) {
+function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal = null) {
   // auto:true means "estimate this item via Gemini" — not yet calculated
   let items = initItems.map((it) => ({ name: it.name || "", qty: it.qty || "", kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0, auto: false }));
   const LABELS = ["breakfast", "lunch", "dinner", "snack"];
   const h = new Date().getHours();
-  let selLabel = h < 10 ? "breakfast" : h < 14 ? "lunch" : h < 19 ? "dinner" : "snack";
+  let selLabel = editMeal ? editMeal.label : (h < 10 ? "breakfast" : h < 14 ? "lunch" : h < 19 ? "dinner" : "snack");
 
   const overlay = document.createElement("div");
   overlay.className = "fuel-edit-overlay";
@@ -2516,10 +2675,11 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr) {
       if (!valid.length) { close(); return; }
       const tot = valid.reduce((a, it) => ({ kcal: a.kcal + it.kcal, p: a.p + it.p, c: a.c + it.c, f: a.f + it.f }), { kcal: 0, p: 0, c: 0, f: 0 });
       const now2 = new Date();
+      if (editMeal) deleteMeal(editMeal.id, targetDateStr);
       saveMeal({
-        id: makeMealId(),
+        id: editMeal ? editMeal.id : makeMealId(),
         label: selLabel,
-        time: `${String(now2.getHours()).padStart(2, "0")}:${String(now2.getMinutes()).padStart(2, "0")}`,
+        time: editMeal ? editMeal.time : `${String(now2.getHours()).padStart(2, "0")}:${String(now2.getMinutes()).padStart(2, "0")}`,
         items: valid,
         total: { kcal: Math.round(tot.kcal), p: Math.round(tot.p * 10) / 10, c: Math.round(tot.c * 10) / 10, f: Math.round(tot.f * 10) / 10 },
         source: source || "manual"
@@ -2568,7 +2728,7 @@ function showFitnessImportSheet({ date, type, duration, kcal, hr, hrMax, distanc
         importedAt: new Date().toISOString()
       }, date);
       // Switch to fitness tab so the user sees the result
-      trainDayTab = "fitness";
+      dayTab = "fitness";
     }
   };
 

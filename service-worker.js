@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v30-fixed-nav";
+const APP_VERSION = "2026-05-26-v31-4tab-layout";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
