@@ -345,7 +345,7 @@ async function analyzeFood(base64Data, mimeType) {
   const prompt = `You are a professional nutritionist. Analyse this meal photo carefully.\nReturn ONLY valid JSON (no markdown, no code fences) in this exact schema:\n{"items":[{"name":"string","qty":"string","kcal":number,"p":number,"c":number,"f":number}],"total":{"kcal":number,"p":number,"c":number,"f":number},"confidence":"high|medium|low","notes":"string"}\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Estimate portions from plate/bowl size and visual cues. Be realistic — do not underestimate. Return ONLY the JSON object.`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -383,7 +383,7 @@ async function estimateItemNutrition(autoItems) {
   const prompt = `You are a professional nutritionist. Estimate nutritional values for each food item below.\nReturn ONLY valid JSON (no markdown, no code fences) as an array with exactly ${autoItems.length} object(s) in this schema:\n[{"name":"string","kcal":number,"p":number,"c":number,"f":number}]\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Use the quantity given. Be accurate and realistic.\nItems:\n${list}\nReturn ONLY the JSON array.`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1762,7 +1762,7 @@ async function renderFuel(app) {
 
   // Count today's photo analyses (meals with source="photo")
   const photoAnalysesToday = meals.filter((m) => m.source === "photo").length;
-  const FREE_TIER_DAILY = 1500;
+  const FREE_TIER_DAILY = 20;
   const tierPct = Math.min(100, Math.round(photoAnalysesToday / FREE_TIER_DAILY * 100));
 
   app.innerHTML = `
@@ -1851,7 +1851,7 @@ function showGeminiError(msg) {
   // Surface a user-friendly banner instead of a raw browser alert
   const isQuota = /quota|limit|billing|rate/i.test(msg);
   const friendly = isQuota
-    ? "Daily Gemini quota reached (1,500 free requests/day). It resets at midnight Pacific time. You can still enter nutrition manually."
+    ? "Daily Gemini quota reached (20 free requests/day on gemini-2.5-flash). It resets at midnight Pacific time. You can still enter nutrition manually."
     : "AI estimation failed: " + msg;
 
   const toast = document.createElement("div");

@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v22-gemini-flash-error-ux";
+const APP_VERSION = "2026-05-26-v23-gemini-2.5-flash";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
