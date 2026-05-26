@@ -45,6 +45,7 @@
 html, body {
   margin: 0;
   padding: 0;
+  height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -53,12 +54,11 @@ html, body {
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "ss01", "cv02";
   overscroll-behavior-y: none;
+  overflow: hidden; /* body never scrolls — #app is the scroll container */
 }
 
 body {
-  min-height: 100vh;
-  padding-top: calc(var(--safe-top) + var(--nav-h));
-  padding-bottom: calc(var(--safe-bottom) + var(--tabbar-h));
+  /* layout handled by fixed topbar / #app / fixed tabbar */
 }
 
 a {
@@ -163,9 +163,18 @@ button, input, select, textarea {
    ============================================================ */
 
 #app {
+  /* Scroll container — sits between fixed topbar and fixed tabbar */
+  position: fixed;
+  top: calc(var(--safe-top) + var(--nav-h));
+  bottom: calc(var(--safe-bottom) + var(--tabbar-h));
+  left: 0;
+  right: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Centre content on wide screens */
   max-width: 720px;
   margin: 0 auto;
-  padding: 8px 20px 40px;
+  padding: 8px 20px 32px;
 }
 
 .large-title {
@@ -2721,7 +2730,7 @@ textarea.form-input {
 
 .train-week-nav {
   position: sticky;
-  top: calc(var(--safe-top) + var(--nav-h));
+  top: 0;
   z-index: 50;
   background: rgba(0,0,0,0.88);
   backdrop-filter: saturate(180%) blur(20px);
@@ -3071,7 +3080,7 @@ textarea.form-input {
 
 .fuel-day-nav {
   position: sticky;
-  top: calc(var(--safe-top) + var(--nav-h));
+  top: 0;
   z-index: 50;
   background: rgba(0,0,0,0.88);
   backdrop-filter: saturate(180%) blur(20px);
