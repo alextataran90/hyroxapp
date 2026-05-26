@@ -1375,7 +1375,7 @@ async function renderTrain(app) {
       </div>`;
 
   } else if (trainDayTab === "fitness") {
-    const allWorkouts = getAllWorkouts();
+    const allWorkouts = getDayWorkouts(selDateStr);
     const importBarHtml = `
       <div class="fi-import-bar">
         <span class="fi-import-bar-title">Workouts</span>
@@ -1391,7 +1391,7 @@ async function renderTrain(app) {
       <div id="fi-import-status" class="fi-import-status" style="display:none"></div>`;
 
     if (allWorkouts.length > 0) {
-      dayContent += importBarHtml + allWorkouts.map((w) => renderWorkoutCard(w, true)).join("");
+      dayContent += importBarHtml + allWorkouts.map((w) => renderWorkoutCard(w, false)).join("");
     } else {
       dayContent += importBarHtml + `
         <div class="hero">

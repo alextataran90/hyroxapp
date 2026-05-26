@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-26-v28-zip-import";
+const APP_VERSION = "2026-05-26-v29-day-filter";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
