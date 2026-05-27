@@ -3911,3 +3911,135 @@ textarea.form-input {
   color: var(--text-3);
   font-size: 14px;
 }
+
+/* ============================================================
+   Meal target progress bar (Feature 1 – v33)
+   ============================================================ */
+
+.meal-target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 10px;
+}
+
+.meal-target-bar-bg {
+  flex: 1;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.meal-target-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.meal-target-bar-fill.meal-target-over {
+  background: var(--danger);
+}
+
+.meal-target-label {
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   Frequent items quick-add chips (Feature 3 – v33)
+   ============================================================ */
+
+.fed-quick-section {
+  margin-bottom: 12px;
+}
+
+.fed-quick-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-4);
+  margin-bottom: 6px;
+}
+
+.fed-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fed-quick-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--separator);
+  border-radius: 20px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s, border-color 0.12s;
+  letter-spacing: -0.01em;
+}
+
+.fed-quick-chip:active {
+  background: rgba(255,149,0,0.12);
+  border-color: var(--accent);
+}
+
+.fed-quick-sub {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ============================================================
+   Quantity + unit split fields (Feature 4 – v33)
+   ============================================================ */
+
+.fed-qty-wrap {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fed-qtynum {
+  width: 48px;
+  background: var(--surface-2);
+  border: none;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 6px;
+  outline: none;
+  text-align: center;
+}
+
+.fed-qtynum:focus {
+  box-shadow: inset 0 0 0 1.5px rgba(255,149,0,0.4);
+}
+
+.fed-unit {
+  width: 36px;
+  background: var(--surface-2);
+  border: none;
+  border-radius: 8px;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 8px 4px;
+  outline: none;
+  text-align: center;
+}
+
+.fed-unit:focus {
+  box-shadow: inset 0 0 0 1.5px rgba(255,149,0,0.4);
+}

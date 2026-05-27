@@ -13,6 +13,7 @@ const READINESS_KEY = "hyrox.readiness";
 const PR_KEY = "hyrox.prs";
 const NUTRITION_KEY = "hyrox.nutrition";
 const FITNESS_KEY = "hyrox.fitness";
+const FOOD_KEY = "hyrox.foods";
 const PLAN_URL = "plan.json";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -57,7 +58,11 @@ const DEFAULT_SETTINGS = {
     kcalTarget: 2800,
     proteinTarget: 180,
     carbTarget: 350,
-    fatTarget: 80
+    fatTarget: 80,
+    mealTargetBreakfast: 25,
+    mealTargetLunch: 35,
+    mealTargetDinner: 30,
+    mealTargetSnack: 10
   }
 };
 
@@ -87,7 +92,11 @@ const REF_LABELS = {
   kcalTarget: "Daily calorie target",
   proteinTarget: "Protein target",
   carbTarget: "Carb target",
-  fatTarget: "Fat target"
+  fatTarget: "Fat target",
+  mealTargetBreakfast: "Breakfast target %",
+  mealTargetLunch: "Lunch target %",
+  mealTargetDinner: "Dinner target %",
+  mealTargetSnack: "Snack target %"
 };
 
 /* ---------- Storage helpers ---------- */
@@ -334,6 +343,71 @@ function deleteMeal(mealId, dateStr) {
 
 function makeMealId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+/* ---------- Food database ---------- */
+
+function getFoodDb() {
+  try { return JSON.parse(localStorage.getItem(FOOD_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function saveFoodDb(db) {
+  localStorage.setItem(FOOD_KEY, JSON.stringify(db));
+}
+
+/** Upsert a food entry keyed by normalised name. */
+function updateFoodEntry(name, qtyNum, unit, kcal, p, c, f) {
+  if (!name) return;
+  const key = name.toLowerCase().trim();
+  const db = getFoodDb();
+  db[key] = { qtyNum: qtyNum || 0, unit: (unit || "g").trim(), kcal: kcal || 0, p: p || 0, c: c || 0, f: f || 0, updatedAt: new Date().toISOString() };
+  saveFoodDb(db);
+}
+
+/** Look up a food entry by name (case-insensitive). Returns null if not found. */
+function lookupFood(name) {
+  if (!name) return null;
+  const db = getFoodDb();
+  return db[name.toLowerCase().trim()] || null;
+}
+
+/** Parse a legacy qty string like "50g", "2 scoops", "100 ml" → { qtyNum, unit }. */
+function parseQtyString(qtyStr) {
+  if (!qtyStr) return { qtyNum: 0, unit: "g" };
+  const s = qtyStr.trim();
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!m) return { qtyNum: 0, unit: s || "g" };
+  const num = parseFloat(m[1]);
+  let unit = (m[2] || "g").trim().toLowerCase();
+  if (unit === "gram" || unit === "grams" || unit === "gr") unit = "g";
+  if (unit === "milliliter" || unit === "milliliters") unit = "ml";
+  if (unit === "piece" || unit === "pieces" || unit === "pcs" || unit === "pc") unit = "pcs";
+  if (!unit) unit = "g";
+  return { qtyNum: isNaN(num) ? 0 : num, unit };
+}
+
+/** Return up to `limit` most-frequently-used items for a given meal label. */
+function getFrequentItemsForMeal(mealLabel, limit = 5) {
+  const log = getNutritionLog();
+  const counts = {};
+  for (const dayData of Object.values(log)) {
+    if (!dayData.meals) continue;
+    for (const meal of dayData.meals) {
+      if (meal.label !== mealLabel) continue;
+      for (const item of meal.items || []) {
+        const key = (item.name || "").toLowerCase().trim();
+        if (!key) continue;
+        if (!counts[key]) counts[key] = { count: 0, item };
+        counts[key].count++;
+        counts[key].item = item; // keep latest
+      }
+    }
+  }
+  return Object.values(counts)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit)
+    .map((e) => e.item);
 }
 
 /* ---------- Fitness / Apple Watch ---------- */
@@ -1443,16 +1517,22 @@ async function renderMain(app) {
       avgP    = Math.round(avgP / avgDays * 10) / 10;
       avgC    = Math.round(avgC / avgDays * 10) / 10;
       avgF    = Math.round(avgF / avgDays * 10) / 10;
-      kcalDelta = Math.round(totals.kcal) - avgKcal;
-      pDelta    = Math.round(totals.p * 10) / 10 - avgP;
-      cDelta    = Math.round(totals.c * 10) / 10 - avgC;
-      fDelta    = Math.round(totals.f * 10) / 10 - avgF;
+      kcalDelta = Math.round(totals.kcal - avgKcal);
+      pDelta    = Math.round(totals.p    - avgP);
+      cDelta    = Math.round(totals.c    - avgC);
+      fDelta    = Math.round(totals.f    - avgF);
     }
 
     const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
+    const MEAL_TARGET_KEYS = { breakfast: "mealTargetBreakfast", lunch: "mealTargetLunch", dinner: "mealTargetDinner", snack: "mealTargetSnack" };
     const mealsHtml = meals.length === 0
       ? `<div class="empty-state"><h3>Nothing logged</h3><p>Tap + Log meal to add a meal${isSelToday ? " today" : " for this day"}.</p></div>`
-      : meals.map((meal) => `
+      : meals.map((meal) => {
+          const mealTargetPct = tgt[MEAL_TARGET_KEYS[meal.label]] || 0;
+          const mealTargetKcal = mealTargetPct > 0 ? Math.round(tgt.kcalTarget * mealTargetPct / 100) : 0;
+          const mealKcalPct = mealTargetKcal > 0 ? Math.min(120, Math.round(meal.total.kcal / mealTargetKcal * 100)) : 0;
+          const mealIsOver = mealTargetKcal > 0 && meal.total.kcal > mealTargetKcal;
+          return `
           <div class="meal-card">
             ${meal.photo ? `<img class="meal-card-thumb" src="${meal.photo}" alt="meal photo" loading="lazy">` : ""}
             <div class="meal-card-header">
@@ -1467,15 +1547,22 @@ async function renderMain(app) {
               <button class="meal-card-edit" data-action="edit-meal" data-mid="${escapeHtml(meal.id)}" data-date="${escapeHtml(selDateStr)}" aria-label="Edit">✏️</button>
               <button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}" data-date="${escapeHtml(selDateStr)}">×</button>
             </div>
+            ${mealTargetKcal > 0 ? `<div class="meal-target-row">
+              <div class="meal-target-bar-bg"><div class="meal-target-bar-fill${mealIsOver ? " meal-target-over" : ""}" style="width:${mealKcalPct}%"></div></div>
+              <span class="meal-target-label">${mealTargetKcal} kcal target</span>
+            </div>` : ""}
             <div class="meal-items-list">
-              ${meal.items.map((it) => `
-                <div class="meal-item">
+              ${meal.items.map((it) => {
+                const qtyDisplay = it.qtyNum != null ? `${it.qtyNum} ${it.unit || ""}`.trim() : (it.qty || "");
+                return `<div class="meal-item">
                   <span class="meal-item-name">${escapeHtml(it.name)}</span>
-                  <span class="meal-item-qty dim">${escapeHtml(it.qty)}</span>
+                  <span class="meal-item-qty dim">${escapeHtml(qtyDisplay)}</span>
                   <span class="meal-item-kcal">${it.kcal}</span>
-                </div>`).join("")}
+                </div>`;
+              }).join("")}
             </div>
-          </div>`).join("");
+          </div>`;
+        }).join("");
 
     // Weekly summary
     const wSumm   = getNutritionWeekSummary(fuelSummaryPeriod);
@@ -2257,10 +2344,10 @@ async function renderFuel(app) {
     avgC    = Math.round(avgC    / avgDays * 10) / 10;
     avgF    = Math.round(avgF    / avgDays * 10) / 10;
   }
-  const kcalDelta = Math.round(totals.kcal) - avgKcal;
-  const pDelta    = Math.round(totals.p * 10) / 10 - avgP;
-  const cDelta    = Math.round(totals.c * 10) / 10 - avgC;
-  const fDelta    = Math.round(totals.f * 10) / 10 - avgF;
+  const kcalDelta = Math.round(totals.kcal - avgKcal);
+  const pDelta    = Math.round(totals.p    - avgP);
+  const cDelta    = Math.round(totals.c    - avgC);
+  const fDelta    = Math.round(totals.f    - avgF);
 
   // Nav constraints: can go back 90 days max
   const minDate      = new Date(today().getTime() - 90 * 86400000);
@@ -2618,7 +2705,16 @@ function showLogMealSheet(targetDateStr) {
 
 function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal = null, photoThumb = null) {
   // auto:true means "estimate this item via Gemini" — not yet calculated
-  let items = initItems.map((it) => ({ name: it.name || "", qty: it.qty || "", kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0, auto: false }));
+  let items = initItems.map((it) => {
+    const parsed = parseQtyString(it.qty || "");
+    return {
+      name:   it.name   || "",
+      qtyNum: it.qtyNum != null ? it.qtyNum : parsed.qtyNum,
+      unit:   it.unit   != null ? it.unit   : parsed.unit,
+      kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0,
+      auto: false
+    };
+  });
   const LABELS = ["breakfast", "lunch", "dinner", "snack"];
   const h = new Date().getHours();
   let selLabel = editMeal ? editMeal.label : (h < 10 ? "breakfast" : h < 14 ? "lunch" : h < 19 ? "dinner" : "snack");
@@ -2641,6 +2737,7 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
     }), { kcal: 0, p: 0, c: 0, f: 0 });
 
   const renderSheet = () => {
+    const freqItems = getFrequentItemsForMeal(selLabel, 5);
     const tot = calcTotal();
     const autoCount = items.filter((it) => it.auto).length;
     overlay.innerHTML = `
@@ -2655,6 +2752,12 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
             ${LABELS.map((l) => `<button class="fuel-label-pill${l === selLabel ? " selected" : ""}" data-lbl="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}
           </div>
           ${aiNotes ? `<div class="fuel-ai-note">💡 ${escapeHtml(aiNotes)}</div>` : ""}
+          ${freqItems.length > 0 ? `<div class="fed-quick-section">
+            <div class="fed-quick-label">Quick add · ${selLabel}</div>
+            <div class="fed-quick-chips">
+              ${freqItems.map((fi, qi) => `<button class="fed-quick-chip" data-qi="${qi}">${escapeHtml(fi.name)}<span class="fed-quick-sub">${fi.kcal} kcal</span></button>`).join("")}
+            </div>
+          </div>` : ""}
           <div id="fed-items">
             ${items.map((it, i) => fuelItemRow(it, i)).join("")}
           </div>
@@ -2669,13 +2772,22 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
           </div>
         </div>
       </div>`;
-    bindSheet();
+    bindSheet(freqItems);
   };
 
   const syncDomToItems = () => {
     overlay.querySelectorAll(".fed-field").forEach((inp) => {
       const i = Number(inp.dataset.i);
       if (i < items.length) items[i][inp.dataset.f] = inp.type === "number" ? (Number(inp.value) || 0) : inp.value;
+    });
+    // Sync qty fields separately (they are not .fed-field to avoid recalc conflicts)
+    overlay.querySelectorAll(".fed-qtynum").forEach((inp) => {
+      const i = Number(inp.dataset.i);
+      if (i < items.length) items[i].qtyNum = Number(inp.value) || 0;
+    });
+    overlay.querySelectorAll(".fed-unit").forEach((inp) => {
+      const i = Number(inp.dataset.i);
+      if (i < items.length) items[i].unit = inp.value.trim() || "g";
     });
   };
 
@@ -2687,7 +2799,7 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
     if (macEl)  macEl.textContent  = `${Math.round(tot.p)}g P · ${Math.round(tot.c)}g C · ${Math.round(tot.f)}g F`;
   };
 
-  const bindSheet = () => {
+  const bindSheet = (freqItems = []) => {
     overlay.querySelectorAll(".fuel-label-pill").forEach((b) => b.addEventListener("click", () => { selLabel = b.dataset.lbl; renderSheet(); }));
 
     overlay.querySelectorAll(".fed-field").forEach((inp) => {
@@ -2696,6 +2808,96 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
         const f = inp.dataset.f;
         items[i][f] = inp.type === "number" ? (Number(inp.value) || 0) : inp.value;
         updateTotals();
+      });
+    });
+
+    // qtyNum: auto-recalc macros from food DB when quantity changes
+    overlay.querySelectorAll(".fed-qtynum").forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const i = Number(inp.dataset.i);
+        items[i].qtyNum = Number(inp.value) || 0;
+        const newQty = items[i].qtyNum;
+        if (newQty > 0 && items[i].name) {
+          const dbEntry = lookupFood(items[i].name);
+          const itemUnit = (items[i].unit || "g").toLowerCase().trim();
+          if (dbEntry && (dbEntry.unit || "g").toLowerCase().trim() === itemUnit && dbEntry.qtyNum > 0) {
+            items[i].kcal = Math.round(dbEntry.kcal * newQty / dbEntry.qtyNum);
+            items[i].p    = Math.round(dbEntry.p    * newQty / dbEntry.qtyNum * 10) / 10;
+            items[i].c    = Math.round(dbEntry.c    * newQty / dbEntry.qtyNum * 10) / 10;
+            items[i].f    = Math.round(dbEntry.f    * newQty / dbEntry.qtyNum * 10) / 10;
+            if (!items[i].auto) {
+              const fedItem = inp.closest(".fed-item");
+              if (fedItem) {
+                ["kcal","p","c","f"].forEach((f) => {
+                  const el = fedItem.querySelector(`.fed-num[data-f="${f}"]`);
+                  if (el) el.value = items[i][f];
+                });
+              }
+            }
+          }
+        }
+        updateTotals();
+      });
+    });
+
+    // unit: just sync
+    overlay.querySelectorAll(".fed-unit").forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const i = Number(inp.dataset.i);
+        items[i].unit = inp.value.trim() || "g";
+      });
+    });
+
+    // Name blur: auto-fill from food DB if fields empty
+    overlay.querySelectorAll(".fed-name").forEach((inp) => {
+      inp.addEventListener("blur", () => {
+        const i = Number(inp.dataset.i);
+        const name = inp.value.trim();
+        if (!name) return;
+        items[i].name = name;
+        if (items[i].qtyNum === 0 && items[i].kcal === 0) {
+          const dbEntry = lookupFood(name);
+          if (dbEntry) {
+            items[i].qtyNum = dbEntry.qtyNum;
+            items[i].unit   = dbEntry.unit || "g";
+            items[i].kcal   = dbEntry.kcal;
+            items[i].p      = dbEntry.p;
+            items[i].c      = dbEntry.c;
+            items[i].f      = dbEntry.f;
+            const fedItem = inp.closest(".fed-item");
+            if (fedItem) {
+              const qtyEl  = fedItem.querySelector(".fed-qtynum");
+              const unitEl = fedItem.querySelector(".fed-unit");
+              if (qtyEl)  qtyEl.value  = items[i].qtyNum;
+              if (unitEl) unitEl.value = items[i].unit;
+              if (!items[i].auto) {
+                ["kcal","p","c","f"].forEach((f) => {
+                  const el = fedItem.querySelector(`.fed-num[data-f="${f}"]`);
+                  if (el) el.value = items[i][f];
+                });
+              }
+            }
+            updateTotals();
+          }
+        }
+      });
+    });
+
+    // Frequent items chips
+    overlay.querySelectorAll(".fed-quick-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        syncDomToItems();
+        const fi = freqItems[Number(btn.dataset.qi)];
+        if (!fi) return;
+        const parsed = parseQtyString(fi.qty || "");
+        items.push({
+          name:   fi.name,
+          qtyNum: fi.qtyNum != null ? fi.qtyNum : parsed.qtyNum,
+          unit:   fi.unit   != null ? fi.unit   : parsed.unit,
+          kcal: fi.kcal || 0, p: fi.p || 0, c: fi.c || 0, f: fi.f || 0,
+          auto: false
+        });
+        renderSheet();
       });
     });
 
@@ -2752,7 +2954,7 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
 
     overlay.querySelector("#fed-add")?.addEventListener("click", () => {
       syncDomToItems();
-      items.push({ name: "", qty: "", kcal: 0, p: 0, c: 0, f: 0, auto: false });
+      items.push({ name: "", qtyNum: 0, unit: "g", kcal: 0, p: 0, c: 0, f: 0, auto: false });
       renderSheet();
       const names = overlay.querySelectorAll(".fed-name");
       if (names.length) names[names.length - 1].focus();
@@ -2767,6 +2969,12 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       if (!valid.length) { close(); return; }
       const tot = valid.reduce((a, it) => ({ kcal: a.kcal + it.kcal, p: a.p + it.p, c: a.c + it.c, f: a.f + it.f }), { kcal: 0, p: 0, c: 0, f: 0 });
       const now2 = new Date();
+      // Update food database with latest values for each named item
+      valid.forEach((it) => {
+        if (it.name && (it.qtyNum > 0 || it.kcal > 0)) {
+          updateFoodEntry(it.name, it.qtyNum || 0, it.unit || "g", it.kcal, it.p, it.c, it.f);
+        }
+      });
       if (editMeal) deleteMeal(editMeal.id, targetDateStr);
       saveMeal({
         id: editMeal ? editMeal.id : makeMealId(),
@@ -2857,10 +3065,15 @@ function showFitnessImportSheet({ date, type, duration, kcal, hr, hrMax, distanc
 }
 
 function fuelItemRow(it, i) {
+  const qtyNum = it.qtyNum != null ? it.qtyNum : "";
+  const unit   = it.unit   != null ? it.unit   : "g";
   return `<div class="fed-item${it.auto ? " fed-item-auto" : ""}">
     <div class="fed-item-top">
       <input class="fed-field fed-name" data-i="${i}" data-f="name" type="text" value="${escapeHtml(it.name)}" placeholder="Food name" />
-      <input class="fed-field fed-qty" data-i="${i}" data-f="qty" type="text" value="${escapeHtml(it.qty)}" placeholder="qty / g" />
+      <div class="fed-qty-wrap">
+        <input class="fed-qtynum" data-i="${i}" type="number" inputmode="decimal" value="${qtyNum}" placeholder="0" />
+        <input class="fed-unit" data-i="${i}" type="text" value="${escapeHtml(unit)}" placeholder="g" />
+      </div>
       <button class="fed-auto-btn${it.auto ? " fed-auto-on" : ""}" data-auto-i="${i}" title="${it.auto ? "Manual entry" : "Auto-estimate with AI"}">✨</button>
       <button class="fed-del" data-i="${i}" aria-label="Remove">×</button>
     </div>
@@ -3417,6 +3630,15 @@ async function renderSettings(app, params) {
       ${numRow("nutrition", "fatTarget", "g")}
     </div>
     <div class="section-footer">Get a free Gemini key at aistudio.google.com · Free tier: 1,500 photo analyses/day.</div>
+
+    <div class="section-header">Meal targets · % of daily kcal</div>
+    <div class="list">
+      ${numRow("nutrition", "mealTargetBreakfast", "%")}
+      ${numRow("nutrition", "mealTargetLunch", "%")}
+      ${numRow("nutrition", "mealTargetDinner", "%")}
+      ${numRow("nutrition", "mealTargetSnack", "%")}
+    </div>
+    <div class="section-footer">Should add up to 100 %. Targets appear as progress bars on each meal card.</div>
 
     <div style="margin-top:24px">
       <button id="save-settings" class="btn">${returnTo ? "Save & return to workout" : "Save changes"}</button>
