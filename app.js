@@ -1924,30 +1924,51 @@ function renderSessionCard(session, weekNum, expanded) {
       <button class="btn-reschedule" data-action="add-exercise" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--accent)">+ Add exercise</button>
       <div class="section-footer">Tap a weight to adjust it · tap ✓ circle to mark done.</div>` : ""}
 
-    ${cooldownHtml ? `
-      <div class="section-header">Cooldown</div>
-      <div class="list">${cooldownHtml}</div>` : ""}
-
-    ${session.tips ? `<div class="alert alert-info" style="margin-top:16px"><strong>Coach note</strong>${escapeHtml(session.tips)}</div>` : ""}
-
-    ${session.testProtocol ? `
-      <div class="alert alert-warn" style="margin-top:16px">
-        <strong>Test session</strong>
-        Capture: ${(session.testProtocol.metrics || []).join(", ")}.<br>
-        ${escapeHtml(session.testProtocol.instructions || "")}
-      </div>` : ""}
-
     ${done ? (() => {
       const savedActuals = getSessionActuals(weekNum, session.id);
-      if (savedActuals) {
-        const editedBlocks = savedActuals.filter((ba) => !ba.asPlanned);
-        const actualsRows = savedActuals.map((ba) => {
-          if (ba.asPlanned) {
-            return `<div class="actual-log-row">
-              <span class="actual-log-name">${escapeHtml(ba.name)}</span>
+      if (savedActuals && savedActuals.length) {
+        const isNewFmt = Array.isArray(savedActuals[0]?.rounds);
+        if (isNewFmt) {
+          const rows = savedActuals.map((bs) => {
+            const allOk = bs.rounds.every((r) =>
+              r.exercises.every((ex) => !ex.actual || ex.actual === ex.planned) &&
+              (!r.rest.actual || r.rest.actual === r.rest.planned)
+            );
+            if (allOk) return `<div class="actual-log-row">
+              <span class="actual-log-name">${escapeHtml(bs.name)}</span>
               <span class="actual-log-ok">✓ as planned</span>
             </div>`;
-          }
+            const roundChips = bs.rounds.map((r) => {
+              const exChg = r.exercises.filter((ex) => ex.actual && ex.actual !== ex.planned);
+              const rstChg = r.rest.actual && r.rest.actual !== r.rest.planned;
+              if (!exChg.length && !rstChg) return null;
+              const chips = [
+                ...exChg.map((ex) => `<span class="actual-log-field">${escapeHtml(ex.actual)}</span>`),
+                rstChg ? `<span class="actual-log-field">rest ${escapeHtml(r.rest.actual)}</span>` : null
+              ].filter(Boolean).join("");
+              return `<span class="actl-rsum"><span class="actl-rnum">R${r.num}</span>${chips}</span>`;
+            }).filter(Boolean).join("");
+            return `<div class="actual-log-row actual-log-row-edited">
+              <span class="actual-log-name">${escapeHtml(bs.name)}</span>
+              <div class="actual-log-changes">${roundChips}${bs.note ? `<span class="actual-log-note">${escapeHtml(bs.note)}</span>` : ""}</div>
+            </div>`;
+          }).join("");
+          const adjCount = savedActuals.filter((bs) => bs.rounds && bs.rounds.some((r) =>
+            r.exercises.some((ex) => ex.actual && ex.actual !== ex.planned) ||
+            (r.rest.actual && r.rest.actual !== r.rest.planned)
+          )).length;
+          return `
+            <div class="section-header">Actuals${adjCount > 0 ? ` · ${adjCount} adjusted` : " · all as planned"}</div>
+            <div class="actual-log-list">${rows}</div>
+            <button class="btn-reschedule" data-action="edit-actuals" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--info)">✏️ Edit actuals</button>`;
+        }
+        // Legacy format
+        const editedBlocks = savedActuals.filter((ba) => !ba.asPlanned);
+        const actualsRows = savedActuals.map((ba) => {
+          if (ba.asPlanned) return `<div class="actual-log-row">
+            <span class="actual-log-name">${escapeHtml(ba.name)}</span>
+            <span class="actual-log-ok">✓ as planned</span>
+          </div>`;
           const changes = [];
           if (ba.schemeActual && ba.schemeActual !== ba.schemePlanned)
             changes.push(`<span class="actual-log-field">${escapeHtml(ba.schemeActual)}</span>`);
@@ -1969,6 +1990,19 @@ function renderSessionCard(session, weekNum, expanded) {
         <div class="section-header">Actuals</div>
         <button class="btn-reschedule" data-action="log-actuals" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--info)">📊 Log actuals</button>`;
     })() : ""}
+
+    ${cooldownHtml ? `
+      <div class="section-header">Cooldown</div>
+      <div class="list">${cooldownHtml}</div>` : ""}
+
+    ${session.tips ? `<div class="alert alert-info" style="margin-top:16px"><strong>Coach note</strong>${escapeHtml(session.tips)}</div>` : ""}
+
+    ${session.testProtocol ? `
+      <div class="alert alert-warn" style="margin-top:16px">
+        <strong>Test session</strong>
+        Capture: ${(session.testProtocol.metrics || []).join(", ")}.<br>
+        ${escapeHtml(session.testProtocol.instructions || "")}
+      </div>` : ""}
 
     <div class="section-header">Session notes</div>
     <textarea class="journal-input" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" placeholder="How did it feel? Notes, PRs, things to remember…" rows="3">${escapeHtml(getJournalNote(weekNum, session.id))}</textarea>
@@ -3961,34 +3995,90 @@ function paceToSec(str) {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
-/* ---------- Session actuals sheet ---------- */
+/* ---------- Session actuals sheet — per-round (v36) ---------- */
+
+function ucFirst(str) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function parseRoundTemplate(block, settings) {
+  const scheme = block.scheme || "";
+
+  // ── Round count ──────────────────────────────────────────────────
+  let roundCount = 1;
+  const roundsMatch = scheme.match(/^(\d+)\s*rounds?/i);
+  if (roundsMatch) {
+    roundCount = parseInt(roundsMatch[1], 10);
+  } else {
+    // "8 × 2 min", "4 × 6", "3x8"
+    const setsMatch = scheme.match(/^(\d+)\s*[×x]/i);
+    if (setsMatch) roundCount = parseInt(setsMatch[1], 10);
+  }
+  if (roundCount > 12) roundCount = 12;
+  if (roundCount < 1)  roundCount = 1;
+
+  // ── Exercises per round ──────────────────────────────────────────
+  let exercises = [];
+  if (Array.isArray(block.load)) {
+    exercises = block.load.map((li) => ({
+      label:   ucFirst(li.label || block.name),
+      planned: li.type === "list"
+        ? (li.items || []).join(" / ")
+        : blockLoadText(li, settings)
+    }));
+  } else if (block.load && block.load.type === "list") {
+    exercises = (block.load.items || []).map((item) => ({ label: item, planned: "" }));
+    if (!exercises.length) exercises = [{ label: block.name, planned: "" }];
+  } else {
+    exercises = [{ label: block.name, planned: blockLoadText(block.load, settings) || scheme }];
+  }
+
+  // ── Rest ─────────────────────────────────────────────────────────
+  let restPlanned = block.rest || "";
+  if (!restPlanned) {
+    const restMatch = scheme.match(/[·•]\s*(\d+\s*s)\s*rest/i);
+    if (restMatch) restPlanned = restMatch[1];
+  }
+
+  return { roundCount, exercises, restPlanned };
+}
 
 function showSessionActualsSheet(weekNum, sessionId) {
   const week = PLAN && PLAN.weeks.find((w) => w.number === weekNum);
   const session = week && week.sessions.find((s) => s.id === sessionId);
   if (!session || !session.blocks || !session.blocks.length) return;
 
-  const settings = getSettings();
-  const existing = getSessionActuals(weekNum, sessionId);
+  const settings  = getSettings();
+  const existing  = getSessionActuals(weekNum, sessionId);
+  const existingIsNew = existing && existing[0] && Array.isArray(existing[0].rounds);
 
-  // Build per-block state from plan + any previously saved actuals
-  let blockActuals = session.blocks.map((block, i) => {
-    const schemePlanned = block.scheme  || "";
-    const loadPlanned   = blockLoadText(block.load, settings);
-    const restPlanned   = block.rest    || "";
-    const saved = existing && existing[i] ? existing[i] : null;
+  // Build per-block state
+  const blockStates = session.blocks.map((block, blockIdx) => {
+    const tmpl      = parseRoundTemplate(block, settings);
+    const savedBlock = existingIsNew && existing[blockIdx] ? existing[blockIdx] : null;
+
+    const rounds = Array.from({ length: tmpl.roundCount }, (_, ri) => {
+      const savedRound = savedBlock && savedBlock.rounds && savedBlock.rounds[ri];
+      return {
+        num: ri + 1,
+        exercises: tmpl.exercises.map((ex, ei) => {
+          const savedEx = savedRound && savedRound.exercises && savedRound.exercises[ei];
+          return { label: ex.label, planned: ex.planned, actual: savedEx ? savedEx.actual : ex.planned };
+        }),
+        rest: {
+          planned: tmpl.restPlanned,
+          actual:  savedRound ? savedRound.rest.actual : tmpl.restPlanned
+        }
+      };
+    });
+
     return {
-      i,
-      name:          block.name,
-      schemePlanned,
-      loadPlanned,
-      restPlanned,
-      schemeActual:  saved ? saved.schemeActual  : schemePlanned,
-      loadActual:    saved ? saved.loadActual    : loadPlanned,
-      restActual:    saved ? saved.restActual    : restPlanned,
-      note:          saved ? saved.note          : "",
-      asPlanned:     saved ? saved.asPlanned     : true,
-      expanded:      saved ? !saved.asPlanned    : false
+      blockIdx,
+      name:   block.name,
+      scheme: block.scheme || "",
+      note:   savedBlock ? (savedBlock.note || "") : "",
+      rounds
     };
   });
 
@@ -4003,61 +4093,75 @@ function showSessionActualsSheet(weekNum, sessionId) {
   };
 
   const syncDom = () => {
-    overlay.querySelectorAll(".actual-input").forEach((inp) => {
+    overlay.querySelectorAll(".actl-ex-input").forEach((inp) => {
+      const bi = Number(inp.dataset.bi), ri = Number(inp.dataset.ri), ei = Number(inp.dataset.ei);
+      const round = blockStates[bi] && blockStates[bi].rounds[ri];
+      if (round && round.exercises[ei]) round.exercises[ei].actual = inp.value;
+    });
+    overlay.querySelectorAll(".actl-rest-input").forEach((inp) => {
+      const bi = Number(inp.dataset.bi), ri = Number(inp.dataset.ri);
+      const round = blockStates[bi] && blockStates[bi].rounds[ri];
+      if (round) round.rest.actual = inp.value;
+    });
+    overlay.querySelectorAll(".actl-note-input").forEach((inp) => {
       const bi = Number(inp.dataset.bi);
-      const f  = inp.dataset.f;
-      if (bi < blockActuals.length) blockActuals[bi][f] = inp.value;
+      if (blockStates[bi]) blockStates[bi].note = inp.value;
     });
   };
 
   const doSave = () => {
     syncDom();
-    const toSave = blockActuals.map(({ i, name, schemePlanned, loadPlanned, restPlanned, schemeActual, loadActual, restActual, note, asPlanned }) =>
-      ({ i, name, schemePlanned, loadPlanned, restPlanned, schemeActual, loadActual, restActual, note, asPlanned })
-    );
+    const toSave = blockStates.map((bs) => ({
+      blockIdx: bs.blockIdx,
+      name:     bs.name,
+      note:     bs.note,
+      rounds:   bs.rounds.map((r) => ({
+        num:       r.num,
+        exercises: r.exercises.map((ex) => ({ label: ex.label, planned: ex.planned, actual: ex.actual })),
+        rest:      { planned: r.rest.planned, actual: r.rest.actual }
+      }))
+    }));
     saveSessionActuals(weekNum, sessionId, toSave);
     close();
     route();
   };
 
-  const renderBlock = (ba) => {
-    const plannedParts = [ba.schemePlanned, ba.loadPlanned, ba.restPlanned ? `rest ${ba.restPlanned}` : ""].filter(Boolean);
-    const plannedSummary = plannedParts.join(" · ");
+  const renderRound = (round, bi) => `
+    <div class="actl-round">
+      <div class="actl-round-label">Round ${round.num}</div>
+      ${round.exercises.map((ex, ei) => `
+        <div class="actl-ex-row">
+          <span class="actl-ex-label">${escapeHtml(ex.label)}</span>
+          <input class="actl-ex-input" data-bi="${bi}" data-ri="${round.num - 1}" data-ei="${ei}"
+            type="text" value="${escapeHtml(ex.actual)}" placeholder="${escapeHtml(ex.planned) || "–"}" />
+        </div>`).join("")}
+      <div class="actl-ex-row actl-rest-row">
+        <span class="actl-ex-label">Rest</span>
+        <input class="actl-rest-input" data-bi="${bi}" data-ri="${round.num - 1}"
+          type="text" value="${escapeHtml(round.rest.actual)}" placeholder="${escapeHtml(round.rest.planned) || "none"}" />
+      </div>
+    </div>`;
+
+  const renderBlockCard = (bs) => {
+    const { blockIdx: bi, name, scheme, note, rounds } = bs;
     return `
-      <div class="actual-block${ba.expanded ? " actual-block-expanded" : ""}">
-        <div class="actual-block-header">
-          <div class="actual-block-info">
-            <div class="actual-block-name">${escapeHtml(ba.name)}</div>
-            ${plannedSummary ? `<div class="actual-block-planned">${escapeHtml(plannedSummary)}</div>` : ""}
-          </div>
-          <button class="actual-toggle${ba.asPlanned ? " actual-toggle-ok" : " actual-toggle-edit"}" data-act-toggle="${ba.i}">
-            ${ba.asPlanned ? "✓ Done" : "✏️ Edited"}
-          </button>
+      <div class="actl-block" data-bi="${bi}">
+        <div class="actl-block-header">
+          <div class="actl-block-name">${escapeHtml(name)}</div>
+          ${scheme ? `<div class="actl-block-scheme">${escapeHtml(scheme)}</div>` : ""}
         </div>
-        ${ba.expanded ? `
-        <div class="actual-block-fields">
-          ${ba.schemePlanned ? `<div class="actual-field-row">
-            <label class="actual-field-label">Scheme</label>
-            <input class="actual-input" data-bi="${ba.i}" data-f="schemeActual" type="text" value="${escapeHtml(ba.schemeActual)}" placeholder="${escapeHtml(ba.schemePlanned)}" />
-          </div>` : ""}
-          ${ba.loadPlanned ? `<div class="actual-field-row">
-            <label class="actual-field-label">Load / pace</label>
-            <input class="actual-input" data-bi="${ba.i}" data-f="loadActual" type="text" value="${escapeHtml(ba.loadActual)}" placeholder="${escapeHtml(ba.loadPlanned)}" />
-          </div>` : ""}
-          <div class="actual-field-row">
-            <label class="actual-field-label">Rest / break</label>
-            <input class="actual-input" data-bi="${ba.i}" data-f="restActual" type="text" value="${escapeHtml(ba.restActual)}" placeholder="${ba.restPlanned || "none"}" />
-          </div>
-          <div class="actual-field-row">
-            <label class="actual-field-label">Note</label>
-            <input class="actual-input" data-bi="${ba.i}" data-f="note" type="text" value="${escapeHtml(ba.note)}" placeholder="e.g. felt strong, cut short…" />
-          </div>
-        </div>` : ""}
+        ${rounds.map((r) => renderRound(r, bi)).join("")}
+        ${rounds.length > 1 ? `<button class="actl-copy-btn" data-bi="${bi}">📋 Copy R1 to all rounds</button>` : ""}
+        <div class="actl-ex-row actl-note-row">
+          <span class="actl-ex-label">Note</span>
+          <input class="actl-note-input" data-bi="${bi}" type="text"
+            value="${escapeHtml(note)}" placeholder="e.g. felt strong, cut short…" />
+        </div>
       </div>`;
   };
 
   const renderSheet = () => {
-    const editedCount = blockActuals.filter((ba) => !ba.asPlanned).length;
+    const scrollTop = overlay.querySelector(".fuel-edit-scroll")?.scrollTop || 0;
     overlay.innerHTML = `
       <div class="fuel-edit-sheet">
         <div class="fuel-edit-topbar">
@@ -4066,11 +4170,12 @@ function showSessionActualsSheet(weekNum, sessionId) {
           <button class="fuel-edit-save" id="act-save">Save</button>
         </div>
         <div class="fuel-edit-scroll">
-          <div class="actual-intro">Confirm or adjust what you actually did. Tap a block to edit it.</div>
-          ${blockActuals.map(renderBlock).join("")}
-          ${editedCount > 0 ? `<div class="actual-summary-note">${editedCount} block${editedCount > 1 ? "s" : ""} adjusted vs plan</div>` : ""}
+          <div class="actual-intro">Log what you actually did — round by round.</div>
+          ${blockStates.map(renderBlockCard).join("")}
         </div>
       </div>`;
+    const scrollEl = overlay.querySelector(".fuel-edit-scroll");
+    if (scrollEl && scrollTop) scrollEl.scrollTop = scrollTop;
     bindSheet();
   };
 
@@ -4078,43 +4183,18 @@ function showSessionActualsSheet(weekNum, sessionId) {
     overlay.querySelector("#act-skip")?.addEventListener("click", close);
     overlay.querySelector("#act-save")?.addEventListener("click", doSave);
 
-    overlay.querySelectorAll("[data-act-toggle]").forEach((btn) => {
+    overlay.querySelectorAll(".actl-copy-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         syncDom();
-        const bi = Number(btn.dataset.actToggle);
-        const ba = blockActuals[bi];
-        if (ba.asPlanned) {
-          // Switch to edit mode
-          ba.asPlanned = false;
-          ba.expanded  = true;
-        } else {
-          // Revert to as-planned — reset values
-          ba.asPlanned     = true;
-          ba.expanded      = false;
-          ba.schemeActual  = ba.schemePlanned;
-          ba.loadActual    = ba.loadPlanned;
-          ba.restActual    = ba.restPlanned;
-          ba.note          = "";
-        }
+        const bi = Number(btn.dataset.bi);
+        const bs = blockStates[bi];
+        const r0 = bs.rounds[0];
+        bs.rounds.forEach((r, ri) => {
+          if (ri === 0) return;
+          r.exercises.forEach((ex, ei) => { ex.actual = r0.exercises[ei] ? r0.exercises[ei].actual : ex.planned; });
+          r.rest.actual = r0.rest.actual;
+        });
         renderSheet();
-      });
-    });
-
-    // Tapping the header row of a non-expanded block also opens it
-    overlay.querySelectorAll(".actual-block-header").forEach((hdr) => {
-      hdr.addEventListener("click", (e) => {
-        if (e.target.closest("[data-act-toggle]")) return; // handled above
-        syncDom();
-        const blockEl = hdr.closest(".actual-block");
-        const toggleBtn = blockEl && blockEl.querySelector("[data-act-toggle]");
-        if (!toggleBtn) return;
-        const bi = Number(toggleBtn.dataset.actToggle);
-        const ba = blockActuals[bi];
-        if (ba.asPlanned) {
-          ba.asPlanned = false;
-          ba.expanded  = true;
-          renderSheet();
-        }
       });
     });
   };
