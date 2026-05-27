@@ -14,6 +14,7 @@ const PR_KEY = "hyrox.prs";
 const NUTRITION_KEY = "hyrox.nutrition";
 const FITNESS_KEY = "hyrox.fitness";
 const FOOD_KEY = "hyrox.foods";
+const ACTUALS_KEY = "hyrox.actuals";
 const PLAN_URL = "plan.json";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -408,6 +409,59 @@ function getFrequentItemsForMeal(mealLabel, limit = 5) {
     .sort((a, b) => b.count - a.count)
     .slice(0, limit)
     .map((e) => e.item);
+}
+
+/* ---------- Session actuals storage ---------- */
+
+function getSessionActuals(weekNum, sessionId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(ACTUALS_KEY) || "{}");
+    return all[`W${weekNum}.${sessionId}`] || null;
+  } catch { return null; }
+}
+
+function saveSessionActuals(weekNum, sessionId, actuals) {
+  try {
+    const all = JSON.parse(localStorage.getItem(ACTUALS_KEY) || "{}");
+    all[`W${weekNum}.${sessionId}`] = actuals;
+    localStorage.setItem(ACTUALS_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+/**
+ * Render a block's load as a plain readable string (for actuals pre-fill).
+ * Mirrors renderLoadSimple but returns a string, not HTML.
+ */
+function blockLoadText(load, settings) {
+  if (!load) return "";
+  switch (load.type) {
+    case "pct": {
+      const max = getRefValue(load.ref, settings);
+      if (!max) return "";
+      const r = settings.rounding || 2.5;
+      return Math.round((max * load.pct) / r) * r + " kg";
+    }
+    case "fixed":  return load.value || "";
+    case "bw":     return "bodyweight";
+    case "pace": {
+      const base = getRefValue(load.ref, settings);
+      if (!base) return "";
+      return formatSecToPace(base * (load.factor != null ? load.factor : 1.0)) + "/km";
+    }
+    case "split": {
+      const base = getRefValue(load.ref, settings);
+      if (!base) return "";
+      return formatSecToPace(base * (load.factor != null ? load.factor : 1.0)) + "/500m";
+    }
+    case "station": {
+      const v = getRefValue(load.ref, settings);
+      return v != null ? v + " kg" : "";
+    }
+    case "rpe":   return "RPE " + load.value;
+    case "label": return load.value || "";
+    case "list":  return (load.items || []).join(", ");
+    default:      return "";
+  }
 }
 
 /* ---------- Fitness / Apple Watch ---------- */
@@ -1865,6 +1919,39 @@ function renderSessionCard(session, weekNum, expanded) {
         Capture: ${(session.testProtocol.metrics || []).join(", ")}.<br>
         ${escapeHtml(session.testProtocol.instructions || "")}
       </div>` : ""}
+
+    ${done ? (() => {
+      const savedActuals = getSessionActuals(weekNum, session.id);
+      if (savedActuals) {
+        const editedBlocks = savedActuals.filter((ba) => !ba.asPlanned);
+        const actualsRows = savedActuals.map((ba) => {
+          if (ba.asPlanned) {
+            return `<div class="actual-log-row">
+              <span class="actual-log-name">${escapeHtml(ba.name)}</span>
+              <span class="actual-log-ok">✓ as planned</span>
+            </div>`;
+          }
+          const changes = [];
+          if (ba.schemeActual && ba.schemeActual !== ba.schemePlanned)
+            changes.push(`<span class="actual-log-field">${escapeHtml(ba.schemeActual)}</span>`);
+          if (ba.loadActual && ba.loadActual !== ba.loadPlanned)
+            changes.push(`<span class="actual-log-field">${escapeHtml(ba.loadActual)}</span>`);
+          if (ba.restActual !== ba.restPlanned)
+            changes.push(`<span class="actual-log-field">rest ${escapeHtml(ba.restActual || "none")}</span>`);
+          return `<div class="actual-log-row actual-log-row-edited">
+            <span class="actual-log-name">${escapeHtml(ba.name)}</span>
+            <div class="actual-log-changes">${changes.join("")}${ba.note ? `<span class="actual-log-note">${escapeHtml(ba.note)}</span>` : ""}</div>
+          </div>`;
+        }).join("");
+        return `
+          <div class="section-header">Actuals${editedBlocks.length > 0 ? ` · ${editedBlocks.length} adjusted` : " · all as planned"}</div>
+          <div class="actual-log-list">${actualsRows}</div>
+          <button class="btn-reschedule" data-action="edit-actuals" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--info)">✏️ Edit actuals</button>`;
+      }
+      return `
+        <div class="section-header">Actuals</div>
+        <button class="btn-reschedule" data-action="log-actuals" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--info)">📊 Log actuals</button>`;
+    })() : ""}
 
     <div class="section-header">Session notes</div>
     <textarea class="journal-input" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" placeholder="How did it feel? Notes, PRs, things to remember…" rows="3">${escapeHtml(getJournalNote(weekNum, session.id))}</textarea>
@@ -3834,7 +3921,7 @@ async function renderSettings(app, params) {
   // Reset all training data
   document.getElementById("reset-all-data")?.addEventListener("click", () => {
     if (!confirm("Clear all progress, notes, and set logs? Settings and tests are kept.")) return;
-    [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY].forEach((k) => localStorage.removeItem(k));
+    [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY, ACTUALS_KEY].forEach((k) => localStorage.removeItem(k));
     route();
   });
 }
@@ -3855,6 +3942,167 @@ function paceToSec(str) {
     return isFinite(n) ? n : null;
   }
   return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/* ---------- Session actuals sheet ---------- */
+
+function showSessionActualsSheet(weekNum, sessionId) {
+  const week = PLAN && PLAN.weeks.find((w) => w.number === weekNum);
+  const session = week && week.sessions.find((s) => s.id === sessionId);
+  if (!session || !session.blocks || !session.blocks.length) return;
+
+  const settings = getSettings();
+  const existing = getSessionActuals(weekNum, sessionId);
+
+  // Build per-block state from plan + any previously saved actuals
+  let blockActuals = session.blocks.map((block, i) => {
+    const schemePlanned = block.scheme  || "";
+    const loadPlanned   = blockLoadText(block.load, settings);
+    const restPlanned   = block.rest    || "";
+    const saved = existing && existing[i] ? existing[i] : null;
+    return {
+      i,
+      name:          block.name,
+      schemePlanned,
+      loadPlanned,
+      restPlanned,
+      schemeActual:  saved ? saved.schemeActual  : schemePlanned,
+      loadActual:    saved ? saved.loadActual    : loadPlanned,
+      restActual:    saved ? saved.restActual    : restPlanned,
+      note:          saved ? saved.note          : "",
+      asPlanned:     saved ? saved.asPlanned     : true,
+      expanded:      saved ? !saved.asPlanned    : false
+    };
+  });
+
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  const close = () => {
+    overlay.classList.remove("open");
+    setTimeout(() => overlay.remove(), 280);
+  };
+
+  const syncDom = () => {
+    overlay.querySelectorAll(".actual-input").forEach((inp) => {
+      const bi = Number(inp.dataset.bi);
+      const f  = inp.dataset.f;
+      if (bi < blockActuals.length) blockActuals[bi][f] = inp.value;
+    });
+  };
+
+  const doSave = () => {
+    syncDom();
+    const toSave = blockActuals.map(({ i, name, schemePlanned, loadPlanned, restPlanned, schemeActual, loadActual, restActual, note, asPlanned }) =>
+      ({ i, name, schemePlanned, loadPlanned, restPlanned, schemeActual, loadActual, restActual, note, asPlanned })
+    );
+    saveSessionActuals(weekNum, sessionId, toSave);
+    close();
+    route();
+  };
+
+  const renderBlock = (ba) => {
+    const plannedParts = [ba.schemePlanned, ba.loadPlanned, ba.restPlanned ? `rest ${ba.restPlanned}` : ""].filter(Boolean);
+    const plannedSummary = plannedParts.join(" · ");
+    return `
+      <div class="actual-block${ba.expanded ? " actual-block-expanded" : ""}">
+        <div class="actual-block-header">
+          <div class="actual-block-info">
+            <div class="actual-block-name">${escapeHtml(ba.name)}</div>
+            ${plannedSummary ? `<div class="actual-block-planned">${escapeHtml(plannedSummary)}</div>` : ""}
+          </div>
+          <button class="actual-toggle${ba.asPlanned ? " actual-toggle-ok" : " actual-toggle-edit"}" data-act-toggle="${ba.i}">
+            ${ba.asPlanned ? "✓ Done" : "✏️ Edited"}
+          </button>
+        </div>
+        ${ba.expanded ? `
+        <div class="actual-block-fields">
+          ${ba.schemePlanned ? `<div class="actual-field-row">
+            <label class="actual-field-label">Scheme</label>
+            <input class="actual-input" data-bi="${ba.i}" data-f="schemeActual" type="text" value="${escapeHtml(ba.schemeActual)}" placeholder="${escapeHtml(ba.schemePlanned)}" />
+          </div>` : ""}
+          ${ba.loadPlanned ? `<div class="actual-field-row">
+            <label class="actual-field-label">Load / pace</label>
+            <input class="actual-input" data-bi="${ba.i}" data-f="loadActual" type="text" value="${escapeHtml(ba.loadActual)}" placeholder="${escapeHtml(ba.loadPlanned)}" />
+          </div>` : ""}
+          <div class="actual-field-row">
+            <label class="actual-field-label">Rest / break</label>
+            <input class="actual-input" data-bi="${ba.i}" data-f="restActual" type="text" value="${escapeHtml(ba.restActual)}" placeholder="${ba.restPlanned || "none"}" />
+          </div>
+          <div class="actual-field-row">
+            <label class="actual-field-label">Note</label>
+            <input class="actual-input" data-bi="${ba.i}" data-f="note" type="text" value="${escapeHtml(ba.note)}" placeholder="e.g. felt strong, cut short…" />
+          </div>
+        </div>` : ""}
+      </div>`;
+  };
+
+  const renderSheet = () => {
+    const editedCount = blockActuals.filter((ba) => !ba.asPlanned).length;
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="act-skip">Skip</button>
+          <span class="fuel-edit-title">Session actuals</span>
+          <button class="fuel-edit-save" id="act-save">Save</button>
+        </div>
+        <div class="fuel-edit-scroll">
+          <div class="actual-intro">Confirm or adjust what you actually did. Tap a block to edit it.</div>
+          ${blockActuals.map(renderBlock).join("")}
+          ${editedCount > 0 ? `<div class="actual-summary-note">${editedCount} block${editedCount > 1 ? "s" : ""} adjusted vs plan</div>` : ""}
+        </div>
+      </div>`;
+    bindSheet();
+  };
+
+  const bindSheet = () => {
+    overlay.querySelector("#act-skip")?.addEventListener("click", close);
+    overlay.querySelector("#act-save")?.addEventListener("click", doSave);
+
+    overlay.querySelectorAll("[data-act-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        syncDom();
+        const bi = Number(btn.dataset.actToggle);
+        const ba = blockActuals[bi];
+        if (ba.asPlanned) {
+          // Switch to edit mode
+          ba.asPlanned = false;
+          ba.expanded  = true;
+        } else {
+          // Revert to as-planned — reset values
+          ba.asPlanned     = true;
+          ba.expanded      = false;
+          ba.schemeActual  = ba.schemePlanned;
+          ba.loadActual    = ba.loadPlanned;
+          ba.restActual    = ba.restPlanned;
+          ba.note          = "";
+        }
+        renderSheet();
+      });
+    });
+
+    // Tapping the header row of a non-expanded block also opens it
+    overlay.querySelectorAll(".actual-block-header").forEach((hdr) => {
+      hdr.addEventListener("click", (e) => {
+        if (e.target.closest("[data-act-toggle]")) return; // handled above
+        syncDom();
+        const blockEl = hdr.closest(".actual-block");
+        const toggleBtn = blockEl && blockEl.querySelector("[data-act-toggle]");
+        if (!toggleBtn) return;
+        const bi = Number(toggleBtn.dataset.actToggle);
+        const ba = blockActuals[bi];
+        if (ba.asPlanned) {
+          ba.asPlanned = false;
+          ba.expanded  = true;
+          renderSheet();
+        }
+      });
+    });
+  };
+
+  renderSheet();
 }
 
 /* ---------- RPE prompt ---------- */
@@ -3887,9 +4135,16 @@ function showRpePrompt(weekNum, sessionId) {
     setTimeout(() => sheet.remove(), 200);
   }
 
+  const maybeShowActuals = () => {
+    // Only auto-open actuals sheet the first time (no existing actuals yet)
+    if (!getSessionActuals(weekNum, sessionId)) {
+      setTimeout(() => showSessionActualsSheet(weekNum, sessionId), 320);
+    }
+  };
+
   sheet.addEventListener("click", (e) => {
     if (e.target === sheet) { close(); return; }
-    if (e.target.closest("[data-cancel]")) { close(); return; }
+    if (e.target.closest("[data-cancel]")) { close(); maybeShowActuals(); return; }
     const rpeBtn = e.target.closest("[data-rpe]");
     if (rpeBtn) {
       const rpe = Number(rpeBtn.dataset.rpe);
@@ -3899,6 +4154,7 @@ function showRpePrompt(weekNum, sessionId) {
       p.sessions[key].rpe = rpe;
       saveJSON(PROGRESS_KEY, p);
       close();
+      maybeShowActuals();
     }
   });
 }
@@ -4349,6 +4605,14 @@ function attachSessionHandlers(weekNum) {
         btn.dataset.name,
         btn.dataset.kg ? Number(btn.dataset.kg) : null
       );
+    });
+  });
+
+  // Log / edit actuals
+  document.querySelectorAll("[data-action='log-actuals'], [data-action='edit-actuals']").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showSessionActualsSheet(Number(btn.dataset.week), btn.dataset.sid);
     });
   });
 
