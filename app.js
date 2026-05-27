@@ -465,6 +465,23 @@ async function loadJSZip() {
   });
 }
 
+/* Compress a base64 image to a small thumbnail data-URL (for meal storage + retry preview) */
+function compressToThumb(b64, mime, maxPx = 220) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = () => resolve(null);
+    img.src = `data:${mime};base64,${b64}`;
+  });
+}
+
 function parseCSVRows(text) {
   const lines = text.trim().split("\n").filter((l) => l.trim());
   if (lines.length < 2) return [];
@@ -973,6 +990,7 @@ function toggleBlockDone(weekNum, sessionId, blockIdx) {
 /* ---------- Plan loading ---------- */
 
 let PLAN = null;
+let _pendingPhoto    = null; // { b64, mime, targetDateStr, thumb } — kept while retry is possible
 let viewingWeekNum   = null; // week shown in train nav
 let selectedDayOverride = null; // day pill selection (null = smart default)
 let dayTab = "overview"; // "overview" | "training" | "nutrition" | "fitness"
@@ -1436,6 +1454,7 @@ async function renderMain(app) {
       ? `<div class="empty-state"><h3>Nothing logged</h3><p>Tap + Log meal to add a meal${isSelToday ? " today" : " for this day"}.</p></div>`
       : meals.map((meal) => `
           <div class="meal-card">
+            ${meal.photo ? `<img class="meal-card-thumb" src="${meal.photo}" alt="meal photo" loading="lazy">` : ""}
             <div class="meal-card-header">
               <div>
                 <div class="meal-card-label">${escapeHtml(MEAL_LABELS[meal.label] || meal.label)}</div>
@@ -2465,6 +2484,68 @@ function showGeminiError(msg) {
   setTimeout(dismiss, 8000);
 }
 
+/* ---------- Photo retry sheet ---------- */
+
+function showPhotoRetrySheet(errMsg) {
+  if (!_pendingPhoto) { showGeminiError(errMsg); return; }
+  const { b64, mime, targetDateStr, thumb } = _pendingPhoto;
+
+  const isQuota = /quota|limit|billing|rate/i.test(errMsg || "");
+  const friendly = isQuota
+    ? "Daily Gemini quota reached. Try again after midnight Pacific time, or enter the meal manually."
+    : (errMsg || "Gemini API unavailable — check your connection or API key.");
+
+  const overlay = document.createElement("div");
+  overlay.className = "photo-retry-overlay";
+  overlay.innerHTML = `
+    <div class="photo-retry-sheet" role="dialog" aria-modal="true">
+      ${thumb ? `<img class="photo-retry-thumb" src="${thumb}" alt="Captured meal photo">` : `<div class="photo-retry-icon">📷</div>`}
+      <div class="photo-retry-title">Analysis failed</div>
+      <div class="photo-retry-msg">${escapeHtml(friendly)}</div>
+      <div class="photo-retry-actions">
+        ${isQuota ? "" : `<button class="photo-retry-btn photo-retry-primary" id="prs-retry">↺ Retry analysis</button>`}
+        <button class="photo-retry-btn photo-retry-secondary" id="prs-manual">✏️ Enter manually</button>
+        <button class="photo-retry-btn photo-retry-cancel" id="prs-cancel">Discard photo</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  const close = () => {
+    overlay.classList.remove("open");
+    setTimeout(() => overlay.remove(), 260);
+  };
+
+  overlay.querySelector("#prs-retry")?.addEventListener("click", async () => {
+    close();
+    const loader = document.createElement("div");
+    loader.className = "fuel-loader";
+    loader.innerHTML = `<div class="fuel-loader-inner">${thumb ? `<img class="fuel-loader-thumb" src="${thumb}" alt="">` : ""}<div class="fuel-spinner"></div><div class="fuel-loader-text">Retrying…</div><div class="fuel-loader-sub">Sending photo to Gemini again</div></div>`;
+    document.body.appendChild(loader);
+    try {
+      const result = await analyzeFood(b64, mime);
+      loader.remove();
+      _pendingPhoto = null;
+      showMealEditSheet(result.items || [], result.notes || "", "photo", targetDateStr, null, thumb);
+    } catch (err2) {
+      loader.remove();
+      showPhotoRetrySheet(err2.message); // keep showing retry sheet
+    }
+  });
+
+  overlay.querySelector("#prs-manual").addEventListener("click", () => {
+    close();
+    _pendingPhoto = null;
+    // Open edit sheet pre-loaded with photo thumb (items empty — user fills manually)
+    showMealEditSheet([], "", "photo", targetDateStr, null, thumb);
+  });
+
+  overlay.querySelector("#prs-cancel").addEventListener("click", () => {
+    close();
+    _pendingPhoto = null;
+  });
+}
+
 /* ---------- Log meal sheet (camera / library / manual) ---------- */
 
 function showLogMealSheet(targetDateStr) {
@@ -2501,15 +2582,26 @@ function showLogMealSheet(targetDateStr) {
 
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const b64 = ev.target.result.split(",")[1];
+      const b64  = ev.target.result.split(",")[1];
       const mime = file.type || "image/jpeg";
+      // Compress immediately → thumbnail stays in memory for retry UI and gets saved with the meal
+      const thumb = await compressToThumb(b64, mime);
+      _pendingPhoto = { b64, mime, targetDateStr, thumb };
+      // Show thumbnail in loader while waiting
+      if (thumb) {
+        const thumbEl = document.createElement("img");
+        thumbEl.src = thumb;
+        thumbEl.className = "fuel-loader-thumb";
+        loader.querySelector(".fuel-loader-inner").prepend(thumbEl);
+      }
       try {
         const result = await analyzeFood(b64, mime);
         loader.remove();
-        showMealEditSheet(result.items || [], result.notes || "", "photo", targetDateStr);
+        _pendingPhoto = null;
+        showMealEditSheet(result.items || [], result.notes || "", "photo", targetDateStr, null, thumb);
       } catch (err) {
         loader.remove();
-        showGeminiError(err.message);
+        showPhotoRetrySheet(err.message);
       }
     };
     reader.readAsDataURL(file);
@@ -2524,7 +2616,7 @@ function showLogMealSheet(targetDateStr) {
 
 /* ---------- Meal edit / confirm sheet ---------- */
 
-function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal = null) {
+function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal = null, photoThumb = null) {
   // auto:true means "estimate this item via Gemini" — not yet calculated
   let items = initItems.map((it) => ({ name: it.name || "", qty: it.qty || "", kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0, auto: false }));
   const LABELS = ["breakfast", "lunch", "dinner", "snack"];
@@ -2682,8 +2774,10 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
         time: editMeal ? editMeal.time : `${String(now2.getHours()).padStart(2, "0")}:${String(now2.getMinutes()).padStart(2, "0")}`,
         items: valid,
         total: { kcal: Math.round(tot.kcal), p: Math.round(tot.p * 10) / 10, c: Math.round(tot.c * 10) / 10, f: Math.round(tot.f * 10) / 10 },
-        source: source || "manual"
+        source: source || "manual",
+        photo: photoThumb || (editMeal && editMeal.photo) || null,
       }, targetDateStr);
+      _pendingPhoto = null; // photo safely stored — clear pending
       close();
       const rn = getRoute().name;
       if (rn === "fuel" || rn === "today") route();

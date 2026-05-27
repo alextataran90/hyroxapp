@@ -3783,3 +3783,131 @@ textarea.form-input {
 .meal-card-edit:active {
   color: var(--accent);
 }
+
+/* ============================================================
+   Meal photo thumbnail (stored with each photo-analysed meal)
+   ============================================================ */
+
+.meal-card-thumb {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 12px 12px 0 0; /* top corners, flush with card */
+  background: var(--surface-2);
+}
+
+/* Thumbnail shown in loading spinner while API is running */
+.fuel-loader-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  opacity: 0.85;
+}
+
+/* ============================================================
+   Photo retry sheet  (shown when Gemini API fails)
+   ============================================================ */
+
+.photo-retry-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  display: flex;
+  align-items: flex-end;
+  z-index: 1200;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.photo-retry-overlay.open {
+  opacity: 1;
+}
+
+.photo-retry-sheet {
+  background: var(--surface-1);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  overflow: hidden;
+  padding-bottom: calc(var(--safe-bottom, 0px) + 12px);
+  transform: translateY(100%);
+  transition: transform 0.26s cubic-bezier(0.32,0.72,0,1);
+}
+
+.photo-retry-overlay.open .photo-retry-sheet {
+  transform: translateY(0);
+}
+
+.photo-retry-thumb {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.photo-retry-icon {
+  font-size: 40px;
+  text-align: center;
+  padding: 24px 0 8px;
+}
+
+.photo-retry-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+  padding: 16px 20px 6px;
+  color: var(--text-1);
+}
+
+.photo-retry-msg {
+  font-size: 14px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 0 24px 20px;
+  line-height: 1.5;
+}
+
+.photo-retry-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+
+.photo-retry-btn {
+  width: 100%;
+  padding: 15px;
+  border-radius: 14px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+
+.photo-retry-btn:active { opacity: 0.65; }
+
+.photo-retry-primary {
+  background: var(--accent);
+  color: #000;
+}
+
+.photo-retry-secondary {
+  background: rgba(255,149,0,0.12);
+  color: var(--accent);
+}
+
+.photo-retry-cancel {
+  background: transparent;
+  color: var(--text-3);
+  font-size: 14px;
+}
