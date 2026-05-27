@@ -1170,7 +1170,24 @@ function navigate(path) {
 
 window.addEventListener("hashchange", route);
 
+// Guard: only one route() execution at a time. If a hashchange fires while a
+// previous route() is still awaiting (e.g. fetching plan.json), the new call
+// is deferred until the current one finishes rather than racing it.
+let _routeRunning = false;
+let _routePending = false;
+
 async function route() {
+  if (_routeRunning) { _routePending = true; return; }
+  _routeRunning = true;
+  try {
+    await _doRoute();
+  } finally {
+    _routeRunning = false;
+    if (_routePending) { _routePending = false; route(); }
+  }
+}
+
+async function _doRoute() {
   const r = getRoute();
   const fn = ROUTES[r.name] || renderMain;
   document.querySelectorAll(".tab").forEach((el) => {
@@ -4880,6 +4897,12 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
   });
+
+  // When the SW sends NEW_VERSION (a new SW just activated and claimed this client),
+  // show the update banner so the user can reload at their convenience.
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data === "NEW_VERSION") showUpdateBanner();
+  });
 }
 
 /* ---------- Config file seed ---------- */
@@ -4898,5 +4921,11 @@ if ("serviceWorker" in navigator) {
 
 /* ---------- Boot ---------- */
 
-if (!location.hash) location.hash = "#/today";
+// Use replaceState (not location.hash=) so we don't fire a hashchange event here.
+// Firing hashchange would call route() a second time in parallel with the explicit
+// call below — two concurrent route() invocations race and the second one blows
+// away the first's event bindings, leaving the UI unresponsive.
+if (!location.hash || location.hash === "#") {
+  history.replaceState(null, "", "#/today");
+}
 route();

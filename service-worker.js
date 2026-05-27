@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v34-actuals";
+const APP_VERSION = "2026-05-27-v35-boot-fix";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
@@ -37,12 +37,14 @@ self.addEventListener("activate", (event) => {
       await Promise.all(oldCaches.map((k) => caches.delete(k)));
       await self.clients.claim();
 
-      // If we just cleaned up an old cache, force any open tab to reload so it
-      // picks up the new HTML/CSS/JS instead of the stale cached copies.
+      // Tell open tabs a new version is ready — they show the update banner
+      // and let the user choose when to reload. We do NOT call c.navigate()
+      // here because that forces a reload mid-load and can leave the page in
+      // an unresponsive state (event bindings from the first load get wiped).
       if (oldCaches.length > 0) {
         const clients = await self.clients.matchAll({ type: "window" });
         for (const c of clients) {
-          try { await c.navigate(c.url); } catch (e) { /* no-op */ }
+          try { c.postMessage("NEW_VERSION"); } catch (e) { /* no-op */ }
         }
       }
     })()
