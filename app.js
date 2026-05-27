@@ -13,6 +13,7 @@ const READINESS_KEY = "hyrox.readiness";
 const PR_KEY = "hyrox.prs";
 const NUTRITION_KEY = "hyrox.nutrition";
 const FITNESS_KEY = "hyrox.fitness";
+const DAILY_BURN_KEY = "hyrox.dailyBurn";
 const FOOD_KEY = "hyrox.foods";
 const ACTUALS_KEY = "hyrox.actuals";
 const PLAN_URL = "plan.json";
@@ -527,6 +528,20 @@ function getAllWorkouts() {
   return all.sort((a, b) => (b.startTime || b.date).localeCompare(a.startTime || a.date));
 }
 
+/* ---------- Daily burn (Move ring) ---------- */
+
+function getDailyBurnLog() {
+  try { return JSON.parse(localStorage.getItem(DAILY_BURN_KEY) || "{}"); } catch { return {}; }
+}
+function getDailyBurn(dateStr) {
+  return (getDailyBurnLog()[dateStr] || {}).moveKcal || 0;
+}
+function saveDailyBurn(dateStr, moveKcal) {
+  const log = getDailyBurnLog();
+  log[dateStr] = { moveKcal, updatedAt: new Date().toISOString() };
+  localStorage.setItem(DAILY_BURN_KEY, JSON.stringify(log));
+}
+
 /* ---------- HR zones ---------- */
 
 const HR_ZONES = [
@@ -708,7 +723,32 @@ async function parseHealthAutoExportZIP(file) {
     });
   }
 
-  return results;
+  // ── Active Energy (Move ring) daily totals ────────────────────────
+  // Health Auto Export names this file "Active Energy (kJ)-*.csv"
+  // It may contain one row per sample interval → sum per calendar day.
+  const dailyBurnKj = {};
+  const aeName = names.find((n) => /Active Energy/i.test(n) && n.endsWith(".csv") && !/Workout/i.test(n));
+  if (aeName) {
+    const aeText = await zip.files[aeName].async("string");
+    const aeRows = parseCSVRows(aeText);
+    for (const row of aeRows) {
+      // Date column may be "Date/Time", "Date", "Start"
+      const rawDate = (row["Date/Time"] || row["Date"] || row["Start"] || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) continue;
+      // Value column may vary — try common names
+      const kj = parseFloat(
+        row["Active Energy (kJ)"] || row["Total (kJ)"] || row["Value (kJ)"] || row["kJ"] || "0"
+      );
+      if (kj > 0) dailyBurnKj[rawDate] = (dailyBurnKj[rawDate] || 0) + kj;
+    }
+  }
+  // Convert kJ → kcal
+  const dailyBurn = {};
+  for (const [date, kj] of Object.entries(dailyBurnKj)) {
+    dailyBurn[date] = Math.round(kj / 4.184);
+  }
+
+  return { workouts: results, dailyBurn };
 }
 
 function renderWorkoutCard(w, showDate = false) {
@@ -1432,6 +1472,9 @@ async function renderMain(app) {
   const dayTotals   = getDayTotals(dayMeals);
   const dayWorkouts = getDayWorkouts(selDateStr);
   const tgt         = settings.nutrition;
+  const selDayLabel = isSelToday
+    ? "Today"
+    : `${selDay}, ${selDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
 
   /* ---- Tab content ---- */
   let tabContent = "";
@@ -1448,9 +1491,12 @@ async function renderMain(app) {
     const trainDone = selSession && isSessionDone(wn, selSession.id);
     const fitMin    = dayWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
     const fitKcal   = dayWorkouts.reduce((s, w) => s + (w.kcal || 0), 0);
-    const selDayLabel = isSelToday
-      ? "Today"
-      : `${selDay}, ${selDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+    const moveKcal  = getDailyBurn(selDateStr);
+
+    // Energy balance: eaten minus total Move ring calories
+    const netKcal   = kcal - moveKcal;
+    const hasBurn   = moveKcal > 0;
+    const netLabel  = netKcal < 0 ? "surplus" : "net eaten";
 
     tabContent = `
       <div class="overview-date-label">${escapeHtml(selDayLabel)}</div>
@@ -1468,13 +1514,30 @@ async function renderMain(app) {
           <div class="osc-value">${kcal > 0 ? kcal.toLocaleString() + " kcal" : "–"}</div>
           <div class="osc-meta">${kcal > 0 ? kcalPct + "% of target" : "Nothing logged"}</div>
         </button>
-        <button class="osc${dayWorkouts.length === 0 ? " osc-dim" : ""}" data-jump="fitness">
+        <button class="osc${dayWorkouts.length === 0 && !hasBurn ? " osc-dim" : ""}" data-jump="fitness">
           <div class="osc-icon">⌚</div>
           <div class="osc-label">Fitness</div>
-          <div class="osc-value">${fitMin > 0 ? fitMin + " min" : "–"}</div>
-          <div class="osc-meta">${fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? dayWorkouts[0].label : "No workout"}</div>
+          <div class="osc-value">${fitMin > 0 ? fitMin + " min" : moveKcal > 0 ? moveKcal.toLocaleString() + " kcal" : "–"}</div>
+          <div class="osc-meta">${moveKcal > 0 ? "🔥 " + moveKcal.toLocaleString() + " move kcal" : fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? dayWorkouts[0].label : "No workout"}</div>
         </button>
       </div>
+      ${hasBurn && kcal > 0 ? `
+      <div class="energy-balance-row">
+        <div class="eb-item">
+          <div class="eb-val">${kcal.toLocaleString()}</div>
+          <div class="eb-lbl">eaten</div>
+        </div>
+        <div class="eb-sep">−</div>
+        <div class="eb-item">
+          <div class="eb-val">${moveKcal.toLocaleString()}</div>
+          <div class="eb-lbl">move</div>
+        </div>
+        <div class="eb-sep">=</div>
+        <div class="eb-item${netKcal < 0 ? " eb-surplus" : ""}">
+          <div class="eb-val">${Math.abs(netKcal).toLocaleString()}</div>
+          <div class="eb-lbl">${netLabel}</div>
+        </div>
+      </div>` : ""}
       ${kcal > 0 || dayTotals.p > 0 ? `
       <div class="section-header">Macros</div>
       <div class="overview-macro-grid">
@@ -1706,6 +1769,7 @@ async function renderMain(app) {
 
   } else if (dayTab === "fitness") {
     const allWorkouts = getDayWorkouts(selDateStr);
+    const dayBurnKcal = getDailyBurn(selDateStr);
     const importBarHtml = `
       <div class="fi-import-bar">
         <span class="fi-import-bar-title">Workouts</span>
@@ -1720,8 +1784,17 @@ async function renderMain(app) {
       </div>
       <div id="fi-import-status" class="fi-import-status" style="display:none"></div>`;
 
+    const burnChipHtml = dayBurnKcal > 0 ? `
+      <div class="fi-daily-burn">
+        <span class="fi-db-icon">🔥</span>
+        <div class="fi-db-info">
+          <div class="fi-db-val">${dayBurnKcal.toLocaleString()} kcal</div>
+          <div class="fi-db-lbl">Total Move ring · ${selDayLabel}</div>
+        </div>
+      </div>` : "";
+
     if (allWorkouts.length > 0) {
-      tabContent = importBarHtml + allWorkouts.map((w) => renderWorkoutCard(w, false)).join("");
+      tabContent = importBarHtml + burnChipHtml + allWorkouts.map((w) => renderWorkoutCard(w, false)).join("");
     } else {
       tabContent = importBarHtml + `
         <div class="hero">
@@ -1824,14 +1897,21 @@ async function renderMain(app) {
         statusEl.className = "fi-import-status fi-import-loading";
         statusEl.textContent = "Parsing ZIP…";
         try {
-          const workouts = await parseHealthAutoExportZIP(file);
-          if (workouts.length === 0) {
+          const { workouts, dailyBurn } = await parseHealthAutoExportZIP(file);
+          workouts.forEach((w) => saveFitnessWorkout(w, w.date));
+          const burnDates = Object.keys(dailyBurn || {});
+          burnDates.forEach((d) => saveDailyBurn(d, dailyBurn[d]));
+
+          const parts = [];
+          if (workouts.length > 0) parts.push(`${workouts.length} workout${workouts.length !== 1 ? "s" : ""}`);
+          if (burnDates.length > 0) parts.push(`Move kcal for ${burnDates.length} day${burnDates.length !== 1 ? "s" : ""}`);
+
+          if (parts.length === 0) {
             statusEl.className = "fi-import-status fi-import-warn";
-            statusEl.textContent = "No new workouts found — already imported or export was empty.";
+            statusEl.textContent = "No new data found — already imported or export was empty.";
           } else {
-            workouts.forEach((w) => saveFitnessWorkout(w, w.date));
             statusEl.className = "fi-import-status fi-import-ok";
-            statusEl.textContent = `Imported ${workouts.length} workout${workouts.length !== 1 ? "s" : ""} ✓`;
+            statusEl.textContent = `Imported: ${parts.join(" · ")} ✓`;
             setTimeout(() => renderMain(app), 1000);
           }
         } catch (err) {

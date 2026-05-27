@@ -4383,3 +4383,97 @@ textarea.form-input {
   letter-spacing: 0.05em;
   flex-shrink: 0;
 }
+
+/* ============================================================
+   Energy balance strip — Today overview (v37)
+   ============================================================ */
+
+.energy-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--surface-1);
+  border-radius: 14px;
+  padding: 14px 20px;
+  margin-top: 10px;
+}
+
+.eb-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+
+.eb-val {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.eb-lbl {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.eb-surplus .eb-val {
+  color: var(--success);
+}
+
+.eb-surplus .eb-lbl {
+  color: var(--success);
+}
+
+.eb-sep {
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--text-4);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Daily burn chip — Fitness tab (v37)
+   ============================================================ */
+
+.fi-daily-burn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-1);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.fi-db-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.fi-db-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.fi-db-val {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.fi-db-lbl {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 1px;
+  letter-spacing: -0.01em;
+}
