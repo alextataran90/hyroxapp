@@ -4477,3 +4477,55 @@ textarea.form-input {
   margin-top: 1px;
   letter-spacing: -0.01em;
 }
+
+/* ============================================================
+   7-day avg delta strip — Today overview (v37)
+   ============================================================ */
+
+.avg-delta-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface-1);
+  border-radius: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.ads-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ads-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-4);
+}
+
+.ads-val {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-2);
+}
+
+.ads-delta.ads-pos {
+  color: var(--danger);
+}
+
+.ads-delta.ads-neg {
+  color: var(--success);
+}
+
+.ads-sep {
+  color: var(--text-4);
+  font-size: 14px;
+  flex-shrink: 0;
+  padding: 0 2px;
+  align-self: center;
+}

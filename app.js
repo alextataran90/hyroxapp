@@ -1498,6 +1498,21 @@ async function renderMain(app) {
     const hasBurn   = moveKcal > 0;
     const netLabel  = netKcal < 0 ? "surplus" : "net eaten";
 
+    // 7-day rolling average (7 days before selDate, excluding today)
+    let avgKcalSum = 0, avgBurnSum = 0, avgDaysCnt = 0, avgBurnDays = 0;
+    for (let i = 1; i <= 7; i++) {
+      const d  = new Date(selDate.getTime() - i * 86400000);
+      const ds = ymd(d);
+      const dm = getDayMeals(ds);
+      if (dm.length > 0) { avgKcalSum += getDayTotals(dm).kcal; avgDaysCnt++; }
+      const db = getDailyBurn(ds);
+      if (db > 0) { avgBurnSum += db; avgBurnDays++; }
+    }
+    const has7dAvg   = avgDaysCnt >= 2;
+    const avg7Kcal   = has7dAvg ? Math.round(avgKcalSum / avgDaysCnt) : 0;
+    const kcalVsAvg  = has7dAvg && kcal > 0 ? Math.round(kcal - avg7Kcal) : null;
+    const avg7Burn   = avgBurnDays >= 2 ? Math.round(avgBurnSum / avgBurnDays) : 0;
+
     tabContent = `
       <div class="overview-date-label">${escapeHtml(selDayLabel)}</div>
       <div class="overview-cards">
@@ -1537,6 +1552,23 @@ async function renderMain(app) {
           <div class="eb-val">${Math.abs(netKcal).toLocaleString()}</div>
           <div class="eb-lbl">${netLabel}</div>
         </div>
+      </div>` : ""}
+      ${has7dAvg || avg7Burn > 0 ? `
+      <div class="avg-delta-strip">
+        ${has7dAvg ? `<div class="ads-item">
+          <span class="ads-lbl">7d avg eaten</span>
+          <span class="ads-val">${avg7Kcal.toLocaleString()} kcal</span>
+        </div>` : ""}
+        ${kcalVsAvg !== null ? `<div class="ads-sep">·</div>
+        <div class="ads-item">
+          <span class="ads-lbl">today</span>
+          <span class="ads-val ads-delta${kcalVsAvg > 0 ? " ads-pos" : kcalVsAvg < 0 ? " ads-neg" : ""}">${kcalVsAvg > 0 ? "+" : ""}${kcalVsAvg.toLocaleString()} vs avg</span>
+        </div>` : ""}
+        ${avg7Burn > 0 ? `<div class="ads-sep">·</div>
+        <div class="ads-item">
+          <span class="ads-lbl">avg burn</span>
+          <span class="ads-val">${avg7Burn.toLocaleString()} kcal</span>
+        </div>` : ""}
       </div>` : ""}
       ${kcal > 0 || dayTotals.p > 0 ? `
       <div class="section-header">Macros</div>
