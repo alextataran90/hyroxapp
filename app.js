@@ -723,25 +723,32 @@ async function parseHealthAutoExportZIP(file) {
     });
   }
 
-  // ── Active Energy (Move ring) daily totals ────────────────────────
-  // Health Auto Export names this file "Active Energy (kJ)-*.csv"
-  // It may contain one row per sample interval → sum per calendar day.
+  // ── Total energy burned = Active + Resting, daily totals ──────────
+  // Health Auto Export writes "Active Energy (kJ)-*.csv" and
+  // "Resting Energy (kJ)-*.csv" (aka Basal / BMR). Sum both per day so
+  // the burn figure matches Apple's true total expenditure (~3200), not
+  // just movement (~1300).
   const dailyBurnKj = {};
-  const aeName = names.find((n) => /Active Energy/i.test(n) && n.endsWith(".csv") && !/Workout/i.test(n));
-  if (aeName) {
-    const aeText = await zip.files[aeName].async("string");
-    const aeRows = parseCSVRows(aeText);
-    for (const row of aeRows) {
-      // Date column may be "Date/Time", "Date", "Start"
-      const rawDate = (row["Date/Time"] || row["Date"] || row["Start"] || "").slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) continue;
-      // Value column may vary — try common names
-      const kj = parseFloat(
-        row["Active Energy (kJ)"] || row["Total (kJ)"] || row["Value (kJ)"] || row["kJ"] || "0"
-      );
-      if (kj > 0) dailyBurnKj[rawDate] = (dailyBurnKj[rawDate] || 0) + kj;
-    }
-  }
+  const sumEnergyFile = (nameRegex) => {
+    const fName = names.find((n) => nameRegex.test(n) && n.endsWith(".csv") && !/Workout/i.test(n));
+    if (!fName) return false;
+    return zip.files[fName].async("string").then((text) => {
+      for (const row of parseCSVRows(text)) {
+        const rawDate = (row["Date/Time"] || row["Date"] || row["Start"] || "").slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) continue;
+        const kj = parseFloat(
+          row["Active Energy (kJ)"] || row["Resting Energy (kJ)"] ||
+          row["Basal Energy (kJ)"]  || row["Total (kJ)"] ||
+          row["Value (kJ)"] || row["kJ"] || "0"
+        );
+        if (kj > 0) dailyBurnKj[rawDate] = (dailyBurnKj[rawDate] || 0) + kj;
+      }
+      return true;
+    });
+  };
+  await sumEnergyFile(/Active Energy/i);
+  await sumEnergyFile(/Resting Energy|Basal Energy/i);
+
   // Convert kJ → kcal
   const dailyBurn = {};
   for (const [date, kj] of Object.entries(dailyBurnKj)) {
@@ -1279,7 +1286,7 @@ async function _doRoute() {
       await renderMain(app2);
     } catch (e) { /* best-effort background render */ }
     showToast(kcal > 0
-      ? `🔥 ${kcal.toLocaleString()} move kcal synced`
+      ? `🔥 ${kcal.toLocaleString()} kcal burned synced`
       : "No burn data received");
     return;
   }
@@ -1574,7 +1581,7 @@ async function renderMain(app) {
           <div class="osc-icon">⌚</div>
           <div class="osc-label">Fitness</div>
           <div class="osc-value">${fitMin > 0 ? fitMin + " min" : moveKcal > 0 ? moveKcal.toLocaleString() + " kcal" : "–"}</div>
-          <div class="osc-meta">${moveKcal > 0 ? "🔥 " + moveKcal.toLocaleString() + " move kcal" : fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? dayWorkouts[0].label : "No workout"}</div>
+          <div class="osc-meta">${moveKcal > 0 ? "🔥 " + moveKcal.toLocaleString() + " kcal burned" : fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? dayWorkouts[0].label : "No workout"}</div>
         </button>
       </div>
       ${hasBurn && kcal > 0 ? `
@@ -1586,7 +1593,7 @@ async function renderMain(app) {
         <div class="eb-sep">−</div>
         <div class="eb-item">
           <div class="eb-val">${moveKcal.toLocaleString()}</div>
-          <div class="eb-lbl">move</div>
+          <div class="eb-lbl">burned</div>
         </div>
         <div class="eb-sep">=</div>
         <div class="eb-item${netKcal < 0 ? " eb-surplus" : ""}">
@@ -1862,30 +1869,34 @@ async function renderMain(app) {
         <span class="fi-db-icon">🔥</span>
         <div class="fi-db-info">
           <div class="fi-db-val">${dayBurnKcal.toLocaleString()} kcal</div>
-          <div class="fi-db-lbl">Total Move ring · ${selDayLabel}</div>
+          <div class="fi-db-lbl">Total energy burned · ${selDayLabel}</div>
         </div>
       </div>` : "";
 
     // Base URL of the app (origin + path, no hash) so the Shortcut recipe is exact.
     const appBase = location.origin + location.pathname.replace(/\/[^/]*$/, "/");
-    const burnUrlExample = appBase + "#/burn-import/" + ymd(today()) + "/650";
+    const burnUrlExample = appBase + "#/burn-import/" + ymd(today()) + "/3200";
     const autoSyncHtml = `
       <details class="fi-autosync">
         <summary class="fi-autosync-summary">
-          <span>⚡️ Auto-sync Move kcal (Shortcut)</span>
+          <span>⚡️ Auto-sync total burn (Shortcut)</span>
           <span class="fi-autosync-chevron">›</span>
         </summary>
         <div class="fi-autosync-body">
-          <p class="fi-autosync-intro">Apple Health can't be read by a website or a server — only on your iPhone, while it's unlocked. This free Shortcut reads today's Move‑ring calories and opens this app to sync them. Run it on a schedule and your burn stays current with no manual export.</p>
+          <p class="fi-autosync-intro">Apple Health can't be read by a website or a server — only on your iPhone, while it's unlocked. This free Shortcut reads today's <strong>total</strong> calories burned — Active Energy (movement) <em>plus</em> Resting Energy (BMR) — and opens this app to sync them. Run it on a schedule and your burn stays current with no manual export.</p>
+          <div class="fi-autosync-callout">Apple has no single "total burned" value. The Shortcut adds the two energy types: e.g. Active 1,300 + Resting 1,900 = <strong>3,200 kcal</strong>.</div>
           <div class="section-header">Build the Shortcut</div>
           <div class="list">
             <div class="list-row"><div class="list-row-main"><div class="list-row-title">1. Shortcuts app → new shortcut</div><div class="list-row-sub">Name it "Sync Burn"</div></div></div>
-            <div class="list-row"><div class="list-row-main"><div class="list-row-title">2. Add "Find Health Samples"</div><div class="list-row-sub">Type = Active Energy · Filter Date is Today · no limit</div></div></div>
-            <div class="list-row"><div class="list-row-main"><div class="list-row-title">3. Add "Calculate Statistics"</div><div class="list-row-sub">Sum · of Active Energy samples → total kcal</div></div></div>
-            <div class="list-row"><div class="list-row-main"><div class="list-row-title">4. Add "Open URLs" with this text</div><div class="list-row-sub">Insert the Sum where 650 is below</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">2. Find Health Samples → Active Energy</div><div class="list-row-sub">Filter: Date is Today · no limit</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">3. Calculate Statistics → Sum</div><div class="list-row-sub">Of the Active samples. Rename this variable "Active"</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">4. Find Health Samples → Resting Energy</div><div class="list-row-sub">Filter: Date is Today · no limit</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">5. Calculate Statistics → Sum</div><div class="list-row-sub">Of the Resting samples. Rename this variable "Resting"</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">6. Calculate → Active + Resting</div><div class="list-row-sub">This is your total burned</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">7. Add "Open URLs" with this text</div><div class="list-row-sub">Insert the Calculation result where 3200 is</div></div></div>
           </div>
           <div class="fi-autosync-url">
-            <code id="fi-burn-url">${escapeHtml(appBase)}#/burn-import/<b>[Current Date, formatted yyyy-MM-dd]</b>/<b>[Sum kcal]</b></code>
+            <code id="fi-burn-url">${escapeHtml(appBase)}#/burn-import/<b>[Current Date, formatted yyyy-MM-dd]</b>/<b>[Active + Resting]</b></code>
             <button class="fi-autosync-copy" data-copy="${escapeHtml(burnUrlExample)}">Copy example</button>
           </div>
           <div class="section-header">Automate it</div>
@@ -1893,7 +1904,7 @@ async function renderMain(app) {
             <div class="list-row"><div class="list-row-main"><div class="list-row-title">Automation → Time of Day</div><div class="list-row-sub">e.g. every 2h, 8am–10pm · Run Immediately (no ask)</div></div></div>
             <div class="list-row"><div class="list-row-main"><div class="list-row-title">Or "When I open an app"</div><div class="list-row-sub">Syncs whenever you open this app — hands-free</div></div></div>
           </div>
-          <p class="fi-autosync-note">⚠️ Phone must be unlocked when it runs — Apple's rule, no workaround. The app opens briefly each sync; that's expected.</p>
+          <p class="fi-autosync-note">⚠️ Phone must be unlocked when it runs — Apple's rule, no workaround. The app opens briefly each sync; that's expected. Resting Energy accumulates through the day, so the total climbs even on rest days.</p>
         </div>
       </details>`;
 

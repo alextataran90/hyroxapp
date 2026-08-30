@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v39-burn-autosync";
+const APP_VERSION = "2026-05-27-v40-total-burn";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

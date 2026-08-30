@@ -4659,3 +4659,16 @@ textarea.form-input {
   background: rgba(255,149,0,0.08);
   border-radius: 10px;
 }
+
+.fi-autosync-callout {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+  margin: 8px 0 2px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  border-left: 3px solid var(--accent);
+}
+
+.fi-autosync-callout strong { color: var(--accent); }
