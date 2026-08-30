@@ -1189,6 +1189,22 @@ function showUpdateBanner() {
   b.hidden = false;
 }
 
+// Lightweight transient toast (used by silent Shortcut imports).
+function showToast(message) {
+  const existing = document.getElementById("app-toast");
+  if (existing) existing.remove();
+  const t = document.createElement("div");
+  t.id = "app-toast";
+  t.className = "app-toast";
+  t.textContent = message;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add("app-toast-show"));
+  setTimeout(() => {
+    t.classList.remove("app-toast-show");
+    setTimeout(() => t.remove(), 300);
+  }, 2200);
+}
+
 /* ---------- Router ---------- */
 
 const ROUTES = {
@@ -1242,6 +1258,31 @@ async function _doRoute() {
   }
   if (r.name === "session" && r.params[0]) viewingWeekNum = Number(r.params[0]);
   if (r.name === "week"    && r.params[0]) viewingWeekNum = Number(r.params[0]);
+
+  // Silent daily Move-ring import via Shortcut URL: #/burn-import/date/kcal
+  // Designed for a scheduled Shortcut — saves directly, no confirmation sheet,
+  // just a brief toast so a time automation can fire it repeatedly.
+  if (r.name === "burn-import") {
+    const [date, kcalStr] = r.params;
+    const ds   = /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date : ymd(today());
+    const kcal = Math.round(parseFloat(kcalStr || "0"));
+    history.replaceState(null, "", location.pathname + "#/today");
+    document.querySelectorAll(".tab").forEach((el) => {
+      el.classList.toggle("active", el.dataset.tab === "today");
+    });
+    if (kcal > 0) saveDailyBurn(ds, kcal);
+    const app2 = document.getElementById("app");
+    try {
+      if (!PLAN) await loadPlan();
+      renderTopBar();
+      app2.innerHTML = "";
+      await renderMain(app2);
+    } catch (e) { /* best-effort background render */ }
+    showToast(kcal > 0
+      ? `🔥 ${kcal.toLocaleString()} move kcal synced`
+      : "No burn data received");
+    return;
+  }
 
   // Apple Watch import via Shortcut URL: #/fitness-import/date/type/dur/kcal/hr/hrmax/dist
   if (r.name === "fitness-import") {
@@ -1825,10 +1866,41 @@ async function renderMain(app) {
         </div>
       </div>` : "";
 
+    // Base URL of the app (origin + path, no hash) so the Shortcut recipe is exact.
+    const appBase = location.origin + location.pathname.replace(/\/[^/]*$/, "/");
+    const burnUrlExample = appBase + "#/burn-import/" + ymd(today()) + "/650";
+    const autoSyncHtml = `
+      <details class="fi-autosync">
+        <summary class="fi-autosync-summary">
+          <span>⚡️ Auto-sync Move kcal (Shortcut)</span>
+          <span class="fi-autosync-chevron">›</span>
+        </summary>
+        <div class="fi-autosync-body">
+          <p class="fi-autosync-intro">Apple Health can't be read by a website or a server — only on your iPhone, while it's unlocked. This free Shortcut reads today's Move‑ring calories and opens this app to sync them. Run it on a schedule and your burn stays current with no manual export.</p>
+          <div class="section-header">Build the Shortcut</div>
+          <div class="list">
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">1. Shortcuts app → new shortcut</div><div class="list-row-sub">Name it "Sync Burn"</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">2. Add "Find Health Samples"</div><div class="list-row-sub">Type = Active Energy · Filter Date is Today · no limit</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">3. Add "Calculate Statistics"</div><div class="list-row-sub">Sum · of Active Energy samples → total kcal</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">4. Add "Open URLs" with this text</div><div class="list-row-sub">Insert the Sum where 650 is below</div></div></div>
+          </div>
+          <div class="fi-autosync-url">
+            <code id="fi-burn-url">${escapeHtml(appBase)}#/burn-import/<b>[Current Date, formatted yyyy-MM-dd]</b>/<b>[Sum kcal]</b></code>
+            <button class="fi-autosync-copy" data-copy="${escapeHtml(burnUrlExample)}">Copy example</button>
+          </div>
+          <div class="section-header">Automate it</div>
+          <div class="list">
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">Automation → Time of Day</div><div class="list-row-sub">e.g. every 2h, 8am–10pm · Run Immediately (no ask)</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">Or "When I open an app"</div><div class="list-row-sub">Syncs whenever you open this app — hands-free</div></div></div>
+          </div>
+          <p class="fi-autosync-note">⚠️ Phone must be unlocked when it runs — Apple's rule, no workaround. The app opens briefly each sync; that's expected.</p>
+        </div>
+      </details>`;
+
     if (allWorkouts.length > 0) {
-      tabContent = importBarHtml + burnChipHtml + allWorkouts.map((w) => renderWorkoutCard(w, false)).join("");
+      tabContent = importBarHtml + burnChipHtml + autoSyncHtml + allWorkouts.map((w) => renderWorkoutCard(w, false)).join("");
     } else {
-      tabContent = importBarHtml + `
+      tabContent = importBarHtml + burnChipHtml + autoSyncHtml + `
         <div class="hero">
           <div class="hero-eyebrow"><span>⌚</span><span>Apple Watch</span></div>
           <div class="hero-title">No workouts yet</div>
@@ -1918,6 +1990,16 @@ async function renderMain(app) {
           renderMain(app);
         }
       });
+    });
+    app.querySelector(".fi-autosync-copy")?.addEventListener("click", async (e) => {
+      const url = e.currentTarget.dataset.copy;
+      try {
+        await navigator.clipboard.writeText(url);
+        e.currentTarget.textContent = "Copied ✓";
+        setTimeout(() => { if (e.currentTarget) e.currentTarget.textContent = "Copy example"; }, 1500);
+      } catch {
+        showToast("Copy failed — long-press the URL");
+      }
     });
     const zipInput = document.getElementById("fi-zip-input");
     const statusEl = document.getElementById("fi-import-status");
