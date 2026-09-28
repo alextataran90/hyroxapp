@@ -1079,6 +1079,94 @@ function getCurrentPhase(plan, weekNum) {
   return plan.phases.find((p) => p.weeks.includes(weekNum));
 }
 
+/* ---------- Program completion / new block ---------- */
+
+// True when today is past the final week of the loaded plan.
+function isProgramComplete(settings) {
+  if (!PLAN) return false;
+  return getWeekIndex(settings) > PLAN.weeks.length;
+}
+
+// Recompute startDate so Week `PLAN.weeks.length` lands on the race week,
+// then persist the new race + start dates. Keeps all history by default.
+function startNewBlock(raceDateStr) {
+  const settings = getSettings();
+  const raceDate = parseDate(raceDateStr);
+  const raceMonday = startOfWeek(raceDate);
+  // Final week's Monday = race week's Monday; walk back (weeks-1) weeks for Week 1.
+  const startMonday = new Date(raceMonday.getTime() - (PLAN.weeks.length - 1) * 7 * 86400000);
+  settings.raceDate  = raceDateStr;
+  settings.startDate = ymd(startMonday);
+  saveJSON(SETTINGS_KEY, settings);
+  // Reset view so we land on the current (Week 1) view of the new block.
+  viewingWeekNum      = null;
+  selectedDayOverride = null;
+}
+
+function showNewBlockSheet() {
+  const settings = getSettings();
+  // Default suggested race date: 19 weeks (plan length) from the coming Monday.
+  const nextMon = new Date(startOfWeek(today()).getTime() + 7 * 86400000);
+  const suggested = new Date(nextMon.getTime() + (PLAN.weeks.length - 1) * 7 * 86400000);
+  const defaultRace = ymd(suggested);
+  const minRace = ymd(new Date(today().getTime() + 7 * 86400000));
+
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  const close = () => {
+    overlay.classList.remove("open");
+    setTimeout(() => overlay.remove(), 280);
+  };
+
+  overlay.innerHTML = `
+    <div class="fuel-edit-sheet">
+      <div class="fuel-edit-topbar">
+        <button class="fuel-edit-cancel" id="nb-cancel">Cancel</button>
+        <span class="fuel-edit-title">Start new block</span>
+        <button class="fuel-edit-save" id="nb-start">Start</button>
+      </div>
+      <div class="fuel-edit-scroll" style="padding:24px 20px">
+        <p class="nb-intro">Restarts the ${PLAN.weeks.length}-week plan from Week 1 this coming Monday. Your history, notes, PBs, nutrition and fitness logs are all kept.</p>
+        <div class="section-header">Next race date</div>
+        <div class="list">
+          <div class="form-row">
+            <label class="form-label">Race day</label>
+            <input class="form-input" type="date" id="nb-race" value="${defaultRace}" min="${minRace}" />
+          </div>
+        </div>
+        <p class="nb-note" id="nb-preview"></p>
+      </div>
+    </div>`;
+
+  const raceInput = overlay.querySelector("#nb-race");
+  const preview   = overlay.querySelector("#nb-preview");
+  const updatePreview = () => {
+    const rd = raceInput.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rd)) { preview.textContent = ""; return; }
+    const raceMonday = startOfWeek(parseDate(rd));
+    const startMonday = new Date(raceMonday.getTime() - (PLAN.weeks.length - 1) * 7 * 86400000);
+    const fmt = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    preview.textContent = `Week 1 starts ${fmt(startMonday)} · Race week ${fmt(raceMonday)}.`;
+  };
+  raceInput.addEventListener("change", updatePreview);
+  raceInput.addEventListener("input", updatePreview);
+  updatePreview();
+
+  overlay.querySelector("#nb-cancel").addEventListener("click", close);
+  overlay.querySelector("#nb-start").addEventListener("click", () => {
+    const rd = raceInput.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rd)) { showToast("Pick a valid race date"); return; }
+    startNewBlock(rd);
+    close();
+    navigate("today");
+    route();
+    showToast("🏁 New block started — Week 1");
+  });
+}
+
 /* ---------- Date helpers ---------- */
 
 function getDateForDayInWeek(weekNum, dayName, settings) {
@@ -1427,11 +1515,14 @@ function renderWeekStrip() {
 
 function renderTopBar() {
   const settings = getSettings();
-  const weekNum = getWeekIndex(settings);
+  const complete = isProgramComplete(settings);
+  const weekNum = Math.min(getWeekIndex(settings), PLAN.weeks.length);
   const week = PLAN.weeks.find((w) => w.number === weekNum);
   const phase = getCurrentPhase(PLAN, weekNum);
-  document.getElementById("phase-chip").textContent = phase ? phase.name : "—";
-  document.getElementById("week-chip").textContent = `Wk ${weekNum}/${PLAN.weeks.length}${week && week.test ? " · TEST" : ""}`;
+  document.getElementById("phase-chip").textContent = complete ? "Complete" : (phase ? phase.name : "—");
+  document.getElementById("week-chip").textContent = complete
+    ? `Done · ${PLAN.weeks.length}/${PLAN.weeks.length}`
+    : `Wk ${weekNum}/${PLAN.weeks.length}${week && week.test ? " · TEST" : ""}`;
 
   const race = parseDate(settings.raceDate);
   const days = daysBetween(today(), race);
@@ -1442,6 +1533,27 @@ function renderTopBar() {
 
 async function renderMain(app) {
   const settings  = getSettings();
+
+  // Program finished: today is past the last week of the plan. Offer a restart
+  // instead of dropping into a dead "no plan" state.
+  if (isProgramComplete(settings)) {
+    const raceDone = daysBetween(today(), parseDate(settings.raceDate)) < 0;
+    app.innerHTML = `
+      <div class="program-complete">
+        <div class="pc-emoji">🏁</div>
+        <h2 class="pc-title">Program complete</h2>
+        <p class="pc-sub">${raceDone
+          ? "You've finished the full block and race day has passed. Time to line up the next one."
+          : "You've reached the end of the training block."}</p>
+        <button class="btn" id="pc-new-block">Start a new block</button>
+        <button class="btn btn-secondary" id="pc-review" style="margin-top:10px">Review past sessions</button>
+        <p class="pc-hint">Your history, PBs, nutrition and fitness logs are all kept.</p>
+      </div>`;
+    document.getElementById("pc-new-block")?.addEventListener("click", showNewBlockSheet);
+    document.getElementById("pc-review")?.addEventListener("click", () => navigate("plan"));
+    return;
+  }
+
   const curWeekNum = getWeekIndex(settings);
   if (viewingWeekNum === null) viewingWeekNum = curWeekNum;
   const wn    = viewingWeekNum;
@@ -1449,7 +1561,14 @@ async function renderMain(app) {
   const phase = getCurrentPhase(PLAN, wn);
 
   if (!week) {
-    app.innerHTML = `<div class="empty-state"><h3>No plan loaded</h3><p>Race day may have passed or start date is in the future.</p></div>`;
+    app.innerHTML = `
+      <div class="program-complete">
+        <div class="pc-emoji">📅</div>
+        <h2 class="pc-title">No plan for this week</h2>
+        <p class="pc-sub">The start date may be in the future, or this week is outside the plan.</p>
+        <button class="btn" id="pc-new-block">Start a new block</button>
+      </div>`;
+    document.getElementById("pc-new-block")?.addEventListener("click", showNewBlockSheet);
     return;
   }
 
@@ -3919,6 +4038,8 @@ async function renderSettings(app, params) {
         <input class="form-input" type="number" data-meta="rounding" value="${s.rounding}" step="0.5" />
       </div>
     </div>
+    <button id="start-new-block" class="btn btn-secondary" style="margin-top:10px">🏁 Start a new block</button>
+    <div class="section-footer">Restarts the ${PLAN ? PLAN.weeks.length : 19}-week plan from Week 1 this week. History is kept.</div>
 
     <div class="section-header">Body</div>
     <div class="list">${numRow("body", "bodyWeight", "kg")}</div>
@@ -4113,6 +4234,8 @@ async function renderSettings(app, params) {
       route();
     });
   }
+
+  document.getElementById("start-new-block")?.addEventListener("click", showNewBlockSheet);
 
   // Notifications
   const notifRow = document.getElementById("notif-row");
