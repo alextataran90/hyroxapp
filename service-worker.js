@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v43-programs";
+const APP_VERSION = "2026-05-27-v44-qa-fixes";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

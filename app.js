@@ -5470,7 +5470,10 @@ if ("serviceWorker" in navigator) {
 /* ---------- Config file seed ---------- */
 // If config.js set window.HYROX_CONFIG, merge its key into Settings once.
 // This runs after config.js has loaded (it's a regular <script> above the module).
-(function seedConfig() {
+// NOTE: this must run AFTER sign-in. Called from boot(), never at module load:
+// before a user exists, writes land in the un-namespaced bucket and get
+// mistaken for a previous user's history.
+function seedConfig() {
   try {
     const cfg = window.HYROX_CONFIG;
     if (!cfg || !cfg.geminiKey || !cfg.geminiKey.startsWith("AIza")) return;
@@ -5479,7 +5482,7 @@ if ("serviceWorker" in navigator) {
     s.nutrition = { ...s.nutrition, geminiKey: cfg.geminiKey };
     saveJSON(SETTINGS_KEY, s);
   } catch {}
-})();
+}
 
 /* ---------- Boot ---------- */
 
@@ -5494,6 +5497,7 @@ if ("serviceWorker" in navigator) {
   if (!user) return;
 
   setSyncStatusHandler(renderSyncStatus);
+  seedConfig(); // safe now that a user exists
 
   if (!location.hash || location.hash === "#" || !location.hash.startsWith("#/")) {
     history.replaceState(null, "", "#/today");

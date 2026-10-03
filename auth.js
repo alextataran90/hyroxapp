@@ -77,6 +77,13 @@ export const store = {
     try { return localStorage.getItem(nsKey(key)); } catch { return null; }
   },
   set(key, value) {
+    // Writes before sign-in would land in the un-namespaced bucket, where
+    // hasLegacyData() would later mistake them for a previous user's history
+    // and offer to import them into whoever signs in next. Refuse them.
+    if (!currentUser) {
+      console.warn("[store] ignoring pre-sign-in write:", key);
+      return;
+    }
     try { localStorage.setItem(nsKey(key), value); } catch { /* quota */ }
     if (SYNCED_KEYS.includes(key)) markDirty(key);
   },
@@ -197,13 +204,28 @@ function wireFlushHandlers() {
 /* ---------- Legacy (pre-account) data migration ---------- */
 
 // Data saved before accounts existed lives at the bare, un-namespaced key.
+// Only actual *training history* counts as something worth importing. A bare
+// settings blob on its own is not history — it can be left behind by config
+// seeding, and offering to import it would copy one person's preferences
+// (including their API key) into whoever signs in next on that device.
+const LEGACY_HISTORY_KEYS = [
+  "hyrox.progress", "hyrox.journal", "hyrox.sessionlogs", "hyrox.actuals",
+  "hyrox.nutrition", "hyrox.fitness", "hyrox.dailyBurn", "hyrox.tests",
+  "hyrox.prs", "hyrox.overrides", "hyrox.userblocks", "hyrox.dayOverrides"
+];
+
+function hasContent(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw || raw === "{}" || raw === "null" || raw === "[]") return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return false;
+    return Object.keys(parsed).length > 0;
+  } catch { return false; }
+}
+
 export function hasLegacyData() {
-  return SYNCED_KEYS.some((k) => {
-    try {
-      const raw = localStorage.getItem(k);
-      return raw && raw !== "{}" && raw !== "null";
-    } catch { return false; }
-  });
+  return LEGACY_HISTORY_KEYS.some(hasContent);
 }
 
 export async function migrateLegacyData() {
