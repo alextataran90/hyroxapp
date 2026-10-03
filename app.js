@@ -23,11 +23,48 @@ const FOOD_KEY = "hyrox.foods";
 const ACTUALS_KEY = "hyrox.actuals";
 const PLAN_URL = "plan.json";
 
+/* ---------- Available training programs ---------- */
+// Each program is a self-contained plan file using the same relative
+// week/day model: week 1..N with sessions on named weekdays. Which calendar
+// dates those land on is purely a function of settings.startDate, so the same
+// file serves someone starting today and someone aligning to an original
+// programme calendar.
+const PROGRAMS = [
+  {
+    id: "hyrox-19week",
+    file: "plan.json",
+    name: "Hyrox 19-Week Macrocycle",
+    weeks: 19,
+    summary: "Base → Build → Peak → Race-Specific → Taper. Loads auto-calculate from your 1RMs and paces in Settings.",
+    tailored: true
+  },
+  {
+    id: "hyrox-11week",
+    file: "plans/hyrox-11week.json",
+    name: "HYROX 11-Week Program",
+    weeks: 11,
+    summary: "72 sessions · Run/Engine, Strength and Race Simulation. Open and Pro variants written out per session.",
+    // Prose-based programme: sessions are written out in full rather than
+    // derived from your Settings numbers, so no auto-calculated weights.
+    tailored: false,
+    originalWeek1Monday: "2026-08-03"
+  }
+];
+
+function getProgram(id) {
+  return PROGRAMS.find((p) => p.id === id) || PROGRAMS[0];
+}
+
+function getActiveProgram() {
+  return getProgram(getSettings().programId);
+}
+
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /* ---------- Defaults ---------- */
 
 const DEFAULT_SETTINGS = {
+  programId: "hyrox-19week",
   raceDate: "2026-09-26",
   startDate: "2026-05-18",
   rounding: 2.5,
@@ -1094,27 +1131,51 @@ function isProgramComplete(settings) {
 
 // Recompute startDate so Week `PLAN.weeks.length` lands on the race week,
 // then persist the new race + start dates. Keeps all history by default.
-function startNewBlock(raceDateStr) {
+/**
+ * Switch to a program and place it on the calendar.
+ * `startMonday` is the Monday that Week 1 maps to — that single value is what
+ * makes the same plan file work for a fresh start and for aligning to an
+ * original programme calendar.
+ */
+async function startNewBlock({ programId, startMonday, raceDate }) {
   const settings = getSettings();
-  const raceDate = parseDate(raceDateStr);
-  const raceMonday = startOfWeek(raceDate);
-  // Final week's Monday = race week's Monday; walk back (weeks-1) weeks for Week 1.
-  const startMonday = new Date(raceMonday.getTime() - (PLAN.weeks.length - 1) * 7 * 86400000);
-  settings.raceDate  = raceDateStr;
+  settings.programId = programId;
   settings.startDate = ymd(startMonday);
+  settings.raceDate  = raceDate;
+  settings.onboarded = true;
   saveJSON(SETTINGS_KEY, settings);
-  // Reset view so we land on the current (Week 1) view of the new block.
+
+  // The plan file may have changed — force a reload on the next route().
+  _programJustSwitched = true;
+  PLAN = null;
   viewingWeekNum      = null;
   selectedDayOverride = null;
 }
 
-function showNewBlockSheet() {
+// Monday that Week 1 maps to, given the chosen start mode.
+function week1MondayFor(program, mode) {
+  if (mode === "aligned" && program.originalWeek1Monday) {
+    return parseDate(program.originalWeek1Monday);
+  }
+  return startOfWeek(today()); // "fresh": Week 1 is the current week
+}
+
+// Last calendar day of the final week of a program starting on `startMonday`.
+function programEndDate(program, startMonday) {
+  return new Date(startMonday.getTime() + ((program.weeks - 1) * 7 + 6) * 86400000);
+}
+
+// Which week of the program today falls in, for a given Week-1 Monday.
+function weekIndexFor(startMonday) {
+  return Math.floor((startOfWeek(today()) - startMonday) / (7 * 86400000)) + 1;
+}
+
+function showNewBlockSheet(opts = {}) {
+  const isFirstRun = !!opts.firstRun;
   const settings = getSettings();
-  // Default suggested race date: 19 weeks (plan length) from the coming Monday.
-  const nextMon = new Date(startOfWeek(today()).getTime() + 7 * 86400000);
-  const suggested = new Date(nextMon.getTime() + (PLAN.weeks.length - 1) * 7 * 86400000);
-  const defaultRace = ymd(suggested);
-  const minRace = ymd(new Date(today().getTime() + 7 * 86400000));
+
+  let selectedId = settings.programId || PROGRAMS[0].id;
+  let startMode  = "fresh"; // "fresh" | "aligned"
 
   const overlay = document.createElement("div");
   overlay.className = "fuel-edit-overlay";
@@ -1126,50 +1187,99 @@ function showNewBlockSheet() {
     setTimeout(() => overlay.remove(), 280);
   };
 
-  overlay.innerHTML = `
-    <div class="fuel-edit-sheet">
-      <div class="fuel-edit-topbar">
-        <button class="fuel-edit-cancel" id="nb-cancel">Cancel</button>
-        <span class="fuel-edit-title">Start new block</span>
-        <button class="fuel-edit-save" id="nb-start">Start</button>
-      </div>
-      <div class="fuel-edit-scroll" style="padding:24px 20px">
-        <p class="nb-intro">Restarts the ${PLAN.weeks.length}-week plan from Week 1 this coming Monday. Your history, notes, PBs, nutrition and fitness logs are all kept.</p>
-        <div class="section-header">Next race date</div>
-        <div class="list">
-          <div class="form-row">
-            <label class="form-label">Race day</label>
-            <input class="form-input" type="date" id="nb-race" value="${defaultRace}" min="${minRace}" />
-          </div>
+  const fmt = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+  const render = () => {
+    const program = getProgram(selectedId);
+    const canAlign = !!program.originalWeek1Monday;
+    if (!canAlign) startMode = "fresh";
+
+    const startMonday = week1MondayFor(program, startMode);
+    const endDate     = programEndDate(program, startMonday);
+    const wkNow       = weekIndexFor(startMonday);
+    const inRange     = wkNow >= 1 && wkNow <= program.weeks;
+
+    const programCards = PROGRAMS.map((p) => `
+      <button class="prog-card${p.id === selectedId ? " prog-card-sel" : ""}" data-prog="${p.id}">
+        <div class="prog-card-top">
+          <span class="prog-card-name">${escapeHtml(p.name)}</span>
+          <span class="prog-card-weeks">${p.weeks} wks</span>
         </div>
-        <p class="nb-note" id="nb-preview"></p>
-      </div>
-    </div>`;
+        <div class="prog-card-sum">${escapeHtml(p.summary)}</div>
+        ${p.tailored
+          ? `<div class="prog-card-tag prog-tag-auto">Loads auto-calculate from your Settings</div>`
+          : `<div class="prog-card-tag">Sessions written out in full · fixed loads</div>`}
+      </button>`).join("");
 
-  const raceInput = overlay.querySelector("#nb-race");
-  const preview   = overlay.querySelector("#nb-preview");
-  const updatePreview = () => {
-    const rd = raceInput.value;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rd)) { preview.textContent = ""; return; }
-    const raceMonday = startOfWeek(parseDate(rd));
-    const startMonday = new Date(raceMonday.getTime() - (PLAN.weeks.length - 1) * 7 * 86400000);
-    const fmt = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    preview.textContent = `Week 1 starts ${fmt(startMonday)} · Race week ${fmt(raceMonday)}.`;
+    const startOptions = canAlign ? `
+      <div class="section-header">Start</div>
+      <div class="list">
+        <button class="start-opt${startMode === "fresh" ? " start-opt-sel" : ""}" data-mode="fresh">
+          <div class="start-opt-name">Start from Week 1</div>
+          <div class="start-opt-sub">Day 1 is this week — ${fmt(startOfWeek(today()))}</div>
+        </button>
+        <button class="start-opt${startMode === "aligned" ? " start-opt-sel" : ""}" data-mode="aligned">
+          <div class="start-opt-name">Align to the original calendar</div>
+          <div class="start-opt-sub">Week 1 was ${fmt(parseDate(program.originalWeek1Monday))} — picks up where the programme is now</div>
+        </button>
+      </div>` : "";
+
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="nb-cancel">${isFirstRun ? "" : "Cancel"}</button>
+          <span class="fuel-edit-title">${isFirstRun ? "Choose your program" : "Start new block"}</span>
+          <button class="fuel-edit-save" id="nb-start">Start</button>
+        </div>
+        <div class="fuel-edit-scroll" style="padding:20px">
+          <p class="nb-intro">${isFirstRun
+            ? "Pick the training program you want to follow. You can switch later from Settings."
+            : "Switching program or restarting keeps all your history, notes, PBs, nutrition and fitness logs."}</p>
+          <div class="section-header">Program</div>
+          <div class="prog-list">${programCards}</div>
+          ${startOptions}
+          <p class="nb-note">${
+            startMode === "aligned" && inRange
+              ? `Lands you in <strong>Week ${wkNow} of ${program.weeks}</strong> · programme ends ${fmt(endDate)}.`
+              : startMode === "aligned"
+                ? `⚠️ Today is outside this programme's original dates (it ran to ${fmt(endDate)}).`
+                : `Week 1 starts ${fmt(startMonday)} · ${program.weeks} weeks · ends ${fmt(endDate)}.`
+          }</p>
+        </div>
+      </div>`;
+    bind();
   };
-  raceInput.addEventListener("change", updatePreview);
-  raceInput.addEventListener("input", updatePreview);
-  updatePreview();
 
-  overlay.querySelector("#nb-cancel").addEventListener("click", close);
-  overlay.querySelector("#nb-start").addEventListener("click", () => {
-    const rd = raceInput.value;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rd)) { showToast("Pick a valid race date"); return; }
-    startNewBlock(rd);
-    close();
-    navigate("today");
-    route();
-    showToast("🏁 New block started — Week 1");
-  });
+  const bind = () => {
+    overlay.querySelectorAll("[data-prog]").forEach((b) =>
+      b.addEventListener("click", () => { selectedId = b.dataset.prog; render(); }));
+    overlay.querySelectorAll("[data-mode]").forEach((b) =>
+      b.addEventListener("click", () => { startMode = b.dataset.mode; render(); }));
+
+    const cancel = overlay.querySelector("#nb-cancel");
+    if (isFirstRun) cancel.style.visibility = "hidden";
+    else cancel.addEventListener("click", close);
+
+    overlay.querySelector("#nb-start").addEventListener("click", async () => {
+      const program = getProgram(selectedId);
+      const startMonday = week1MondayFor(program, startMode);
+      const endDate = programEndDate(program, startMonday);
+      await startNewBlock({
+        programId: program.id,
+        startMonday,
+        raceDate: ymd(endDate)
+      });
+      close();
+      navigate("today");
+      await route();
+      const wk = weekIndexFor(startMonday);
+      showToast(startMode === "aligned"
+        ? `🏁 ${program.name} — Week ${wk}`
+        : `🏁 ${program.name} — Week 1`);
+    });
+  };
+
+  render();
 }
 
 /* ---------- Date helpers ---------- */
@@ -1258,24 +1368,31 @@ function toggleBlockDone(weekNum, sessionId, blockIdx) {
 /* ---------- Plan loading ---------- */
 
 let PLAN = null;
+let _programJustSwitched = false; // suppresses the update banner on a deliberate program change
 let _pendingPhoto    = null; // { b64, mime, targetDateStr, thumb } — kept while retry is possible
 let viewingWeekNum   = null; // week shown in train nav
 let selectedDayOverride = null; // day pill selection (null = smart default)
 let dayTab = "overview"; // "overview" | "training" | "nutrition" | "fitness"
 
 async function loadPlan() {
-  const res = await fetch(PLAN_URL, { cache: "no-cache" });
-  if (!res.ok) throw new Error("Failed to load plan.json");
+  const program = getActiveProgram();
+  const res = await fetch(program.file, { cache: "no-cache" });
+  if (!res.ok) throw new Error(`Failed to load ${program.file}`);
   PLAN = await res.json();
+  PLAN.programId = program.id;
 
   // Detect new version. Ignore any sentinel values from old buggy dismiss handlers.
   const seenVersionRaw = localStorage.getItem(APP_VERSION_KEY);
   const isSentinel = seenVersionRaw && /^(dismissed-|reset-)/.test(seenVersionRaw);
   const seenVersion = isSentinel ? null : seenVersionRaw;
 
-  if (seenVersion && seenVersion !== PLAN.version) {
+  // Switching program deliberately loads a different plan file with a different
+  // version string. That isn't "a new plan is available" — suppress the banner
+  // for that one load, otherwise every program switch nags the user to reload.
+  if (seenVersion && seenVersion !== PLAN.version && !_programJustSwitched) {
     showUpdateBanner();
   }
+  _programJustSwitched = false;
   // Always heal localStorage to the real version so dismiss/reload "sticks".
   localStorage.setItem(APP_VERSION_KEY, PLAN.version);
   return PLAN;
@@ -2408,6 +2525,7 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
         </div>
         ${block.scheme ? `<div class="block-scheme">${escapeHtml(block.scheme)}${block.rest ? ` · rest ${escapeHtml(block.rest)}` : ""}</div>` : ""}
         ${inlineLoadHtml}
+        ${block.text ? `<div class="block-text">${escapeHtml(block.text)}</div>` : ""}
         ${block.note ? `<div class="block-note">${escapeHtml(block.note)}</div>` : ""}
         ${logPillsHtml}
         ${actionsHtml}
@@ -5380,7 +5498,20 @@ if ("serviceWorker" in navigator) {
   if (!location.hash || location.hash === "#" || !location.hash.startsWith("#/")) {
     history.replaceState(null, "", "#/today");
   }
-  route();
+  await route();
+
+  // First run: no program picked and nothing logged yet → let them choose one
+  // rather than dropping them on a default plan whose dates are long past.
+  const s = getSettings();
+  if (!s.onboarded) {
+    const hasHistory = Object.keys(getProgress().sessions || {}).length > 0;
+    if (hasHistory) {
+      // Existing athlete (or freshly migrated data) — don't interrupt them.
+      saveJSON(SETTINGS_KEY, { ...s, onboarded: true });
+    } else {
+      showNewBlockSheet({ firstRun: true });
+    }
+  }
 })();
 
 function renderSyncStatus(status) {
