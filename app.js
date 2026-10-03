@@ -1637,6 +1637,16 @@ function renderWeekStrip() {
 
 function renderTopBar() {
   const settings = getSettings();
+
+  // Before a program is chosen the default dates are meaningless — showing
+  // "Done 19/19 · Race day passed" to someone who just signed up is nonsense.
+  if (!settings.onboarded) {
+    document.getElementById("phase-chip").textContent = "";
+    document.getElementById("week-chip").textContent = "";
+    document.getElementById("countdown").textContent = "";
+    return;
+  }
+
   const complete = isProgramComplete(settings);
   const weekNum = Math.min(getWeekIndex(settings), PLAN.weeks.length);
   const week = PLAN.weeks.find((w) => w.number === weekNum);
@@ -1655,6 +1665,19 @@ function renderTopBar() {
 
 async function renderMain(app) {
   const settings  = getSettings();
+
+  // Brand-new account: the default dates are long past, so without this the
+  // first thing someone sees is "Program complete" — nonsense for a new user.
+  // boot() opens the program picker over the top of this.
+  if (!settings.onboarded) {
+    app.innerHTML = `
+      <div class="program-complete">
+        <div class="pc-emoji">🏃</div>
+        <h2 class="pc-title">Welcome</h2>
+        <p class="pc-sub">Pick a training program to get started.</p>
+      </div>`;
+    return;
+  }
 
   // Program finished: today is past the last week of the plan. Offer a restart
   // instead of dropping into a dead "no plan" state.

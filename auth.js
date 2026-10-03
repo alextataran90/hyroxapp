@@ -315,11 +315,15 @@ function renderAuthGate(mode = "signin", message = "") {
       <button class="auth-btn" id="auth-submit">Create account</button>
       <button class="auth-link" id="auth-to-signin">I already have an account</button>`;
   } else if (mode === "reset") {
+    // This project uses Supabase's built-in mailer, which only delivers to
+    // addresses on the project team. Rather than let someone wait forever for
+    // an email that will never arrive, say so up front.
     body = `
       <p class="auth-sub">We'll email you a link to set a new password.</p>
       ${msgHtml}
       ${fieldRow("auth-email", "Email", "email", "you@example.com")}
       <button class="auth-btn" id="auth-submit">Send reset link</button>
+      <div class="auth-note">Heads up: automated email isn't fully set up for this app yet. If nothing arrives within a few minutes, ask whoever shared the app with you — they can reset your password directly.</div>
       <button class="auth-link" id="auth-to-signin">Back to sign in</button>`;
   } else if (mode === "recover") {
     body = `
