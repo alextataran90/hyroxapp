@@ -1,10 +1,12 @@
-const APP_VERSION = "2026-05-27-v41-new-block";
+const APP_VERSION = "2026-05-27-v42-accounts";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./auth.js",
+  "./supabase-config.js",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./icons/icon-180.png",

@@ -1,5 +1,10 @@
 /* Hyrox Trainer - vanilla SPA */
 
+import {
+  store, initAuth, getCurrentUser, signOut,
+  pushDirty, setSyncStatusHandler
+} from "./auth.js";
+
 const APP_VERSION_KEY = "hyrox.app.version";
 const SETTINGS_KEY = "hyrox.settings";
 const PROGRESS_KEY = "hyrox.progress";
@@ -105,7 +110,7 @@ const REF_LABELS = {
 
 function loadJSON(key, fallback) {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = store.get(key);
     if (!raw) return fallback;
     return { ...fallback, ...JSON.parse(raw) };
   } catch (e) {
@@ -114,7 +119,7 @@ function loadJSON(key, fallback) {
 }
 
 function saveJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  store.set(key, JSON.stringify(value));
 }
 
 function getSettings() {
@@ -148,7 +153,7 @@ function getDayOverrides() {
 /* ---------- Weight overrides ---------- */
 
 function getOverrides() {
-  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}"); }
+  try { return JSON.parse(store.get(OVERRIDES_KEY) || "{}"); }
   catch { return {}; }
 }
 
@@ -162,34 +167,34 @@ function setBlockOverride(weekNum, sessionId, blockIdx, kg) {
   const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
   if (kg == null) delete o[key];
   else o[key] = kg;
-  localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o));
+  store.set(OVERRIDES_KEY, JSON.stringify(o));
 }
 
 /* ---------- User-added blocks ---------- */
 
 function getUserBlocks(weekNum, sessionId) {
   try {
-    const all = JSON.parse(localStorage.getItem(USER_BLOCKS_KEY) || "{}");
+    const all = JSON.parse(store.get(USER_BLOCKS_KEY) || "{}");
     return all[`W${weekNum}.${sessionId}`] || [];
   } catch { return []; }
 }
 
 function addUserBlock(weekNum, sessionId, block) {
   try {
-    const all = JSON.parse(localStorage.getItem(USER_BLOCKS_KEY) || "{}");
+    const all = JSON.parse(store.get(USER_BLOCKS_KEY) || "{}");
     const key = `W${weekNum}.${sessionId}`;
     if (!all[key]) all[key] = [];
     all[key].push({ ...block, id: "ub" + Date.now() });
-    localStorage.setItem(USER_BLOCKS_KEY, JSON.stringify(all));
+    store.set(USER_BLOCKS_KEY, JSON.stringify(all));
   } catch {}
 }
 
 function deleteUserBlock(weekNum, sessionId, blockId) {
   try {
-    const all = JSON.parse(localStorage.getItem(USER_BLOCKS_KEY) || "{}");
+    const all = JSON.parse(store.get(USER_BLOCKS_KEY) || "{}");
     const key = `W${weekNum}.${sessionId}`;
     if (all[key]) all[key] = all[key].filter((b) => b.id !== blockId);
-    localStorage.setItem(USER_BLOCKS_KEY, JSON.stringify(all));
+    store.set(USER_BLOCKS_KEY, JSON.stringify(all));
   } catch {}
 }
 
@@ -197,17 +202,17 @@ function deleteUserBlock(weekNum, sessionId, blockId) {
 
 function getJournalNote(weekNum, sessionId) {
   try {
-    const all = JSON.parse(localStorage.getItem(JOURNAL_KEY) || "{}");
+    const all = JSON.parse(store.get(JOURNAL_KEY) || "{}");
     return all[`W${weekNum}.${sessionId}`] || "";
   } catch { return ""; }
 }
 
 function saveJournalNote(weekNum, sessionId, text) {
   try {
-    const all = JSON.parse(localStorage.getItem(JOURNAL_KEY) || "{}");
+    const all = JSON.parse(store.get(JOURNAL_KEY) || "{}");
     if (text) all[`W${weekNum}.${sessionId}`] = text;
     else delete all[`W${weekNum}.${sessionId}`];
-    localStorage.setItem(JOURNAL_KEY, JSON.stringify(all));
+    store.set(JOURNAL_KEY, JSON.stringify(all));
   } catch {}
 }
 
@@ -215,18 +220,18 @@ function saveJournalNote(weekNum, sessionId, text) {
 
 function getBlockLogs(weekNum, sessionId, blockIdx) {
   try {
-    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    const all = JSON.parse(store.get(SESSION_LOGS_KEY) || "{}");
     return all[`W${weekNum}.${sessionId}.b${blockIdx}`] || [];
   } catch { return []; }
 }
 
 function addBlockLog(weekNum, sessionId, blockIdx, entry) {
   try {
-    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    const all = JSON.parse(store.get(SESSION_LOGS_KEY) || "{}");
     const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
     if (!all[key]) all[key] = [];
     all[key].push({ ...entry, id: "l" + Date.now() });
-    localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(all));
+    store.set(SESSION_LOGS_KEY, JSON.stringify(all));
 
     // Check for PR
     if (entry.kg != null && entry.blockName) {
@@ -243,10 +248,10 @@ function addBlockLog(weekNum, sessionId, blockIdx, entry) {
 
 function deleteBlockLog(weekNum, sessionId, blockIdx, logId) {
   try {
-    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    const all = JSON.parse(store.get(SESSION_LOGS_KEY) || "{}");
     const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
     if (all[key]) all[key] = all[key].filter((l) => l.id !== logId);
-    localStorage.setItem(SESSION_LOGS_KEY, JSON.stringify(all));
+    store.set(SESSION_LOGS_KEY, JSON.stringify(all));
   } catch {}
 }
 
@@ -254,7 +259,7 @@ function deleteBlockLog(weekNum, sessionId, blockIdx, logId) {
 
 function getLastLoggedKgForBlock(blockName) {
   try {
-    const all = JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}");
+    const all = JSON.parse(store.get(SESSION_LOGS_KEY) || "{}");
     let lastKg = null;
     let lastTime = 0;
     for (const logs of Object.values(all)) {
@@ -274,16 +279,16 @@ function getLastLoggedKgForBlock(blockName) {
 
 function getStoredPR(blockName) {
   try {
-    const prs = JSON.parse(localStorage.getItem(PR_KEY) || "{}");
+    const prs = JSON.parse(store.get(PR_KEY) || "{}");
     return prs[blockName] ?? null;
   } catch { return null; }
 }
 
 function updateStoredPR(blockName, kg) {
   try {
-    const prs = JSON.parse(localStorage.getItem(PR_KEY) || "{}");
+    const prs = JSON.parse(store.get(PR_KEY) || "{}");
     prs[blockName] = kg;
-    localStorage.setItem(PR_KEY, JSON.stringify(prs));
+    store.set(PR_KEY, JSON.stringify(prs));
   } catch {}
 }
 
@@ -303,7 +308,7 @@ function showPRToast(blockName, kg) {
 /* ---------- Nutrition helpers ---------- */
 
 function getNutritionLog() {
-  try { return JSON.parse(localStorage.getItem(NUTRITION_KEY) || "{}"); }
+  try { return JSON.parse(store.get(NUTRITION_KEY) || "{}"); }
   catch { return {}; }
 }
 
@@ -332,7 +337,7 @@ function saveMeal(meal, dateStr) {
   const idx = log[ds].meals.findIndex((m) => m.id === meal.id);
   if (idx >= 0) log[ds].meals[idx] = meal;
   else log[ds].meals.push(meal);
-  localStorage.setItem(NUTRITION_KEY, JSON.stringify(log));
+  store.set(NUTRITION_KEY, JSON.stringify(log));
 }
 
 function deleteMeal(mealId, dateStr) {
@@ -340,7 +345,7 @@ function deleteMeal(mealId, dateStr) {
   const ds = dateStr || ymd(today());
   if (!log[ds]) return;
   log[ds].meals = log[ds].meals.filter((m) => m.id !== mealId);
-  localStorage.setItem(NUTRITION_KEY, JSON.stringify(log));
+  store.set(NUTRITION_KEY, JSON.stringify(log));
 }
 
 function makeMealId() {
@@ -350,12 +355,12 @@ function makeMealId() {
 /* ---------- Food database ---------- */
 
 function getFoodDb() {
-  try { return JSON.parse(localStorage.getItem(FOOD_KEY) || "{}"); }
+  try { return JSON.parse(store.get(FOOD_KEY) || "{}"); }
   catch { return {}; }
 }
 
 function saveFoodDb(db) {
-  localStorage.setItem(FOOD_KEY, JSON.stringify(db));
+  store.set(FOOD_KEY, JSON.stringify(db));
 }
 
 /** Upsert a food entry keyed by normalised name. */
@@ -416,16 +421,16 @@ function getFrequentItemsForMeal(mealLabel, limit = 5) {
 
 function getSessionActuals(weekNum, sessionId) {
   try {
-    const all = JSON.parse(localStorage.getItem(ACTUALS_KEY) || "{}");
+    const all = JSON.parse(store.get(ACTUALS_KEY) || "{}");
     return all[`W${weekNum}.${sessionId}`] || null;
   } catch { return null; }
 }
 
 function saveSessionActuals(weekNum, sessionId, actuals) {
   try {
-    const all = JSON.parse(localStorage.getItem(ACTUALS_KEY) || "{}");
+    const all = JSON.parse(store.get(ACTUALS_KEY) || "{}");
     all[`W${weekNum}.${sessionId}`] = actuals;
-    localStorage.setItem(ACTUALS_KEY, JSON.stringify(all));
+    store.set(ACTUALS_KEY, JSON.stringify(all));
   } catch {}
 }
 
@@ -486,7 +491,7 @@ function mapAppleWorkout(appleType) {
 }
 
 function getFitnessLog() {
-  try { return JSON.parse(localStorage.getItem(FITNESS_KEY) || "{}"); }
+  try { return JSON.parse(store.get(FITNESS_KEY) || "{}"); }
   catch { return {}; }
 }
 
@@ -502,7 +507,7 @@ function saveFitnessWorkout(workout, dateStr) {
   const idx = log[ds].workouts.findIndex((w) => w.id === workout.id);
   if (idx >= 0) log[ds].workouts[idx] = workout;
   else log[ds].workouts.push(workout);
-  localStorage.setItem(FITNESS_KEY, JSON.stringify(log));
+  store.set(FITNESS_KEY, JSON.stringify(log));
 }
 
 function deleteFitnessWorkout(workoutId, dateStr) {
@@ -510,7 +515,7 @@ function deleteFitnessWorkout(workoutId, dateStr) {
   const ds = dateStr || ymd(today());
   if (!log[ds]) return;
   log[ds].workouts = log[ds].workouts.filter((w) => w.id !== workoutId);
-  localStorage.setItem(FITNESS_KEY, JSON.stringify(log));
+  store.set(FITNESS_KEY, JSON.stringify(log));
 }
 
 function makeWorkoutId() {
@@ -531,7 +536,7 @@ function getAllWorkouts() {
 /* ---------- Daily burn (Move ring) ---------- */
 
 function getDailyBurnLog() {
-  try { return JSON.parse(localStorage.getItem(DAILY_BURN_KEY) || "{}"); } catch { return {}; }
+  try { return JSON.parse(store.get(DAILY_BURN_KEY) || "{}"); } catch { return {}; }
 }
 function getDailyBurn(dateStr) {
   return (getDailyBurnLog()[dateStr] || {}).moveKcal || 0;
@@ -539,7 +544,7 @@ function getDailyBurn(dateStr) {
 function saveDailyBurn(dateStr, moveKcal) {
   const log = getDailyBurnLog();
   log[dateStr] = { moveKcal, updatedAt: new Date().toISOString() };
-  localStorage.setItem(DAILY_BURN_KEY, JSON.stringify(log));
+  store.set(DAILY_BURN_KEY, JSON.stringify(log));
 }
 
 /* ---------- HR zones ---------- */
@@ -867,16 +872,16 @@ async function estimateItemNutrition(autoItems) {
 
 function getTodayReadiness() {
   try {
-    const all = JSON.parse(localStorage.getItem(READINESS_KEY) || "{}");
+    const all = JSON.parse(store.get(READINESS_KEY) || "{}");
     return all[ymd(today())] || null;
   } catch { return null; }
 }
 
 function saveReadiness(data) {
   try {
-    const all = JSON.parse(localStorage.getItem(READINESS_KEY) || "{}");
+    const all = JSON.parse(store.get(READINESS_KEY) || "{}");
     all[ymd(today())] = { ...data, date: ymd(today()) };
-    localStorage.setItem(READINESS_KEY, JSON.stringify(all));
+    store.set(READINESS_KEY, JSON.stringify(all));
   } catch {}
 }
 
@@ -2694,8 +2699,8 @@ function showSimSummary(splits, totalSec) {
 ROUTES.history = renderHistory;
 async function renderHistory(app) {
   const progress = getProgress();
-  const allLogs = (() => { try { return JSON.parse(localStorage.getItem(SESSION_LOGS_KEY) || "{}"); } catch { return {}; } })();
-  const journals = (() => { try { return JSON.parse(localStorage.getItem(JOURNAL_KEY) || "{}"); } catch { return {}; } })();
+  const allLogs = (() => { try { return JSON.parse(store.get(SESSION_LOGS_KEY) || "{}"); } catch { return {}; } })();
+  const journals = (() => { try { return JSON.parse(store.get(JOURNAL_KEY) || "{}"); } catch { return {}; } })();
 
   const completed = Object.entries(progress.sessions || {})
     .filter(([key, v]) => v && v.completedAt && !key.includes(".b"))
@@ -4014,9 +4019,24 @@ async function renderSettings(app, params) {
     </div>`;
   };
 
+  const acct = getCurrentUser();
+
   let html = `
     <h1 class="large-title">Settings</h1>
-    <div class="large-title-sub">Stored on this device. Loads recalculate automatically.</div>
+    <div class="large-title-sub">Synced to your account. Loads recalculate automatically.</div>
+
+    ${acct ? `
+    <div class="section-header">Account</div>
+    <div class="list">
+      <div class="form-row">
+        <label class="form-label">Signed in as</label>
+        <span class="account-email">${escapeHtml(acct.email || "—")}</span>
+      </div>
+    </div>
+    <button id="sync-now" class="btn btn-secondary" style="margin-top:10px">Sync now</button>
+    <button id="sign-out" class="btn btn-secondary" style="margin-top:10px">Sign out</button>
+    <div class="section-footer">Your training data syncs automatically across every device you sign in on.</div>
+    ` : ""}
 
     ${focusKey ? `<div class="alert alert-info">
       <strong>Add ${escapeHtml(REF_LABELS[focusKey] || focusKey)}</strong>
@@ -4230,12 +4250,26 @@ async function renderSettings(app, params) {
   if (resetBtn) {
     resetBtn.addEventListener("click", () => {
       if (!confirm("Clear all session completion ticks? (Settings + tests preserved.)")) return;
-      localStorage.removeItem(PROGRESS_KEY);
+      store.remove(PROGRESS_KEY);
       route();
     });
   }
 
   document.getElementById("start-new-block")?.addEventListener("click", showNewBlockSheet);
+
+  document.getElementById("sync-now")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Syncing…";
+    await pushDirty();
+    btn.textContent = "Synced ✓";
+    setTimeout(() => { btn.disabled = false; btn.textContent = "Sync now"; }, 1400);
+  });
+
+  document.getElementById("sign-out")?.addEventListener("click", () => {
+    if (!confirm("Sign out? Your data is saved to your account and will be here when you sign back in.")) return;
+    signOut();
+  });
 
   // Notifications
   const notifRow = document.getElementById("notif-row");
@@ -4262,10 +4296,12 @@ async function renderSettings(app, params) {
   // Export data
   document.getElementById("export-data")?.addEventListener("click", () => {
     const data = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith("hyrox.")) data[k] = localStorage.getItem(k);
-    }
+    // Keys are namespaced per account in localStorage, so read the logical
+    // key list from the store rather than walking localStorage directly.
+    store.allKeys().forEach((k) => {
+      const v = store.get(k);
+      if (v) data[k] = v;
+    });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -4288,7 +4324,7 @@ async function renderSettings(app, params) {
       const data = JSON.parse(text);
       let count = 0;
       for (const [k, v] of Object.entries(data)) {
-        if (k.startsWith("hyrox.")) { localStorage.setItem(k, v); count++; }
+        if (k.startsWith("hyrox.")) { store.set(k, v); count++; }
       }
       alert(`Restored ${count} data entries. Reloading…`);
       location.reload();
@@ -4300,7 +4336,7 @@ async function renderSettings(app, params) {
   // Reset all training data
   document.getElementById("reset-all-data")?.addEventListener("click", () => {
     if (!confirm("Clear all progress, notes, and set logs? Settings and tests are kept.")) return;
-    [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY, ACTUALS_KEY].forEach((k) => localStorage.removeItem(k));
+    [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY, ACTUALS_KEY].forEach((k) => store.remove(k));
     route();
   });
 }
@@ -5333,7 +5369,32 @@ if ("serviceWorker" in navigator) {
 // Firing hashchange would call route() a second time in parallel with the explicit
 // call below — two concurrent route() invocations race and the second one blows
 // away the first's event bindings, leaving the UI unresponsive.
-if (!location.hash || location.hash === "#") {
-  history.replaceState(null, "", "#/today");
+(async function boot() {
+  // Gate on authentication. initAuth() renders the sign-in UI and resolves null
+  // when there's no session, in which case we never boot the app itself.
+  const user = await initAuth();
+  if (!user) return;
+
+  setSyncStatusHandler(renderSyncStatus);
+
+  if (!location.hash || location.hash === "#" || !location.hash.startsWith("#/")) {
+    history.replaceState(null, "", "#/today");
+  }
+  route();
+})();
+
+function renderSyncStatus(status) {
+  const el = document.getElementById("sync-chip");
+  if (!el) return;
+  const map = {
+    syncing: { t: "Syncing…", c: "sync-busy" },
+    synced:  { t: "",         c: "" },
+    pending: { t: "Pending",  c: "sync-pending" },
+    offline: { t: "Offline",  c: "sync-offline" },
+    error:   { t: "Sync error", c: "sync-error" }
+  };
+  const s = map[status] || map.synced;
+  el.textContent = s.t;
+  el.className = "sync-chip " + s.c;
+  el.hidden = !s.t;
 }
-route();
