@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v46-api-key-hint";
+const APP_VERSION = "2026-05-27-v47-voice-meals";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

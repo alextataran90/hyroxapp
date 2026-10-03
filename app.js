@@ -866,6 +866,74 @@ async function analyzeFood(base64Data, mimeType) {
   return JSON.parse(clean);
 }
 
+/* ---------- AI nutrition estimation (spoken description) ---------- */
+
+/**
+ * Send a recorded description straight to Gemini, which transcribes and
+ * costs the meal in one call. Crucially the prompt makes any figure the
+ * speaker states authoritative — if they say a bagel is 105 kcal/100g, that
+ * is what gets used rather than the model's own guess for "bagel".
+ */
+async function analyzeFoodAudio(base64Data, mimeType) {
+  const s = getSettings();
+  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
+  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
+
+  const prompt = [
+    "You are a professional nutritionist. The audio is someone describing a meal they ate.",
+    "",
+    "Return ONLY valid JSON (no markdown, no code fences) in this exact schema:",
+    '{"items":[{"name":"string","qty":"string","kcal":number,"p":number,"c":number,"f":number}],',
+    '"total":{"kcal":number,"p":number,"c":number,"f":number},"confidence":"high|medium|low",',
+    '"transcript":"string","notes":"string"}',
+    "",
+    "Rules:",
+    "- p=protein(g), c=carbohydrates(g), f=fat(g). Numbers only, no units in the numeric fields.",
+    "- List each distinct food as its own item, with the quantity in `qty` (e.g. \"2 eggs\", \"200 g\", \"5 g\").",
+    "- IMPORTANT: if the speaker states a nutritional value (e.g. \"a bagel that has 105 calories per 100 grams\"),",
+    "  treat that figure as authoritative and compute from it. Do NOT replace it with your own estimate.",
+    "  Scale it to the stated quantity (e.g. 105 kcal/100 g at 200 g = 210 kcal).",
+    "- For foods with no stated values, estimate realistically from typical nutrition data.",
+    "- `total` must be the sum of the items.",
+    "- Put your verbatim transcription of the audio in `transcript`.",
+    "- If the audio is unclear or contains no food, return an empty items array and explain in `notes`.",
+    "",
+    "Return ONLY the JSON object."
+  ].join("\n");
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { text: prompt },
+          { inlineData: { mimeType, data: base64Data } }
+        ] }],
+        generationConfig: { temperature: 0.1 }
+      })
+    }
+  );
+
+  if (!res.ok) {
+    let msg = `Gemini error ${res.status}`;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
+  let parsed;
+  try { parsed = JSON.parse(clean); }
+  catch { throw new Error("Couldn't read the response. Try again, or add the meal manually."); }
+  if (!parsed.items || !parsed.items.length) {
+    throw new Error(parsed.notes || "No food detected in that recording. Try again, closer to the mic.");
+  }
+  return parsed;
+}
+
 /* ---------- AI nutrition estimation (text-only, no image) ---------- */
 
 async function estimateItemNutrition(autoItems) {
@@ -1480,9 +1548,19 @@ async function _doRoute() {
   // Designed for a scheduled Shortcut — saves directly, no confirmation sheet,
   // just a brief toast so a time automation can fire it repeatedly.
   if (r.name === "burn-import") {
-    const [date, kcalStr] = r.params;
-    const ds   = /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date : ymd(today());
-    const kcal = Math.round(parseFloat(kcalStr || "0"));
+    // Two accepted shapes:
+    //   #/burn-import/{date}/{total}
+    //   #/burn-import/{date}/{active}/{resting}   <- app does the addition
+    // The two-value form exists so the Shortcut never needs a Calculate step,
+    // which is the fiddliest action to wire up by hand.
+    const [date, aStr, bStr] = r.params;
+    const ds = /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date : ymd(today());
+    const num = (v) => {
+      // Shortcuts can hand over "1,234" or "1 234,5" depending on locale.
+      const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(/,(?=\d{3}\b)/g, "").replace(",", "."));
+      return isFinite(n) && n > 0 ? n : 0;
+    };
+    const kcal = Math.round(num(aStr) + num(bStr));
     history.replaceState(null, "", location.pathname + "#/today");
     document.querySelectorAll(".tab").forEach((el) => {
       el.classList.toggle("active", el.dataset.tab === "today");
@@ -2145,7 +2223,7 @@ async function renderMain(app) {
 
     // Base URL of the app (origin + path, no hash) so the Shortcut recipe is exact.
     const appBase = location.origin + location.pathname.replace(/\/[^/]*$/, "/");
-    const burnUrlExample = appBase + "#/burn-import/" + ymd(today()) + "/3200";
+    const burnUrlExample = appBase + "#/burn-import/" + ymd(today()) + "/1300/1900";
     const autoSyncHtml = `
       <details class="fi-autosync">
         <summary class="fi-autosync-summary">
@@ -2154,19 +2232,18 @@ async function renderMain(app) {
         </summary>
         <div class="fi-autosync-body">
           <p class="fi-autosync-intro">Apple Health can't be read by a website or a server — only on your iPhone, while it's unlocked. This free Shortcut reads today's <strong>total</strong> calories burned — Active Energy (movement) <em>plus</em> Resting Energy (BMR) — and opens this app to sync them. Run it on a schedule and your burn stays current with no manual export.</p>
-          <div class="fi-autosync-callout">Apple has no single "total burned" value. The Shortcut adds the two energy types: e.g. Active 1,300 + Resting 1,900 = <strong>3,200 kcal</strong>.</div>
+          <div class="fi-autosync-callout">Apple has no single "total burned" value, so the Shortcut sends both energy types and <strong>the app adds them for you</strong> — e.g. Active 1,300 + Resting 1,900 = <strong>3,200 kcal</strong>. That means no Calculate step to wire up.</div>
           <div class="section-header">Build the Shortcut</div>
           <div class="list">
             <div class="list-row"><div class="list-row-main"><div class="list-row-title">1. Shortcuts app → new shortcut</div><div class="list-row-sub">Name it "Sync Burn"</div></div></div>
             <div class="list-row"><div class="list-row-main"><div class="list-row-title">2. Find Health Samples → Active Energy</div><div class="list-row-sub">Filter: Date is Today · no limit</div></div></div>
             <div class="list-row"><div class="list-row-main"><div class="list-row-title">3. Calculate Statistics → Sum</div><div class="list-row-sub">Of the Active samples. Rename this variable "Active"</div></div></div>
             <div class="list-row"><div class="list-row-main"><div class="list-row-title">4. Find Health Samples → Resting Energy</div><div class="list-row-sub">Filter: Date is Today · no limit</div></div></div>
-            <div class="list-row"><div class="list-row-main"><div class="list-row-title">5. Calculate Statistics → Sum</div><div class="list-row-sub">Of the Resting samples. Rename this variable "Resting"</div></div></div>
-            <div class="list-row"><div class="list-row-main"><div class="list-row-title">6. Calculate → Active + Resting</div><div class="list-row-sub">This is your total burned</div></div></div>
-            <div class="list-row"><div class="list-row-main"><div class="list-row-title">7. Add "Open URLs" with this text</div><div class="list-row-sub">Insert the Calculation result where 3200 is</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">5. Calculate Statistics → Sum</div><div class="list-row-sub">Of the Resting samples</div></div></div>
+            <div class="list-row"><div class="list-row-main"><div class="list-row-title">6. Add "Open URLs" with this text</div><div class="list-row-sub">Insert the FIRST Sum, then the SECOND Sum — no Calculate step needed</div></div></div>
           </div>
           <div class="fi-autosync-url">
-            <code id="fi-burn-url">${escapeHtml(appBase)}#/burn-import/<b>[Current Date, formatted yyyy-MM-dd]</b>/<b>[Active + Resting]</b></code>
+            <code id="fi-burn-url">${escapeHtml(appBase)}#/burn-import/<b>[Date yyyy-MM-dd]</b>/<b>[Sum &#8470;1 — Active]</b>/<b>[Sum &#8470;2 — Resting]</b></code>
             <button class="fi-autosync-copy" data-copy="${escapeHtml(burnUrlExample)}">Copy example</button>
           </div>
           <div class="section-header">Automate it</div>
@@ -3264,6 +3341,7 @@ function showLogMealSheet(targetDateStr) {
           🖼️ Choose from library
           <input type="file" accept="image/*" id="meal-lib" style="display:none" />
         </label>
+        <button class="action-sheet-btn" id="meal-voice-btn">🎤 Say what you ate</button>
         <button class="action-sheet-btn" id="meal-manual-btn">✏️ Add manually</button>
       </div>
       <button class="action-sheet-btn action-sheet-cancel" id="meal-sheet-cancel">Cancel</button>
@@ -3310,9 +3388,138 @@ function showLogMealSheet(targetDateStr) {
 
   sheet.querySelector("#meal-cam").addEventListener("change", (e) => processFile(e.target.files[0]));
   sheet.querySelector("#meal-lib").addEventListener("change", (e) => processFile(e.target.files[0]));
+  sheet.querySelector("#meal-voice-btn").addEventListener("click", () => { close(); showVoiceMealSheet(targetDateStr); });
   sheet.querySelector("#meal-manual-btn").addEventListener("click", () => { close(); showMealEditSheet([], "", "manual", targetDateStr); });
   sheet.querySelector("#meal-sheet-cancel").addEventListener("click", close);
   sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
+}
+
+/* ---------- Voice meal capture ---------- */
+
+// Pick a container both MediaRecorder and Gemini accept. Safari/iOS gives
+// audio/mp4, Chrome/Android gives audio/webm — Gemini understands both.
+function pickAudioMime() {
+  if (typeof MediaRecorder === "undefined") return null;
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+  return candidates.find((m) => MediaRecorder.isTypeSupported(m)) || null;
+}
+
+function showVoiceMealSheet(targetDateStr) {
+  if (!navigator.mediaDevices?.getUserMedia || !pickAudioMime()) {
+    alert("Voice recording isn't supported by this browser. Use a photo or add the meal manually.");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "action-sheet-backdrop";
+  overlay.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">Say what you ate
+        <div class="action-sheet-title-sub">e.g. "two eggs, 5 g of olive oil, and 200 g of bagel at 105 calories per 100 grams"</div>
+      </div>
+      <div class="voice-body">
+        <button class="voice-orb" id="voice-orb" aria-label="Start recording">🎤</button>
+        <div class="voice-status" id="voice-status">Tap to start recording</div>
+        <div class="voice-timer" id="voice-timer" hidden>0:00</div>
+      </div>
+      <button class="action-sheet-btn action-sheet-cancel" id="voice-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  let recorder = null, stream = null, chunks = [], tick = null, startedAt = 0, finished = false;
+
+  const close = () => {
+    stopTracks();
+    overlay.classList.remove("open");
+    setTimeout(() => overlay.remove(), 260);
+  };
+  const stopTracks = () => {
+    clearInterval(tick);
+    try { stream?.getTracks().forEach((t) => t.stop()); } catch {}
+  };
+
+  const orb    = overlay.querySelector("#voice-orb");
+  const status = overlay.querySelector("#voice-status");
+  const timer  = overlay.querySelector("#voice-timer");
+
+  const start = async () => {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      status.textContent = "Microphone permission denied. Allow mic access and try again.";
+      return;
+    }
+    const mime = pickAudioMime();
+    recorder = new MediaRecorder(stream, { mimeType: mime });
+    chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => { if (!finished) handleStop(mime); };
+    recorder.start();
+    startedAt = Date.now();
+
+    orb.classList.add("voice-orb-live");
+    orb.textContent = "⏹";
+    orb.setAttribute("aria-label", "Stop recording");
+    status.textContent = "Listening… tap to finish";
+    timer.hidden = false;
+    tick = setInterval(() => {
+      const s = Math.floor((Date.now() - startedAt) / 1000);
+      timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      if (s >= 60) stop(); // keep clips short — plenty for a meal description
+    }, 250);
+  };
+
+  const stop = () => {
+    if (!recorder || recorder.state === "inactive") return;
+    clearInterval(tick);
+    recorder.stop();
+  };
+
+  const handleStop = async (mime) => {
+    finished = true;
+    stopTracks();
+    if ((Date.now() - startedAt) < 900) {
+      status.textContent = "That was too short — hold on a moment longer.";
+      orb.classList.remove("voice-orb-live");
+      orb.textContent = "🎤";
+      timer.hidden = true;
+      finished = false;
+      return;
+    }
+    close();
+
+    const loader = document.createElement("div");
+    loader.className = "fuel-loader";
+    loader.innerHTML = `<div class="fuel-loader-inner"><div class="fuel-spinner"></div><div class="fuel-loader-text">Listening back…</div><div class="fuel-loader-sub">Transcribing and costing your meal</div></div>`;
+    document.body.appendChild(loader);
+
+    try {
+      const blob = new Blob(chunks, { type: mime });
+      const b64  = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload  = () => res(String(fr.result).split(",")[1]);
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+      // Gemini wants the bare container type, without the codecs parameter.
+      const geminiMime = mime.split(";")[0];
+      const result = await analyzeFoodAudio(b64, geminiMime);
+      loader.remove();
+      const note = [result.transcript ? `“${result.transcript}”` : "", result.notes || ""]
+        .filter(Boolean).join(" · ");
+      showMealEditSheet(result.items || [], note, "voice", targetDateStr);
+    } catch (err) {
+      loader.remove();
+      alert(err.message || "Couldn't process that recording.");
+    }
+  };
+
+  orb.addEventListener("click", () => {
+    if (!recorder || recorder.state === "inactive") start(); else stop();
+  });
+  overlay.querySelector("#voice-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 }
 
 /* ---------- Meal edit / confirm sheet ---------- */
