@@ -33,6 +33,7 @@ export const SYNCED_KEYS = [
   "hyrox.dailyBurn",
   "hyrox.foods",
   "hyrox.savedMeals",
+  "hyrox.setEntries",
   "hyrox.actuals"
 ];
 

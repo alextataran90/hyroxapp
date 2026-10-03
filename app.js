@@ -21,6 +21,7 @@ const FITNESS_KEY = "hyrox.fitness";
 const DAILY_BURN_KEY = "hyrox.dailyBurn";
 const FOOD_KEY = "hyrox.foods";
 const SAVED_MEALS_KEY = "hyrox.savedMeals";
+const SET_ENTRIES_KEY = "hyrox.setEntries";
 const ACTUALS_KEY = "hyrox.actuals";
 const PLAN_URL = "plan.json";
 
@@ -2605,6 +2606,13 @@ function renderSessionCard(session, weekNum, expanded) {
         <button class="btn-reschedule" data-action="log-actuals" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--info)">📊 Log actuals</button>`;
     })() : ""}
 
+    ${(session.exercises && session.exercises.length) ? `
+      <div class="section-header">Exercises · log your sets</div>
+      ${session.exercises.map((ex, i) =>
+        renderSetGrid(`W${weekNum}.${session.id}.e${i}`, ex.name, ex.setPlan)
+        + exerciseVideoChips({ name: ex.name })
+      ).join("")}` : ""}
+
     ${cooldownHtml ? `
       <div class="section-header">Cooldown</div>
       <div class="list">${cooldownHtml}</div>` : ""}
@@ -2630,6 +2638,159 @@ function renderSessionCard(session, weekNum, expanded) {
       ${session.testProtocol ? `<a class="btn btn-secondary" href="#/tests" style="margin-top:10px;display:flex">Log test result</a>` : ""}
     </div>
   `;
+}
+
+/* ---------- Set-by-set logging (Fitr-style grid) ---------- */
+
+// Entries are indexed per set, keyed "W{week}.{sessionId}.{slot}" -> { "0": {...} }
+// where slot is b{n} for a plan block or e{n} for a structured exercise.
+function getSetEntries(slotKey) {
+  try { return (JSON.parse(store.get(SET_ENTRIES_KEY) || "{}"))[slotKey] || {}; }
+  catch { return {}; }
+}
+
+function saveSetEntry(slotKey, setIdx, patch) {
+  let all = {};
+  try { all = JSON.parse(store.get(SET_ENTRIES_KEY) || "{}"); } catch {}
+  if (!all[slotKey]) all[slotKey] = {};
+  all[slotKey][setIdx] = { ...(all[slotKey][setIdx] || {}), ...patch };
+  store.set(SET_ENTRIES_KEY, JSON.stringify(all));
+}
+
+/**
+ * Where a set grid comes from, in order of preference:
+ *   1. setPlan baked into the plan (the 11-week programme, from Fitr)
+ *   2. parsed from a scheme like "4 × 6" (the 19-week plan)
+ * Returns null when a block isn't set-based (runs, AMRAPs, prose work).
+ */
+function deriveSetPlan(block) {
+  if (block.setPlan && Array.isArray(block.setPlan.targets) && block.setPlan.targets.length) {
+    return block.setPlan;
+  }
+  const sch = (block.scheme || "").trim();
+  if (!sch) return null;
+
+  // "4 × 6", "3 x 8", "3 × 20 steps", "3 × 30s / side", "5 × 5"
+  const m = sch.match(/^(\d+)\s*[×x]\s*(\d+)\s*(s\b|sec|min|m\b|steps?|reps?)?/i);
+  if (!m) return null;
+  const sets = parseInt(m[1], 10);
+  const per  = parseInt(m[2], 10);
+  if (!(sets >= 1 && sets <= 12 && per >= 1)) return null;
+
+  const raw = (m[3] || "").toLowerCase();
+  const metric = /^(s|sec|min)/.test(raw) ? "time" : /^m$/.test(raw) ? "distance_m" : "reps";
+  const unit   = metric === "time" ? (raw.startsWith("min") ? "min" : "s")
+               : metric === "distance_m" ? "m"
+               : (raw.startsWith("step") ? "steps" : "reps");
+
+  const plan = { metric, unit, targets: Array(sets).fill(per) };
+  // Only offer a weight box where a load actually applies.
+  const ld = block.load;
+  if (ld && !Array.isArray(ld) && ["pct", "fixed", "station"].includes(ld.type)) plan.weightUnit = "kg";
+  return plan;
+}
+
+function setGridProgress(slotKey, total) {
+  const e = getSetEntries(slotKey);
+  let done = 0;
+  for (let i = 0; i < total; i++) if (e[i]?.done) done++;
+  return done;
+}
+
+function renderSetGrid(slotKey, name, setPlan, showName = true) {
+  if (!setPlan) return "";
+  const { targets, unit, weightUnit } = setPlan;
+  const entries = getSetEntries(slotKey);
+  const doneCount = setGridProgress(slotKey, targets.length);
+  const hasWeight = !!weightUnit;
+
+  const rows = targets.map((t, i) => {
+    const e = entries[i] || {};
+    const prevW = i > 0 ? (entries[i - 1] || {}).weight : null; // carry-forward hint
+    return `
+      <div class="setrow${e.done ? " setrow-done" : ""}" data-slot="${escapeHtml(slotKey)}" data-set="${i}">
+        <span class="setrow-n">${i + 1}</span>
+        <span class="setrow-target">${t}<span class="setrow-unit">${escapeHtml(unit || "")}</span></span>
+        <input class="setrow-in setrow-actual" type="number" inputmode="numeric" placeholder="${t}"
+          value="${e.actual != null ? e.actual : ""}" aria-label="Actual ${escapeHtml(unit || "")} for set ${i + 1}" />
+        ${hasWeight ? `<input class="setrow-in setrow-weight" type="number" inputmode="decimal"
+          placeholder="${prevW != null ? prevW : escapeHtml(weightUnit)}"
+          value="${e.weight != null ? e.weight : ""}" aria-label="Weight for set ${i + 1}" />` : ""}
+        <button class="setrow-tick" aria-label="Mark set ${i + 1} done">${e.done ? "✓" : ""}</button>
+      </div>`;
+  }).join("");
+
+  return `
+    <div class="setgrid" data-slotkey="${escapeHtml(slotKey)}">
+      <div class="setgrid-head${showName ? "" : " setgrid-head-bare"}">
+        <span class="setgrid-name"${showName ? "" : ' hidden'}>${escapeHtml(name)}</span>
+        <span class="setgrid-count${doneCount === targets.length ? " setgrid-count-done" : ""}">${doneCount}/${targets.length}</span>
+      </div>
+      <div class="setgrid-labels">
+        <span class="setrow-n">#</span>
+        <span class="setrow-target">target</span>
+        <span class="setrow-in">done</span>
+        ${hasWeight ? `<span class="setrow-in">${escapeHtml(weightUnit)}</span>` : ""}
+        <span class="setrow-tick"></span>
+      </div>
+      ${rows}
+      ${setPlan.rest && setPlan.rest[0] != null ? `<div class="setgrid-rest">Rest ${setPlan.rest[0]}${escapeHtml(setPlan.restUnit || "s")} between sets</div>` : ""}
+    </div>`;
+}
+
+/**
+ * Delegated handlers for every set grid currently on screen. Values save on
+ * change rather than on a submit button, so a half-finished session is never
+ * lost if the app is backgrounded mid-workout.
+ */
+function attachSetGridHandlers(root) {
+  (root || document).querySelectorAll(".setgrid").forEach((grid) => {
+    const slotKey = grid.dataset.slotkey;
+    const total = grid.querySelectorAll(".setrow").length;
+
+    const refreshCount = () => {
+      const c = grid.querySelector(".setgrid-count");
+      if (!c) return;
+      const done = setGridProgress(slotKey, total);
+      c.textContent = `${done}/${total}`;
+      c.classList.toggle("setgrid-count-done", done === total);
+    };
+
+    grid.querySelectorAll(".setrow").forEach((row) => {
+      const idx = Number(row.dataset.set);
+      const num = (el) => el.value.trim() === "" ? null : Number(el.value);
+
+      row.querySelector(".setrow-actual")?.addEventListener("change", (e) =>
+        saveSetEntry(slotKey, idx, { actual: num(e.target) }));
+
+      row.querySelector(".setrow-weight")?.addEventListener("change", (e) => {
+        const kg = num(e.target);
+        saveSetEntry(slotKey, idx, { weight: kg });
+        // Mirror the PR tracking the old logger did, keyed on the exercise name.
+        const name = grid.querySelector(".setgrid-name")?.textContent || "";
+        if (kg != null && name) {
+          const prev = getStoredPR(name);
+          if (prev === null) updateStoredPR(name, kg);
+          else if (kg > prev) { updateStoredPR(name, kg); setTimeout(() => showPRToast(name, kg), 250); }
+        }
+      });
+
+      row.querySelector(".setrow-tick")?.addEventListener("click", () => {
+        const now = !row.classList.contains("setrow-done");
+        row.classList.toggle("setrow-done", now);
+        row.querySelector(".setrow-tick").textContent = now ? "✓" : "";
+        // Ticking with an empty box means "did the target"
+        const a = row.querySelector(".setrow-actual");
+        const patch = { done: now };
+        if (now && a && a.value.trim() === "") {
+          patch.actual = Number(a.placeholder);
+          a.value = a.placeholder;
+        }
+        saveSetEntry(slotKey, idx, patch);
+        refreshCount();
+      });
+    });
+  });
 }
 
 /* ---------- Exercise demo videos ---------- */
@@ -2790,6 +2951,7 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
         ${inlineLoadHtml}
         ${block.text ? `<div class="block-text">${escapeHtml(block.text)}</div>` : ""}
         ${block.note ? `<div class="block-note">${escapeHtml(block.note)}</div>` : ""}
+        ${renderSetGrid(`W${weekNum}.${sessionId}.b${blockIdx}`, block.name, deriveSetPlan(block), false)}
         ${exerciseVideoChips(block)}
         ${logPillsHtml}
         ${actionsHtml}
@@ -5582,6 +5744,8 @@ function showLogSetSheet(weekNum, sessionId, blockIdx, blockName, defaultKg) {
 /* ---------- Event delegation ---------- */
 
 function attachSessionHandlers(weekNum) {
+  attachSetGridHandlers(document);
+
   document.querySelectorAll("[data-action='toggle-done']").forEach((btn) => {
     btn.addEventListener("click", () => {
       const sid = btn.dataset.session;

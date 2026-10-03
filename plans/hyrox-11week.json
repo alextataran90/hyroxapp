@@ -1,5 +1,5 @@
 {
- "version": "hyrox-11week-2026-08-06",
+ "version": "hyrox-11week-2026-10-03-sets",
  "id": "hyrox-11week",
  "name": "HYROX 11-Week Program",
  "description": "72 sessions over 11 weeks · Run/Engine, Strength and Race Simulation.",
@@ -3861,7 +3861,93 @@
        "text": "🗒️ Athlete Notes\nNote down weights and distances for each interval as we will be progressing over the coming weeks. It is important we strictly progress those weights and distances in order to create physiological adaptation (give results).\nWarm-Up\nLower Mobility (30sec each):\n① Seated 90/90\n② Skin the cat\n③ Dynamic split position (R/L)\n④ Split quad stretch (R/L)\n⑤ Split hamstring stretch (R/L)\n⑥ Pigeon stretch (R/L)\n⑦ Frog stretch\n⑧ Squat bottom up\n⑨ Calf stretch\n\nGeneral Warm-Up:\n① 15× Front and reverse lunge (R/L)\n② 15× Lateral lunge to curtsy lunge (R/L)\n③ 15× Squats\n④ 15× Narrow squat\n⑤ 15× Med-ball single-leg glute bridge (R/L)\n⑥ 15× Clamshell (R/L)\n⑦ 15× Broad jump → run back\n\nResisted Warm-Up:\n① 15× BB good morning (45/35lbs)\n② 15× BB back squat with pause\n③ 15× BB cossack squat\n④ 15× BB squat jump\n\nSpecific Warm-Up:\nStart loading the bar for workout\nSuperset 1\nBarbell Front Rack Reverse Lunge\n1A\nGHD Back Extension\n1B\nW/ 1sec pause @top\nSandbag Walking Lunges\nDetails:\nWeight = Category weight\nIt must be unbroken/can’t drop SB (respect H standards)\n\nSled Drag (Drop Set)\n4 Sets:\n10m Heavy Drag\n20m Sprint Drag\n\nRest: 3 mins between sets\n\nDetails:\nSet 1 = @ 80% Heavy- 50% Sprint (category weight)\nSets 2-4 = @ 100% Heavy -50% Sprint (category weight)\n\nYou should not use arms to pull, it will be you dragging the sled along the track.\nSuperset 2\nSingle Leg Curl\n2A\nRest 2min B/T SuperSets\nShort Lever Side Plank Clam w/Band\n2B\nCalf Raise\n2C\nW/ Pause at the top\nRun Warm-Up\nDynamic Mobility Drills:\n① 200m walk\n② 200m easy jog\n③ 10× Leg swings (front, back, sides)\n④ 10× Ankle rotations (each direction)\n\nActive Leg Drills:\n① 10× air squats\n② 10× side lunges\n③ 10× front lunges\n④ 10× squat jumps\n⑤ 10× jumping split lunges\n\nShin & Calf Drills (10m each):\n① Walk on heels (toes up)\n② Walk on toes (heels up)\nLactate Threshold\n4 sets:\n800m at RPE 5\nRest 1min b/t sets\n\n4 sets:\n150m at RPE8, 1min at RPE1\nRest 1min b/t sets\n\nTotal: 3800m\nCool Down\nLower Body (30sec each):\n① Child's Pose\n② Skin the cat\n③ Split Quad Stretch (R/L)\n④ Split Hamstring Stretch (R/L)\n⑤ Pigeon Stretch (R/L)\n⑥ Frog Stretch\n⑦ Calf Stretch"
       }
      ],
-     "cooldown": []
+     "cooldown": [],
+     "exercises": [
+      {
+       "name": "Barbell Front Rack Reverse Lunge",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         14,
+         14,
+         14
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "GHD Back Extension",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         15,
+         15,
+         15
+        ]
+       }
+      },
+      {
+       "name": "Sandbag Walking Lunges",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         45,
+         45,
+         45,
+         45
+        ],
+        "rest": [
+         15,
+         15,
+         15,
+         15
+        ],
+        "restUnit": "s"
+       }
+      },
+      {
+       "name": "Single Leg Curl",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         12,
+         12,
+         12
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Short Lever Side Plank Clam w/Band",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         15,
+         15,
+         15
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Calf Raise",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         20,
+         20,
+         20
+        ],
+        "weightUnit": "kg"
+       }
+      }
+     ]
     },
     {
      "id": "W09S2",
@@ -3938,7 +4024,29 @@
       "❼ Triceps OH Stretch",
       "❽ Neck Stretch"
      ],
-     "tips": "Session dedicated to develop overall HYROX upper body Readiness, as well as conditioning and efficiency on Ski-erg.\nToday we will focus specially on the Sled \"pulling phase\" , rowing (horizontal pulling), as well as the grip effort on KB Carries. We will also race prep your horizontal push, which will build capacity in one of the most challenging stations, the Burpee BJ."
+     "tips": "Session dedicated to develop overall HYROX upper body Readiness, as well as conditioning and efficiency on Ski-erg.\nToday we will focus specially on the Sled \"pulling phase\" , rowing (horizontal pulling), as well as the grip effort on KB Carries. We will also race prep your horizontal push, which will build capacity in one of the most challenging stations, the Burpee BJ.",
+     "exercises": [
+      {
+       "name": "Dead Hang",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         20
+        ]
+       }
+      },
+      {
+       "name": "KB FARMERS CARRY",
+       "setPlan": {
+        "metric": "distance_m",
+        "unit": "m",
+        "targets": [
+         30
+        ]
+       }
+      }
+     ]
     },
     {
      "id": "W09S3",
@@ -4291,7 +4399,93 @@
       "❻ Frog Stretch",
       "❼ Calf Stretch"
      ],
-     "tips": "⏰ Note down weights, and distances for each interval, as we will be progressing over the coming weeks, and it is important we strictly progress those weights and distances, in order to create physiological adaptation (give results)⏰"
+     "tips": "⏰ Note down weights, and distances for each interval, as we will be progressing over the coming weeks, and it is important we strictly progress those weights and distances, in order to create physiological adaptation (give results)⏰",
+     "exercises": [
+      {
+       "name": "Barbell Front Rack Reverse Lunge",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         16,
+         16,
+         16
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "GHD Back Extension",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         15,
+         15,
+         15
+        ]
+       }
+      },
+      {
+       "name": "Sandbag Walking Lunges",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         60,
+         60,
+         60,
+         60
+        ],
+        "rest": [
+         30,
+         30,
+         30,
+         30
+        ],
+        "restUnit": "s"
+       }
+      },
+      {
+       "name": "Single Leg Curl",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         12,
+         12,
+         12
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Short Lever Side Plank Clam w/Band",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         15,
+         15,
+         15
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Calf Raise",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         20,
+         20,
+         20
+        ],
+        "weightUnit": "kg"
+       }
+      }
+     ]
     },
     {
      "id": "W10S2",
@@ -4372,7 +4566,35 @@
       "❼ Triceps OH Stretch",
       "❽ Neck Stretch"
      ],
-     "tips": "Session dedicated to develop overall HYROX upper body Readiness, as well as conditioning and efficiency on Ski-erg.\nToday we will focus specially on the Sled \"pulling phase\" , rowing (horizontal pulling), as well as the grip effort on KB Carries. We will also race prep your horizontal push, which will build capacity in one of the most challenging stations, the Burpee BJ."
+     "tips": "Session dedicated to develop overall HYROX upper body Readiness, as well as conditioning and efficiency on Ski-erg.\nToday we will focus specially on the Sled \"pulling phase\" , rowing (horizontal pulling), as well as the grip effort on KB Carries. We will also race prep your horizontal push, which will build capacity in one of the most challenging stations, the Burpee BJ.",
+     "exercises": [
+      {
+       "name": "Dead Hang",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         30,
+         30,
+         30,
+         30
+        ]
+       }
+      },
+      {
+       "name": "KB FARMERS CARRY",
+       "setPlan": {
+        "metric": "distance_m",
+        "unit": "m",
+        "targets": [
+         40,
+         40,
+         40,
+         40
+        ]
+       }
+      }
+     ]
     },
     {
      "id": "W10S3",
@@ -4436,6 +4658,87 @@
       "❺ Pigeon Stretch (R/L)",
       "❻ Frog Stretch",
       "❼ Calf Stretch"
+     ],
+     "exercises": [
+      {
+       "name": "Barbell Squat",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         3,
+         3,
+         3,
+         3
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "DB WEIGHTED VERTICAL JUMP",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         3,
+         3,
+         3,
+         3
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Box Jump",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         5,
+         5,
+         5,
+         5
+        ]
+       }
+      },
+      {
+       "name": "BANDED KNEE RAISES",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         15,
+         15,
+         15
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Copehagen Side Plank variations",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         40,
+         40,
+         40
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "TIBIALIS ANTERIOR RAISE",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         20,
+         20,
+         20
+        ]
+       }
+      }
      ]
     },
     {
@@ -4809,6 +5112,93 @@
       "❺ Pigeon Stretch (R/L)",
       "❻ Frog Stretch",
       "❼ Calf Stretch"
+     ],
+     "exercises": [
+      {
+       "name": "Barbell Front Rack Reverse Lunge",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         18,
+         18,
+         18
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "GHD Back Extension",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         18,
+         18,
+         18
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Sandbag Walking Lunges",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         75,
+         75,
+         75,
+         75
+        ],
+        "rest": [
+         45,
+         45,
+         45,
+         45
+        ],
+        "restUnit": "s"
+       }
+      },
+      {
+       "name": "Single Leg Curl",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         12,
+         12,
+         12
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "BANDED GLUTE SIDE STEPS",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         20,
+         20,
+         20
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Calf Raise",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         20,
+         20,
+         20
+        ],
+        "weightUnit": "kg"
+       }
+      }
      ]
     },
     {
@@ -4884,6 +5274,34 @@
       "❻ Rotator Cuff Stretch",
       "❼ Triceps OH Stretch",
       "❽ Neck Stretch"
+     ],
+     "exercises": [
+      {
+       "name": "Dead Hang",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         40,
+         40,
+         40,
+         40
+        ]
+       }
+      },
+      {
+       "name": "KB FARMERS CARRY",
+       "setPlan": {
+        "metric": "distance_m",
+        "unit": "m",
+        "targets": [
+         50,
+         50,
+         50,
+         50
+        ]
+       }
+      }
      ]
     },
     {
@@ -4952,6 +5370,87 @@
       "❺ Pigeon Stretch (R/L)",
       "❻ Frog Stretch",
       "❼ Calf Stretch"
+     ],
+     "exercises": [
+      {
+       "name": "Barbell Squat",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         2,
+         2,
+         2,
+         2
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "DB WEIGHTED VERTICAL JUMP",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         3,
+         3,
+         3,
+         3
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Box Jump",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         5,
+         5,
+         5,
+         5
+        ]
+       }
+      },
+      {
+       "name": "BANDED KNEE RAISES",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         15,
+         15,
+         15
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "Copehagen Side Plank variations",
+       "setPlan": {
+        "metric": "time",
+        "unit": "s",
+        "targets": [
+         40,
+         40,
+         40
+        ],
+        "weightUnit": "kg"
+       }
+      },
+      {
+       "name": "TIBIALIS ANTERIOR RAISE",
+       "setPlan": {
+        "metric": "reps",
+        "unit": "reps",
+        "targets": [
+         20,
+         20,
+         20
+        ]
+       }
+      }
      ]
     },
     {
