@@ -2632,6 +2632,101 @@ function renderSessionCard(session, weekNum, expanded) {
   `;
 }
 
+/* ---------- Exercise demo videos ---------- */
+
+// Matched against a block's name AND its written-out body, because the two
+// programmes name things differently: the 19-week plan's block titles are the
+// movements ("Back Squat"), while the 11-week programme's titles are section
+// headings ("Heavy", "Open") with the actual exercises inside the prose.
+//
+// These are SEARCH queries, not fixed video IDs — a pinned video can be
+// deleted or renamed, whereas a well-targeted search keeps working.
+// More specific patterns must come first (romanian deadlift before deadlift).
+const EXERCISE_VIDEOS = [
+  // Hyrox stations
+  [/\bski[\s-]?erg\b|\bski\b/i,                        "SkiErg",            "HYROX SkiErg technique"],
+  [/\bsled\s*push\b/i,                          "Sled Push",         "HYROX sled push technique"],
+  [/\bsled\s*(pull|drag)\b/i,                   "Sled Pull",         "HYROX sled pull technique"],
+  [/\bburpee\s*broad\s*jump|BBJ\b/i,            "Burpee Broad Jump", "HYROX burpee broad jump technique"],
+  [/\bfarmer'?s?\s*(carry|walk)\b/i,            "Farmers Carry",     "HYROX farmers carry technique"],
+  [/\bsandbag\s*lunge/i,                        "Sandbag Lunges",    "HYROX sandbag lunges technique", "lunge"],
+  [/\bwall\s*ball/i,                            "Wall Balls",        "HYROX wall balls technique"],
+  // Barbell
+  [/\bromanian\s*deadlift|\bRDL\b/i,            "Romanian Deadlift", "Romanian deadlift form", "deadlift"],
+  [/\bfront[\s-]?rack.*lunge/i,                 "Front-Rack Lunge",  "front rack barbell lunge form", "lunge"],
+  [/\bfront\s*squat\b/i,                        "Front Squat",       "front squat form", "squat"],
+  [/\bback\s*squats?\b|\bsquats?\b/i,               "Squat",             "back squat form", "squat"],
+  [/\bdeadlifts?\b/i,                             "Deadlift",          "conventional deadlift form", "deadlift"],
+  [/\bbench\s*press\b/i,                        "Bench Press",       "bench press form"],
+  [/\bpush\s*press\b/i,                         "Push Press",        "push press technique"],
+  [/\b(strict\s*)?(OHP|overhead\s*press)\b/i,   "Overhead Press",    "strict overhead press form"],
+  [/\bpower\s*cleans?\b|\bcleans?\b/i,              "Power Clean",       "power clean technique", "clean"],
+  [/\bsnatch(es)?\b/i,                               "Snatch",            "dumbbell snatch technique"],
+  [/\bpendlay\s*row\b/i,                        "Pendlay Row",       "Pendlay row form", "row"],
+  [/\brow(ing)?\b|\brower\b/i,                  "Rowing",            "Concept2 rowing technique", "row"],
+  [/\bgood\s*morning\b/i,                       "Good Morning",      "barbell good morning form"],
+  [/\bhip\s*thrust\b/i,                         "Hip Thrust",        "barbell hip thrust form"],
+  [/\bcossack\s*squat\b/i,                      "Cossack Squat",     "cossack squat form", "squat"],
+  // Bodyweight / accessory
+  [/\b(weighted\s*)?pull[\s-]?up|\bchin[\s-]?up/i, "Pull-ups",       "strict pull up technique"],
+  [/\bghd\b|\bback\s*extension\b/i,             "Back Extension",    "GHD back extension form"],
+  [/\bnordic\b/i,                               "Nordic Curl",       "nordic hamstring curl progression"],
+  [/\bpistol\s*squat\b/i,                       "Pistol Squat",      "pistol squat progression", "squat"],
+  [/\bbox\s*(jump|step)/i,                       "Box Jump",          "box jump technique"],
+  [/\bkettlebell\s*swings?|\bKB\s*swings?/i,        "KB Swing",          "kettlebell swing technique"],
+  [/\bthrusters?\b/i,                             "Thruster",          "barbell thruster technique"],
+  [/\bdouble[\s-]?under|\bjump\s*rope\b/i,      "Double Unders",     "double unders technique"],
+  [/\bturkish\s*get[\s-]?up\b/i,                "Turkish Get-up",    "turkish get up technique"],
+  [/\bburpees?\b/i,                               "Burpee",            "burpee technique"],
+  [/\blunges?\b/i,                                "Lunge",             "walking lunge form", "lunge"],
+  [/\bcalf\s*raises?\b/i,                         "Calf Raise",        "calf raise form"],
+  [/\btibialis\b/i,                             "Tibialis Raise",    "tibialis anterior raise"],
+  // Core
+  [/\bpallof\s*press\b/i,                       "Pallof Press",      "pallof press form"],
+  [/\bhollow\s*rock|\bhollow\s*hold/i,          "Hollow Hold",       "hollow body hold technique"],
+  [/\bside\s*plank\b/i,                         "Side Plank",        "side plank form", "plank"],
+  [/\bplanks?\b/i,                                "Plank",             "front plank form", "plank"],
+  [/\b(hanging\s*)?(knee|leg)\s*raise/i,        "Leg Raise",         "hanging leg raise form"],
+  [/\bdead\s*bug\b/i,                           "Dead Bug",          "dead bug exercise form"],
+  // Conditioning
+  [/\bassault\s*bike|\bbike\s*erg\b/i,          "Bike Erg",          "assault bike technique"],
+  [/\bstrides?\b/i,                             "Running Strides",   "running strides technique"],
+];
+
+// Section headings that are not movements — never offer a demo for these.
+const NON_EXERCISE = /^(open|pro|pro\/open|heavy|details?|notes?|athlete notes|for time|for max reps|warm[\s-]?up|cool\s*down|stretch|no rest,?|into--|workout \d+|\d+ rounds?|\d+'? ?amrap|session|strength|zone 2 run)$/i;
+
+function findExerciseVideos(...texts) {
+  const out = [], seen = new Set(), families = new Set();
+  for (const t of texts) {
+    if (!t) continue;
+    for (const [re, label, query, family] of EXERCISE_VIDEOS) {
+      if (seen.has(label) || !re.test(t)) continue;
+      // Patterns are ordered specific -> generic and share a family, so once
+      // "Romanian Deadlift" matches we skip the broad "Deadlift" entry rather
+      // than showing two chips for the same movement.
+      if (family && families.has(family)) continue;
+      if (family) families.add(family);
+      seen.add(label);
+      out.push({ label, query });
+      if (out.length >= 5) return out; // keep the row scannable
+    }
+  }
+  return out;
+}
+
+function exerciseVideoChips(block) {
+  const name = (block.name || "").trim();
+  // A bare section heading on its own tells us nothing — but its body might.
+  const searchName = NON_EXERCISE.test(name) ? "" : name;
+  const vids = findExerciseVideos(searchName, block.text);
+  if (!vids.length) return "";
+  return `<div class="block-videos">${vids.map((v) => `
+    <a class="block-video-chip" target="_blank" rel="noopener"
+       href="https://www.youtube.com/results?search_query=${encodeURIComponent(v.query)}"
+       title="How to: ${escapeHtml(v.label)}">▶ ${escapeHtml(v.label)}</a>`).join("")}</div>`;
+}
+
 function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
   const done = isBlockDone(weekNum, sessionId, blockIdx);
   const isCompound = Array.isArray(block.load) || (block.load && block.load.type === "list");
@@ -2695,6 +2790,7 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
         ${inlineLoadHtml}
         ${block.text ? `<div class="block-text">${escapeHtml(block.text)}</div>` : ""}
         ${block.note ? `<div class="block-note">${escapeHtml(block.note)}</div>` : ""}
+        ${exerciseVideoChips(block)}
         ${logPillsHtml}
         ${actionsHtml}
       </div>
