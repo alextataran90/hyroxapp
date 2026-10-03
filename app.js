@@ -2098,6 +2098,12 @@ async function renderMain(app) {
         <span class="fuel-avg-sep">·</span>
         <span class="fuel-avg-item${fDelta > 0 ? " avg-pos" : fDelta < 0 ? " avg-neg" : ""}">${fDelta > 0 ? "+" : ""}${fDelta}g F</span>
       </div>` : ""}
+      ${!tgt.geminiKey ? `<div class="alert alert-warn" style="margin-top:16px">
+        <strong>Photo analysis needs your own API key</strong>
+        Manual logging works now. For AI photo &amp; text calorie estimates, get a free key at
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--warn)">aistudio.google.com</a>
+        and paste it into <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a>.
+      </div>` : ""}
       <button class="btn" id="log-meal-btn">+ Log meal</button>
       <div class="section-header">Meals</div>
       ${mealsHtml}
