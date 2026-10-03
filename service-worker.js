@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v47-voice-meals";
+const APP_VERSION = "2026-05-27-v48-saved-meals";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

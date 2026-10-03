@@ -20,6 +20,7 @@ const NUTRITION_KEY = "hyrox.nutrition";
 const FITNESS_KEY = "hyrox.fitness";
 const DAILY_BURN_KEY = "hyrox.dailyBurn";
 const FOOD_KEY = "hyrox.foods";
+const SAVED_MEALS_KEY = "hyrox.savedMeals";
 const ACTUALS_KEY = "hyrox.actuals";
 const PLAN_URL = "plan.json";
 
@@ -390,6 +391,67 @@ function makeMealId() {
 }
 
 /* ---------- Food database ---------- */
+
+/* ---------- Saved meals (reusable presets) ---------- */
+
+function getSavedMeals() {
+  try {
+    const all = JSON.parse(store.get(SAVED_MEALS_KEY) || "{}");
+    // Stored as an object keyed by id so sync merges stay simple; expose a
+    // list sorted by most-recently-used so the common choice is at the top.
+    return Object.values(all).sort((a, b) =>
+      (b.lastUsedAt || b.createdAt || "").localeCompare(a.lastUsedAt || a.createdAt || ""));
+  } catch { return []; }
+}
+
+function saveSavedMeal(name, items, label) {
+  const all = (() => { try { return JSON.parse(store.get(SAVED_MEALS_KEY) || "{}"); } catch { return {}; } })();
+  const id = "sm" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  all[id] = {
+    id,
+    name: (name || "").trim() || "Saved meal",
+    label: label || "",
+    createdAt: new Date().toISOString(),
+    lastUsedAt: new Date().toISOString(),
+    items: (items || []).map((it) => ({
+      name: it.name || "",
+      qtyNum: Number(it.qtyNum) || 0,
+      unit: it.unit || "g",
+      kcal: Number(it.kcal) || 0,
+      p: Number(it.p) || 0,
+      c: Number(it.c) || 0,
+      f: Number(it.f) || 0
+    }))
+  };
+  store.set(SAVED_MEALS_KEY, JSON.stringify(all));
+  return id;
+}
+
+function touchSavedMeal(id) {
+  try {
+    const all = JSON.parse(store.get(SAVED_MEALS_KEY) || "{}");
+    if (!all[id]) return;
+    all[id].lastUsedAt = new Date().toISOString();
+    store.set(SAVED_MEALS_KEY, JSON.stringify(all));
+  } catch { /* no-op */ }
+}
+
+function deleteSavedMeal(id) {
+  try {
+    const all = JSON.parse(store.get(SAVED_MEALS_KEY) || "{}");
+    delete all[id];
+    store.set(SAVED_MEALS_KEY, JSON.stringify(all));
+  } catch { /* no-op */ }
+}
+
+function savedMealTotals(meal) {
+  return (meal.items || []).reduce((a, it) => ({
+    kcal: a.kcal + (Number(it.kcal) || 0),
+    p: a.p + (Number(it.p) || 0),
+    c: a.c + (Number(it.c) || 0),
+    f: a.f + (Number(it.f) || 0)
+  }), { kcal: 0, p: 0, c: 0, f: 0 });
+}
 
 function getFoodDb() {
   try { return JSON.parse(store.get(FOOD_KEY) || "{}"); }
@@ -3327,6 +3389,7 @@ function showPhotoRetrySheet(errMsg) {
 /* ---------- Log meal sheet (camera / library / manual) ---------- */
 
 function showLogMealSheet(targetDateStr) {
+  const savedCount = getSavedMeals().length;
   const sheet = document.createElement("div");
   sheet.className = "action-sheet-backdrop";
   sheet.innerHTML = `
@@ -3342,6 +3405,7 @@ function showLogMealSheet(targetDateStr) {
           <input type="file" accept="image/*" id="meal-lib" style="display:none" />
         </label>
         <button class="action-sheet-btn" id="meal-voice-btn">🎤 Say what you ate</button>
+        <button class="action-sheet-btn" id="meal-saved-btn">💾 Saved meals${savedCount ? ` <span class="sheet-badge">${savedCount}</span>` : ""}</button>
         <button class="action-sheet-btn" id="meal-manual-btn">✏️ Add manually</button>
       </div>
       <button class="action-sheet-btn action-sheet-cancel" id="meal-sheet-cancel">Cancel</button>
@@ -3389,9 +3453,89 @@ function showLogMealSheet(targetDateStr) {
   sheet.querySelector("#meal-cam").addEventListener("change", (e) => processFile(e.target.files[0]));
   sheet.querySelector("#meal-lib").addEventListener("change", (e) => processFile(e.target.files[0]));
   sheet.querySelector("#meal-voice-btn").addEventListener("click", () => { close(); showVoiceMealSheet(targetDateStr); });
+  sheet.querySelector("#meal-saved-btn").addEventListener("click", () => { close(); setTimeout(() => showSavedMealsSheet(targetDateStr), 280); });
   sheet.querySelector("#meal-manual-btn").addEventListener("click", () => { close(); showMealEditSheet([], "", "manual", targetDateStr); });
   sheet.querySelector("#meal-sheet-cancel").addEventListener("click", close);
   sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
+}
+
+/* ---------- Saved meals picker ---------- */
+
+function showSavedMealsSheet(targetDateStr) {
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
+
+  const render = () => {
+    const meals = getSavedMeals();
+    const rows = meals.length === 0
+      ? `<div class="saved-empty">
+           <div class="saved-empty-icon">💾</div>
+           <div class="saved-empty-title">No saved meals yet</div>
+           <div class="saved-empty-sub">Build a meal, then tap <strong>Save as a meal</strong> in the edit screen to reuse it here.</div>
+         </div>`
+      : meals.map((m) => {
+          const t = savedMealTotals(m);
+          const preview = (m.items || [])
+            .map((it) => `${escapeHtml(it.name)}${it.qtyNum ? ` ${it.qtyNum}${escapeHtml(it.unit || "")}` : ""}`)
+            .join(" · ");
+          return `
+            <div class="saved-row">
+              <button class="saved-row-main" data-load="${escapeHtml(m.id)}">
+                <div class="saved-row-top">
+                  <span class="saved-row-name">${escapeHtml(m.name)}</span>
+                  <span class="saved-row-kcal">${Math.round(t.kcal)} kcal</span>
+                </div>
+                <div class="saved-row-items">${preview || "—"}</div>
+                <div class="saved-row-macros">${Math.round(t.p)}g P · ${Math.round(t.c)}g C · ${Math.round(t.f)}g F</div>
+              </button>
+              <button class="saved-row-del" data-del="${escapeHtml(m.id)}" aria-label="Delete saved meal">×</button>
+            </div>`;
+        }).join("");
+
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="sm-cancel">Cancel</button>
+          <span class="fuel-edit-title">Saved meals</span>
+          <span style="width:54px"></span>
+        </div>
+        <div class="fuel-edit-scroll" style="padding:16px 16px 24px">
+          ${meals.length ? `<p class="saved-intro">Tap a meal to load it — you can still adjust quantities before saving.</p>` : ""}
+          ${rows}
+        </div>
+      </div>`;
+
+    overlay.querySelector("#sm-cancel").addEventListener("click", close);
+
+    overlay.querySelectorAll("[data-load]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const m = getSavedMeals().find((x) => x.id === btn.dataset.load);
+        if (!m) return;
+        touchSavedMeal(m.id);
+        close();
+        // Deep-copy so edits here never mutate the stored preset.
+        const copy = (m.items || []).map((it) => ({ ...it }));
+        setTimeout(() => showMealEditSheet(copy, "", "saved", targetDateStr), 300);
+      });
+    });
+
+    overlay.querySelectorAll("[data-del]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const m = getSavedMeals().find((x) => x.id === btn.dataset.del);
+        if (!m) return;
+        if (!confirm(`Delete saved meal “${m.name}”?`)) return;
+        deleteSavedMeal(m.id);
+        render();
+      });
+    });
+  };
+
+  render();
 }
 
 /* ---------- Voice meal capture ---------- */
@@ -3584,6 +3728,7 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
           </div>
           ${autoCount > 0 ? `<button class="fed-estimate-btn" id="fed-estimate">✨ Estimate nutrition for ${autoCount} item${autoCount > 1 ? "s" : ""}</button>` : ""}
           <button class="fuel-add-item" id="fed-add">+ Add item</button>
+          ${items.length > 0 ? `<button class="fed-save-preset" id="fed-save-preset">💾 Save as a meal</button>` : ""}
           <div class="fuel-edit-total">
             <div class="fuel-edit-total-row">
               <span>Total${autoCount > 0 ? `<span class="fed-total-note"> (${autoCount} pending)</span>` : ""}</span>
@@ -3779,6 +3924,20 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       renderSheet();
       const names = overlay.querySelectorAll(".fed-name");
       if (names.length) names[names.length - 1].focus();
+    });
+
+    overlay.querySelector("#fed-save-preset")?.addEventListener("click", () => {
+      syncDomToItems();
+      const valid = items.filter((it) => it.name.trim() && !it.auto);
+      if (!valid.length) { showToast("Add at least one item first"); return; }
+      // Default to the first item's name — usually the dish, and easy to edit.
+      const suggested = valid.length === 1
+        ? valid[0].name.trim()
+        : `${valid[0].name.trim()} + ${valid.length - 1} more`;
+      const name = prompt("Name this meal so you can reuse it:", suggested);
+      if (name === null) return; // cancelled
+      saveSavedMeal(name, valid, selLabel);
+      showToast(`💾 Saved “${(name || "Saved meal").trim() || "Saved meal"}”`);
     });
 
     overlay.querySelector("#fed-cancel")?.addEventListener("click", close);
