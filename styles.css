@@ -5455,3 +5455,29 @@ textarea.form-input {
   border-radius: 0;
   background: none;
 }
+
+/* Calendar date on each day pill (v52) */
+.tdp-date {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text-2);
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tdp-sel .tdp-date   { color: var(--accent); }
+.tdp-today .tdp-date { color: var(--text); }
+.tdp-rest .tdp-date  { color: var(--text-4); }
+
+/* Date range beside the week number, so the month is never ambiguous */
+.train-week-range {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-4);
+  letter-spacing: -0.01em;
+  margin-top: 1px;
+}

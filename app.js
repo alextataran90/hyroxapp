@@ -1885,6 +1885,13 @@ async function renderMain(app) {
         <div class="train-week-info">
           <span class="train-week-num">Week ${wn}</span>
           ${phase ? `<span class="train-week-phase"> · ${escapeHtml(phase.name)}</span>` : ""}
+          <span class="train-week-range">${(() => {
+            const a = getDateForDayInWeek(wn, "Mon", settings);
+            const b = getDateForDayInWeek(wn, "Sun", settings);
+            const f = (d, withMon) => d.getDate() + (withMon ? " " + d.toLocaleDateString("en-GB", { month: "short" }) : "");
+            const sameMonth = a.getMonth() === b.getMonth();
+            return `${f(a, !sameMonth)} – ${f(b, true)}`;
+          })()}</span>
         </div>
         <button class="train-week-arrow" id="tn-next" ${wn >= PLAN.weeks.length ? "disabled" : ""} aria-label="Next week">›</button>
       </div>
@@ -1899,8 +1906,14 @@ async function renderMain(app) {
           else if (isToday) cls += " tdp-today";
           if (isDone)       cls += " tdp-done";
           if (!s)           cls += " tdp-rest";
-          return `<button class="${cls}" data-day="${d}" aria-label="${d}">
+          // Show the actual calendar date — "Mo" alone doesn't tell you which
+          // week you're looking at once you navigate away from the current one.
+          const pillDate = getDateForDayInWeek(wn, d, settings);
+          const dom = pillDate.getDate();
+          const mon = pillDate.toLocaleDateString("en-GB", { month: "short" });
+          return `<button class="${cls}" data-day="${d}" aria-label="${d} ${dom} ${mon}">
             <span class="tdp-label">${d.slice(0, 2)}</span>
+            <span class="tdp-date">${dom}</span>
             ${s ? `<span class="tdp-dot dot dot-${s.focus}"></span>` : `<span class="tdp-dot"></span>`}
             ${isDone && !isSel ? `<span class="tdp-check">✓</span>` : ""}
           </button>`;
