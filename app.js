@@ -2576,6 +2576,10 @@ function renderSessionCard(session, weekNum, expanded) {
     return `<a href="#/session/${weekNum}/${escapeHtml(sess.id)}" class="day-pill ${isCurrent ? "selected" : "has-session"}">${d}</a>`;
   }).join("");
 
+  // Plans converted from Fitr carry an ordered `sections` list; the 19-week
+  // plan doesn't, and falls back to the flat warm-up / main / cooldown layout.
+  const hasSections = Array.isArray(session.sections) && session.sections.length > 0;
+
   const blocksHtml = expanded && session.blocks
     ? session.blocks.map((b, i) => renderBlock(b, settings, weekNum, session.id, i)).join("")
     : "";
@@ -2597,24 +2601,32 @@ function renderSessionCard(session, weekNum, expanded) {
         <span>${escapeHtml(focusLabel)} · ${session.duration} min · ${escapeHtml(currentDay)}</span>
       </div>
       <div class="hero-title">${escapeHtml(session.title)}</div>
-      ${session.intent ? `<div class="hero-intent">${escapeHtml(session.intent)}</div>` : ""}
+      ${session.intent && session.intent !== session.title
+        ? `<div class="hero-intent">${escapeHtml(session.intent)}</div>` : ""}
     </div>
 
-    ${warmupHtml ? `
-      <details class="prep-fold">
-        <summary class="prep-fold-head">
-          <span class="prep-fold-title">Warm-up</span>
-          <span class="prep-fold-count">${(session.warmup || []).length} steps</span>
-          <span class="prep-fold-chev">›</span>
-        </summary>
-        <div class="list">${warmupHtml}</div>
-      </details>` : ""}
-
-    ${(blocksHtml || userBlocksHtml) ? `
-      <div class="section-header">Main</div>
-      <div class="list">${blocksHtml}${userBlocksHtml}</div>
+    ${hasSections ? `
+      ${renderSessionSections(session, settings, weekNum)}
+      ${userBlocksHtml ? `<div class="list">${userBlocksHtml}</div>` : ""}
       <button class="btn-reschedule" data-action="add-exercise" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--accent)">+ Add exercise</button>
-      <div class="section-footer">Tap a weight to adjust it · tap ✓ circle to mark done.</div>` : ""}
+      <div class="section-footer">Tap a weight to adjust it · tap ✓ to mark a set or block done.</div>
+    ` : `
+      ${warmupHtml ? `
+        <details class="prep-fold">
+          <summary class="prep-fold-head">
+            <span class="prep-fold-title">Warm-up</span>
+            <span class="prep-fold-count">${(session.warmup || []).length} steps</span>
+            <span class="prep-fold-chev">›</span>
+          </summary>
+          <div class="list">${warmupHtml}</div>
+        </details>` : ""}
+
+      ${(blocksHtml || userBlocksHtml) ? `
+        <div class="section-header">Main</div>
+        <div class="list">${blocksHtml}${userBlocksHtml}</div>
+        <button class="btn-reschedule" data-action="add-exercise" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--accent)">+ Add exercise</button>
+        <div class="section-footer">Tap a weight to adjust it · tap ✓ circle to mark done.</div>` : ""}
+    `}
 
     ${done ? (() => {
       const savedActuals = getSessionActuals(weekNum, session.id);
@@ -2683,24 +2695,26 @@ function renderSessionCard(session, weekNum, expanded) {
         <button class="btn-reschedule" data-action="log-actuals" data-week="${weekNum}" data-sid="${escapeHtml(session.id)}" style="color:var(--info)">📊 Log actuals</button>`;
     })() : ""}
 
-    ${(session.exercises && session.exercises.length) ? `
-      <div class="section-header">Exercises · log your sets</div>
-      ${session.exercises.map((ex, i) =>
-        renderSetGrid(`W${weekNum}.${session.id}.e${i}`, ex.name, ex.setPlan)
-        + exerciseVideoChips({ name: ex.name })
-      ).join("")}` : ""}
+    ${hasSections ? "" : `
+      ${(session.exercises && session.exercises.length) ? `
+        <div class="section-header">Exercises · log your sets</div>
+        ${session.exercises.map((ex, i) =>
+          renderSetGrid(`W${weekNum}.${session.id}.e${i}`, ex.name, ex.setPlan)
+          + exerciseVideoChips({ name: ex.name })
+        ).join("")}` : ""}
 
-    ${cooldownHtml ? `
-      <details class="prep-fold">
-        <summary class="prep-fold-head">
-          <span class="prep-fold-title">Cooldown</span>
-          <span class="prep-fold-count">${(session.cooldown || []).length} steps</span>
-          <span class="prep-fold-chev">›</span>
-        </summary>
-        <div class="list">${cooldownHtml}</div>
-      </details>` : ""}
+      ${cooldownHtml ? `
+        <details class="prep-fold">
+          <summary class="prep-fold-head">
+            <span class="prep-fold-title">Cooldown</span>
+            <span class="prep-fold-count">${(session.cooldown || []).length} steps</span>
+            <span class="prep-fold-chev">›</span>
+          </summary>
+          <div class="list">${cooldownHtml}</div>
+        </details>` : ""}
 
-    ${session.tips ? `<div class="alert alert-info" style="margin-top:16px"><strong>Coach note</strong>${escapeHtml(session.tips)}</div>` : ""}
+      ${session.tips ? `<div class="alert alert-info" style="margin-top:16px"><strong>Coach note</strong>${escapeHtml(session.tips)}</div>` : ""}
+    `}
 
     ${session.testProtocol ? `
       <div class="alert alert-warn" style="margin-top:16px">
@@ -2969,6 +2983,73 @@ function exerciseVideoChips(block) {
     <a class="block-video-chip" target="_blank" rel="noopener"
        href="https://www.youtube.com/results?search_query=${encodeURIComponent(v.query)}"
        title="How to: ${escapeHtml(v.label)}">▶ ${escapeHtml(v.label)}</a>`).join("")}</div>`;
+}
+
+/**
+ * One exercise row of a superset, the way Fitr lays it out: slot label, name,
+ * the coach's notes for that movement, then the set grid to fill in.
+ */
+function renderExerciseItem(item, slotKey) {
+  const notes = (item.notes || []).length
+    ? `<div class="ex-notes">${item.notes.map((n) => `<div class="ex-note">${escapeHtml(n)}</div>`).join("")}</div>`
+    : "";
+  return `
+    <div class="ex-item">
+      <div class="ex-item-head">
+        ${item.slot ? `<span class="ex-slot">${escapeHtml(item.slot)}</span>` : ""}
+        <span class="ex-name">${escapeHtml(item.name)}</span>
+      </div>
+      ${notes}
+      ${renderSetGrid(slotKey, item.name, item.setPlan, false)}
+      ${exerciseVideoChips({ name: item.name })}
+    </div>`;
+}
+
+function renderExerciseGroups(block, weekNum, sessionId, blockIdx) {
+  return (block.groups || []).map((g, gi) => `
+    <div class="ex-group">
+      ${g.label ? `<div class="ex-group-label">${escapeHtml(g.label)}</div>` : ""}
+      ${g.items.map((it, ii) =>
+        renderExerciseItem(it, `W${weekNum}.${sessionId}.b${blockIdx}.g${gi}.e${ii}`)).join("")}
+    </div>`).join("");
+}
+
+/**
+ * Walk `session.sections` in source order. A Fitr session alternates between
+ * warm-ups and work — a strength day really does run warm-up, lift, run
+ * warm-up, intervals — so the order is part of the session, not decoration.
+ * Plans without `sections` (the 19-week file) fall back to the flat layout.
+ */
+function renderSessionSections(session, settings, weekNum) {
+  return (session.sections || []).map((sec) => {
+    if (sec.kind === "warm" || sec.kind === "cool") {
+      const steps = sec.steps || [];
+      if (!steps.length) return "";
+      return `
+        <details class="prep-fold">
+          <summary class="prep-fold-head">
+            <span class="prep-fold-title">${escapeHtml(sec.title)}</span>
+            <span class="prep-fold-count">${steps.length} steps</span>
+            <span class="prep-fold-chev">›</span>
+          </summary>
+          <div class="list">${steps.map((w) => `<div class="prep-row">${escapeHtml(w)}</div>`).join("")}</div>
+        </details>`;
+    }
+    if (sec.kind === "note") {
+      return `<div class="alert alert-info" style="margin-top:16px"><strong>${escapeHtml(sec.title)}</strong>${escapeHtml(sec.text || "")}</div>`;
+    }
+    const block = session.blocks[sec.blockIndex];
+    if (!block) return "";
+    if (block.groups && block.groups.length) {
+      // Exercise rows carry no name of their own, so the section heading is
+      // the only place the block is named.
+      return `
+        <div class="section-header">${escapeHtml(sec.title)}</div>
+        ${renderExerciseGroups(block, weekNum, session.id, sec.blockIndex)}`;
+    }
+    // renderBlock already prints the block's name — don't say it twice.
+    return `<div class="list">${renderBlock(block, settings, weekNum, session.id, sec.blockIndex)}</div>`;
+  }).join("");
 }
 
 function renderBlock(block, settings, weekNum, sessionId, blockIdx) {

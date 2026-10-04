@@ -5256,6 +5256,74 @@ textarea.form-input {
 }
 
 /* ============================================================
+   Fitr-style exercise rows inside a work section (v56)
+   ============================================================ */
+
+/* A superset is one visual unit: the rows inside it are performed back to
+   back, so they share a bracket rather than floating as separate cards. */
+.ex-group {
+  background: var(--surface-1);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.ex-group-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.ex-item + .ex-item {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.ex-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ex-slot {
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-4);
+  background: var(--surface-2);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+.ex-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.ex-notes { margin-top: 6px; }
+
+.ex-note {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.ex-item .setgrid {
+  background: var(--surface-2);
+  margin: 10px 0 0;
+}
+
+.ex-item .block-videos { margin-top: 8px; }
+
+/* ============================================================
    Set-by-set logging grid (v50)
    ============================================================ */
 

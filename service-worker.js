@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v55-start-mode-default";
+const APP_VERSION = "2026-05-27-v56-fitr-session-structure";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
