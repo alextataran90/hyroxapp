@@ -31,15 +31,8 @@
   <div id="pr-toast" hidden></div>
   <div id="timer-pill" hidden></div>
   <main id="app"></main>
-  <div id="update-banner" hidden>
-    <span>New plan available</span>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button id="dismiss-btn" aria-label="Dismiss"
-        onclick="const b=this.closest('#update-banner');b.hidden=true;try{const v=b.dataset.version;if(v)localStorage.setItem('hyrox.app.version',v)}catch(e){}">×</button>
-      <button id="update-btn"
-        onclick="(async()=>{const b=this.closest('#update-banner');b.hidden=true;try{const v=b.dataset.version;if(v)localStorage.setItem('hyrox.app.version',v)}catch(e){};if('serviceWorker' in navigator){try{const r=await navigator.serviceWorker.getRegistrations();for(const x of r)await x.unregister();}catch(e){};if(window.caches){try{const k=await caches.keys();for(const c of k)await caches.delete(c);}catch(e){}}};location.replace(location.pathname+'?v='+Date.now()+location.hash)})()">Reload</button>
-    </div>
-  </div>
+  <!-- No floating update bar: an available update shows as a dot on the gear
+       and a row under Settings → App, so nothing covers the workout. -->
   <!-- Sign-in / sign-up gate. Shown until there's a session. -->
   <div id="auth-root" hidden></div>
 

@@ -1312,7 +1312,17 @@ function showNewBlockSheet(opts = {}) {
   const settings = getSettings();
 
   let selectedId = settings.programId || PROGRAMS[0].id;
-  let startMode  = "fresh"; // "fresh" | "aligned"
+
+  // Which start mode to pre-select. Someone opening this from Settings is
+  // almost always resuming a coached programme that is already under way, so
+  // defaulting them to "fresh" silently drops them a week out of sync. A
+  // brand-new athlete, by contrast, really does want day 1.
+  const defaultStartMode = (program) => {
+    if (isFirstRun || !program.originalWeek1Monday) return "fresh";
+    const wk = weekIndexFor(parseDate(program.originalWeek1Monday));
+    return wk >= 1 && wk <= program.weeks ? "aligned" : "fresh";
+  };
+  let startMode = defaultStartMode(getProgram(selectedId)); // "fresh" | "aligned"
 
   const overlay = document.createElement("div");
   overlay.className = "fuel-edit-overlay";
@@ -1336,6 +1346,12 @@ function showNewBlockSheet(opts = {}) {
     const wkNow       = weekIndexFor(startMonday);
     const inRange     = wkNow >= 1 && wkNow <= program.weeks;
 
+    // Spell out, on the option itself, which week each choice lands you in —
+    // the bottom note alone was too easy to tap straight past.
+    const alignedMonday = canAlign ? parseDate(program.originalWeek1Monday) : null;
+    const alignedWk     = alignedMonday ? weekIndexFor(alignedMonday) : 0;
+    const alignedOk     = alignedWk >= 1 && alignedWk <= program.weeks;
+
     const programCards = PROGRAMS.map((p) => `
       <button class="prog-card${p.id === selectedId ? " prog-card-sel" : ""}" data-prog="${p.id}">
         <div class="prog-card-top">
@@ -1354,11 +1370,13 @@ function showNewBlockSheet(opts = {}) {
       <div class="list">
         <button class="start-opt${startMode === "fresh" ? " start-opt-sel" : ""}" data-mode="fresh">
           <div class="start-opt-name">Start from Week 1</div>
-          <div class="start-opt-sub">Day 1 is this week — ${fmt(startOfWeek(today()))}</div>
+          <div class="start-opt-sub">You're on <strong>Week 1</strong> from ${fmt(startOfWeek(today()))} — all ${program.weeks} weeks from day 1</div>
         </button>
         <button class="start-opt${startMode === "aligned" ? " start-opt-sel" : ""}" data-mode="aligned">
-          <div class="start-opt-name">Align to the original calendar</div>
-          <div class="start-opt-sub">Week 1 was ${fmt(parseDate(program.originalWeek1Monday))} — picks up where the programme is now</div>
+          <div class="start-opt-name">Continue where the program is now</div>
+          <div class="start-opt-sub">${alignedOk
+            ? `Week 1 was ${fmt(alignedMonday)}, so you're on <strong>Week ${alignedWk}</strong> this week`
+            : `Week 1 was ${fmt(alignedMonday)} — today falls outside the original dates`}</div>
         </button>
       </div>` : "";
 
@@ -1390,7 +1408,12 @@ function showNewBlockSheet(opts = {}) {
 
   const bind = () => {
     overlay.querySelectorAll("[data-prog]").forEach((b) =>
-      b.addEventListener("click", () => { selectedId = b.dataset.prog; render(); }));
+      b.addEventListener("click", () => {
+        selectedId = b.dataset.prog;
+        // Each programme has its own calendar, so re-pick the sensible default.
+        startMode = defaultStartMode(getProgram(selectedId));
+        render();
+      }));
     overlay.querySelectorAll("[data-mode]").forEach((b) =>
       b.addEventListener("click", () => { startMode = b.dataset.mode; render(); }));
 
@@ -1511,6 +1534,7 @@ let _pendingPhoto    = null; // { b64, mime, targetDateStr, thumb } — kept whi
 let viewingWeekNum   = null; // week shown in train nav
 let selectedDayOverride = null; // day pill selection (null = smart default)
 let dayTab = "overview"; // "overview" | "training" | "nutrition" | "fitness"
+let _updateReady = false; // a newer plan/app is cached and waiting for a reload
 
 async function loadPlan() {
   const program = getActiveProgram();
@@ -1528,7 +1552,7 @@ async function loadPlan() {
   // version string. That isn't "a new plan is available" — suppress the banner
   // for that one load, otherwise every program switch nags the user to reload.
   if (seenVersion && seenVersion !== PLAN.version && !_programJustSwitched) {
-    showUpdateBanner();
+    flagUpdateAvailable();
   }
   _programJustSwitched = false;
   // Always heal localStorage to the real version so dismiss/reload "sticks".
@@ -1536,12 +1560,39 @@ async function loadPlan() {
   return PLAN;
 }
 
-function showUpdateBanner() {
-  const b = document.getElementById("update-banner");
-  if (!b) return;
-  // Stamp the current version on the element so inline onclicks can use it.
-  if (PLAN && PLAN.version) b.dataset.version = PLAN.version;
-  b.hidden = false;
+/**
+ * An update being available used to raise a fixed bar over the bottom of the
+ * screen, which sat on top of whatever session you were mid-way through. It
+ * now only puts a dot on the Settings gear; the actual Reload button lives
+ * under Settings → App.
+ */
+function flagUpdateAvailable() {
+  _updateReady = true;
+  markSettingsGear();
+}
+
+function markSettingsGear() {
+  document.getElementById("settings-nav-btn")?.classList.toggle("has-update", _updateReady);
+}
+
+/** Reload defeating both the service worker and the HTTP cache. */
+async function hardReload() {
+  if (PLAN && PLAN.version) {
+    try { localStorage.setItem(APP_VERSION_KEY, PLAN.version); } catch {}
+  }
+  if ("serviceWorker" in navigator) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    } catch {}
+    if (window.caches) {
+      try {
+        const keys = await caches.keys();
+        for (const k of keys) await caches.delete(k);
+      } catch {}
+    }
+  }
+  location.replace(location.pathname + "?v=" + Date.now() + location.hash);
 }
 
 // Lightweight transient toast (used by silent Shortcut imports).
@@ -4862,7 +4913,7 @@ async function renderSettings(app, params) {
       </div>
     </div>
     <button id="start-new-block" class="btn btn-secondary" style="margin-top:10px">🏁 Start a new block</button>
-    <div class="section-footer">Restarts the ${PLAN ? PLAN.weeks.length : 19}-week plan from Week 1 this week. History is kept.</div>
+    <div class="section-footer">Switch program, restart from Week 1, or re-align to the original calendar. History is kept either way.</div>
 
     <div class="section-header">Body</div>
     <div class="list">${numRow("body", "bodyWeight", "kg")}</div>
@@ -4975,7 +5026,15 @@ async function renderSettings(app, params) {
       </div>
     </div>
 
-    <div class="section-header">About</div>
+    <div class="section-header">App</div>
+    ${_updateReady ? `
+    <div class="update-row">
+      <div class="update-row-main">
+        <div class="update-row-title">A new version is ready</div>
+        <div class="update-row-sub">Reloading picks up the latest plan and app code.</div>
+      </div>
+      <button class="btn btn-tertiary update-row-btn" id="app-reload">Reload</button>
+    </div>` : ""}
     <div class="list">
       <div class="form-row">
         <span class="form-label">Plan version</span>
@@ -4990,6 +5049,8 @@ async function renderSettings(app, params) {
         <span class="form-input mono" style="text-align:right;color:var(--accent)">${escapeHtml(PLAN.metadata.raceTarget || "—")}</span>
       </div>
     </div>
+    <button id="force-reload" class="btn btn-secondary" style="margin-top:10px">Force reload</button>
+    <div class="section-footer">Clears the offline cache and fetches everything fresh. Use this if the app looks out of date.</div>
   `;
 
   app.innerHTML = html;
@@ -5059,6 +5120,8 @@ async function renderSettings(app, params) {
   }
 
   document.getElementById("start-new-block")?.addEventListener("click", showNewBlockSheet);
+  document.getElementById("app-reload")?.addEventListener("click", hardReload);
+  document.getElementById("force-reload")?.addEventListener("click", hardReload);
 
   document.getElementById("sync-now")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget;
@@ -6119,27 +6182,6 @@ function showReschedulePicker(weekNum, sessionId) {
   });
 }
 
-/* ---------- Update banner ---------- */
-
-document.getElementById("update-btn").addEventListener("click", () => {
-  document.getElementById("update-banner").hidden = true;
-  if (PLAN && PLAN.version) {
-    localStorage.setItem(APP_VERSION_KEY, PLAN.version);
-  }
-  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage("SKIP_WAITING");
-  }
-  location.reload();
-});
-
-const dismissBtn = document.getElementById("dismiss-btn");
-if (dismissBtn) {
-  dismissBtn.addEventListener("click", () => {
-    document.getElementById("update-banner").hidden = true;
-    if (PLAN && PLAN.version) localStorage.setItem(APP_VERSION_KEY, PLAN.version);
-  });
-}
-
 /* ---------- Service worker ---------- */
 
 if ("serviceWorker" in navigator) {
@@ -6147,10 +6189,10 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
   });
 
-  // When the SW sends NEW_VERSION (a new SW just activated and claimed this client),
-  // show the update banner so the user can reload at their convenience.
+  // When the SW sends NEW_VERSION (a new SW just activated and claimed this
+  // client), flag it quietly — the reload button lives in Settings → App.
   navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data === "NEW_VERSION") showUpdateBanner();
+    if (event.data === "NEW_VERSION") flagUpdateAvailable();
   });
 }
 
