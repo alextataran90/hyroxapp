@@ -36,16 +36,22 @@ const PROGRAMS = [
     id: "hyrox-19week",
     file: "plan.json",
     name: "Hyrox 19-Week Macrocycle",
+    // Where the programme came from — shown as the headline label on the
+    // picker, because "which of these two is which" is the whole decision.
+    source: "Claude-generated",
+    sourceKind: "claude",
     weeks: 19,
-    summary: "Base → Build → Peak → Race-Specific → Taper. Loads auto-calculate from your 1RMs and paces in Settings.",
+    summary: "Written for you around your race date, built from your 1RMs and paces. Every weight and pace recalculates when you update your numbers in Settings.",
     tailored: true
   },
   {
     id: "hyrox-11week",
     file: "plans/hyrox-11week.json",
     name: "HYROX 11-Week Program",
+    source: "From the Fitr app",
+    sourceKind: "fitr",
     weeks: 11,
-    summary: "72 sessions · Run/Engine, Strength and Race Simulation. Open and Pro variants written out per session.",
+    summary: "Your coach's programme, imported from Fitr exactly as written — 72 sessions of Run/Engine, Strength and Race Simulation, with Open and Pro variants.",
     // Prose-based programme: sessions are written out in full rather than
     // derived from your Settings numbers, so no auto-calculated weights.
     tailored: false,
@@ -1333,9 +1339,10 @@ function showNewBlockSheet(opts = {}) {
     const programCards = PROGRAMS.map((p) => `
       <button class="prog-card${p.id === selectedId ? " prog-card-sel" : ""}" data-prog="${p.id}">
         <div class="prog-card-top">
-          <span class="prog-card-name">${escapeHtml(p.name)}</span>
+          <span class="prog-card-src prog-src-${p.sourceKind}">${escapeHtml(p.source)}</span>
           <span class="prog-card-weeks">${p.weeks} wks</span>
         </div>
+        <div class="prog-card-name">${escapeHtml(p.name)}</div>
         <div class="prog-card-sum">${escapeHtml(p.summary)}</div>
         ${p.tailored
           ? `<div class="prog-card-tag prog-tag-auto">Loads auto-calculate from your Settings</div>`
@@ -1364,9 +1371,9 @@ function showNewBlockSheet(opts = {}) {
         </div>
         <div class="fuel-edit-scroll" style="padding:20px">
           <p class="nb-intro">${isFirstRun
-            ? "Pick the training program you want to follow. You can switch later from Settings."
+            ? "Two programs to choose from: one Claude writes around your own numbers, or your coach's programme imported from Fitr exactly as written. You can switch later from Settings."
             : "Switching program or restarting keeps all your history, notes, PBs, nutrition and fitness logs."}</p>
-          <div class="section-header">Program</div>
+          <div class="section-header">Where the program comes from</div>
           <div class="prog-list">${programCards}</div>
           ${startOptions}
           <p class="nb-note">${

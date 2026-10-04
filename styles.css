@@ -4909,17 +4909,32 @@ textarea.form-input {
 
 .prog-card-top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 7px;
 }
+
+/* The source is the headline on this card: picking between the two programs
+   is really picking between "Claude wrote it" and "my coach wrote it". */
+.prog-card-src {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.prog-src-claude { color: var(--accent); background: rgba(255, 149, 0, 0.14); }
+.prog-src-fitr   { color: #35a7ff; background: rgba(53, 167, 255, 0.14); }
 
 .prog-card-name {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
+  margin-bottom: 4px;
 }
 
 .prog-card-weeks {
