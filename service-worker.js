@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v50-set-logging";
+const APP_VERSION = "2026-05-27-v51-collapsible-prep";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

@@ -2530,8 +2530,14 @@ function renderSessionCard(session, weekNum, expanded) {
     </div>
 
     ${warmupHtml ? `
-      <div class="section-header">Warm-up</div>
-      <div class="list">${warmupHtml}</div>` : ""}
+      <details class="prep-fold">
+        <summary class="prep-fold-head">
+          <span class="prep-fold-title">Warm-up</span>
+          <span class="prep-fold-count">${(session.warmup || []).length} steps</span>
+          <span class="prep-fold-chev">›</span>
+        </summary>
+        <div class="list">${warmupHtml}</div>
+      </details>` : ""}
 
     ${(blocksHtml || userBlocksHtml) ? `
       <div class="section-header">Main</div>
@@ -2614,8 +2620,14 @@ function renderSessionCard(session, weekNum, expanded) {
       ).join("")}` : ""}
 
     ${cooldownHtml ? `
-      <div class="section-header">Cooldown</div>
-      <div class="list">${cooldownHtml}</div>` : ""}
+      <details class="prep-fold">
+        <summary class="prep-fold-head">
+          <span class="prep-fold-title">Cooldown</span>
+          <span class="prep-fold-count">${(session.cooldown || []).length} steps</span>
+          <span class="prep-fold-chev">›</span>
+        </summary>
+        <div class="list">${cooldownHtml}</div>
+      </details>` : ""}
 
     ${session.tips ? `<div class="alert alert-info" style="margin-top:16px"><strong>Coach note</strong>${escapeHtml(session.tips)}</div>` : ""}
 
