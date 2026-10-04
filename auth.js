@@ -41,6 +41,7 @@ export const SYNCED_KEYS = [
 
 let sb = null;
 let currentUser = null;
+let pullOk = false;   // did we successfully load this account's data?
 let configError = null;
 
 function initClient() {
@@ -63,6 +64,8 @@ function initClient() {
     }
   });
 }
+
+export function hasLoadedRemote() { return pullOk; }
 
 export function getCurrentUser() {
   return currentUser;
@@ -145,6 +148,13 @@ function schedulePush() {
 
 export async function pushDirty() {
   if (!sb || !currentUser || syncing || dirty.size === 0) return;
+  if (!pullOk) {
+    // We never loaded this account — pushing now would overwrite good cloud
+    // data with local defaults. Hold the queue until a pull succeeds.
+    console.warn("[sync] push held: remote state was never loaded");
+    onStatus("error");
+    return;
+  }
   if (!navigator.onLine) { onStatus("offline"); return; }
 
   syncing = true;
@@ -185,12 +195,13 @@ export async function pullAll() {
       store.setLocalOnly(row.key, JSON.stringify(row.value ?? {}));
       pulled++;
     });
+    pullOk = true;
     onStatus(dirty.size === 0 ? "synced" : "pending");
-    return { pulled };
+    return { ok: true, pulled };
   } catch (e) {
     console.warn("[sync] pull failed:", e.message || e);
     onStatus("error");
-    return { pulled: 0, error: e };
+    return { ok: false, pulled: 0, error: e };
   }
 }
 
@@ -468,7 +479,12 @@ export async function initAuth() {
   loadPending();
 
   // Pull this account's data into the local cache before the app renders.
-  await pullAll();
+  // Retry briefly — a transient failure here used to look like a new account.
+  let pull = await pullAll();
+  for (let attempt = 0; !pull.ok && attempt < 2; attempt++) {
+    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    pull = await pullAll();
+  }
 
   // Offer to bring across anything saved before accounts existed.
   if (hasLegacyData()) {

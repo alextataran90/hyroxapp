@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v52-pill-dates";
+const APP_VERSION = "2026-05-27-v53-sync-safety";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

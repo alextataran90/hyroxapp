@@ -2,7 +2,7 @@
 
 import {
   store, initAuth, getCurrentUser, signOut,
-  pushDirty, setSyncStatusHandler
+  pushDirty, setSyncStatusHandler, hasLoadedRemote
 } from "./auth.js";
 
 const APP_VERSION_KEY = "hyrox.app.version";
@@ -6164,6 +6164,21 @@ function seedConfig() {
   } catch {}
 }
 
+
+function showLoadFailed() {
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.innerHTML = `
+    <div class="program-complete">
+      <div class="pc-emoji">⚠️</div>
+      <h2 class="pc-title">Couldn't load your training</h2>
+      <p class="pc-sub">We reached your account but couldn't fetch your data. Nothing has been changed — your plan and history are safe in the cloud.</p>
+      <button class="btn" id="lf-retry">Try again</button>
+      <p class="pc-hint">If this keeps happening, check your connection. Avoid making changes until it loads, so nothing is overwritten.</p>
+    </div>`;
+  document.getElementById("lf-retry")?.addEventListener("click", () => location.reload());
+}
+
 /* ---------- Boot ---------- */
 
 // Use replaceState (not location.hash=) so we don't fire a hashchange event here.
@@ -6186,6 +6201,13 @@ function seedConfig() {
 
   // First run: no program picked and nothing logged yet → let them choose one
   // rather than dropping them on a default plan whose dates are long past.
+  // Only ever treat someone as new when we KNOW their account is empty. If the
+  // initial load failed we have local defaults in hand, which look identical to
+  // a fresh account — onboarding there would overwrite a real plan.
+  if (!hasLoadedRemote()) {
+    showLoadFailed();
+    return;
+  }
   const s = getSettings();
   if (!s.onboarded) {
     const hasHistory = Object.keys(getProgress().sessions || {}).length > 0;
