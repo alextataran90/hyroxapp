@@ -300,6 +300,20 @@ function fieldRow(id, label, type, placeholder, extra = "") {
       autocapitalize="none" autocorrect="off" spellcheck="false" ${extra} />`;
 }
 
+/**
+ * Supabase hands back whatever the fetch layer threw, so a sleeping or
+ * unreachable backend arrives as Safari's bare "Load failed" (Chrome:
+ * "Failed to fetch") — which tells the person nothing and looks like they
+ * typed something wrong. Name the real problem instead.
+ */
+function friendlyAuthError(error) {
+  const msg = (error && error.message) || "Something went wrong.";
+  if (/load failed|failed to fetch|networkerror|network request failed|fetch failed/i.test(msg)) {
+    return "Can't reach the server right now. Check your connection and try again in a minute — if it keeps failing, tell whoever shared the app with you.";
+  }
+  return msg;
+}
+
 function renderAuthGate(mode = "signin", message = "") {
   const root = document.getElementById("auth-root");
   if (!root) return;
@@ -364,7 +378,7 @@ function renderAuthGate(mode = "signin", message = "") {
       if (!email() || !pass()) return renderAuthGate("signin", "Enter your email and password.");
       busy(true, "Sign in");
       const { error } = await sb.auth.signInWithPassword({ email: email(), password: pass() });
-      if (error) return renderAuthGate("signin", error.message);
+      if (error) return renderAuthGate("signin", friendlyAuthError(error));
       location.reload();
     } else if (mode === "signup") {
       if (!email() || pass().length < 8) {
@@ -372,7 +386,7 @@ function renderAuthGate(mode = "signin", message = "") {
       }
       busy(true, "Create account");
       const { data, error } = await sb.auth.signUp({ email: email(), password: pass() });
-      if (error) return renderAuthGate("signup", error.message);
+      if (error) return renderAuthGate("signup", friendlyAuthError(error));
       // If email confirmation is ON in Supabase, there's no session yet.
       if (!data.session) {
         return renderAuthGate("signin", "✓ Account created. Check your email to confirm, then sign in.");
@@ -383,13 +397,13 @@ function renderAuthGate(mode = "signin", message = "") {
       busy(true, "Send reset link");
       const redirectTo = location.origin + location.pathname;
       const { error } = await sb.auth.resetPasswordForEmail(email(), { redirectTo });
-      if (error) return renderAuthGate("reset", error.message);
+      if (error) return renderAuthGate("reset", friendlyAuthError(error));
       renderAuthGate("signin", "✓ Reset link sent. Check your email.");
     } else if (mode === "recover") {
       if (pass().length < 8) return renderAuthGate("recover", "Password must be at least 8 characters.");
       busy(true, "Save new password");
       const { error } = await sb.auth.updateUser({ password: pass() });
-      if (error) return renderAuthGate("recover", error.message);
+      if (error) return renderAuthGate("recover", friendlyAuthError(error));
       history.replaceState(null, "", location.pathname + "#/today");
       location.reload();
     }

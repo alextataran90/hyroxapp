@@ -1,0 +1,38 @@
+# Supabase pauses a free project after 7 days with no API traffic. When that
+# happened the project's hostname stopped resolving entirely, so the app could
+# not sign anyone in — it surfaced as Safari's bare "Load failed".
+#
+# Training isn't daily, and a friend using the app shouldn't depend on how
+# recently Alex logged a session, so this pings the project on a schedule.
+# The key below is the publishable (browser-safe) one that already ships in
+# supabase-config.js; Row Level Security is what protects the data, and this
+# request reads nothing — a 401/200 both count as traffic.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "17 6 */3 * *"   # every 3 days, well inside the 7-day window
+  workflow_dispatch:          # and on demand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the project
+        run: |
+          URL="https://wbqhzlqzbzvpjuboxeca.supabase.co"
+          KEY="sb_publishable_7cYw5jFJK-XEtWHRm82xPQ_f4XKk_Dw"
+          fail=0
+          for path in "/auth/v1/health" "/rest/v1/user_data?select=key&limit=1"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+                     -H "apikey: $KEY" "$URL$path")
+            echo "$path -> HTTP $code"
+            # Anything from the server is fine, including 401 from RLS.
+            # 000 means DNS/connection failed, i.e. the project is paused.
+            if [ "$code" = "000" ]; then fail=1; fi
+          done
+          if [ "$fail" = "1" ]; then
+            echo "::error::Supabase did not answer — the project is probably paused. Resume it at https://supabase.com/dashboard/project/wbqhzlqzbzvpjuboxeca"
+            exit 1
+          fi
+          echo "Project is awake."
