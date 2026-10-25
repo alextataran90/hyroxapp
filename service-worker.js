@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v58-my-menu";
+const APP_VERSION = "2026-05-27-v59-multi-photo-queue";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

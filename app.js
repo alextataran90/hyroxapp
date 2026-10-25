@@ -954,27 +954,63 @@ function renderWorkoutCard(w, showDate = false) {
 
 /* ---------- Gemini Flash API ---------- */
 
-async function analyzeFood(base64Data, mimeType) {
+const PHOTO_TIMEOUT_MS = 60000;   // a photo that hasn't come back in a minute isn't coming back
+const PHOTO_ATTEMPTS    = 2;      // one automatic retry; the queue offers manual retries after that
+
+/**
+ * Analyse one photo, retrying transient failures. A bad key or an exhausted
+ * quota won't fix itself, so those fail fast rather than burning the retry.
+ */
+async function analyzeFoodWithRetry(b64, mime, onAttempt) {
+  let lastErr;
+  for (let attempt = 1; attempt <= PHOTO_ATTEMPTS; attempt++) {
+    try {
+      if (onAttempt) onAttempt(attempt);
+      return await analyzeFood(b64, mime);
+    } catch (err) {
+      lastErr = err;
+      if (/api key|quota|billing/i.test(err.message || "")) break;
+      if (attempt < PHOTO_ATTEMPTS) await new Promise((r) => setTimeout(r, 1200 * attempt));
+    }
+  }
+  throw lastErr;
+}
+
+async function analyzeFood(base64Data, mimeType, timeoutMs = PHOTO_TIMEOUT_MS) {
   const s = getSettings();
   const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
   if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
 
   const prompt = `You are a professional nutritionist. Analyse this meal photo carefully.\nReturn ONLY valid JSON (no markdown, no code fences) in this exact schema:\n{"items":[{"name":"string","qty":"string","kcal":number,"p":number,"c":number,"f":number}],"total":{"kcal":number,"p":number,"c":number,"f":number},"confidence":"high|medium|low","notes":"string"}\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Estimate portions from plate/bowl size and visual cues. Be realistic — do not underestimate. Return ONLY the JSON object.`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [
-          { text: prompt },
-          { inline_data: { mime_type: mimeType, data: base64Data } }
-        ]}],
-        generationConfig: { temperature: 0.1 }
-      })
+  // Without this a stalled request hangs the whole queue behind it.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: base64Data } }
+          ]}],
+          generationConfig: { temperature: 0.1 }
+        })
+      }
+    );
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
-  );
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     let msg = `Gemini error ${res.status}`;
@@ -1584,7 +1620,6 @@ function toggleBlockDone(weekNum, sessionId, blockIdx) {
 
 let PLAN = null;
 let _programJustSwitched = false; // suppresses the update banner on a deliberate program change
-let _pendingPhoto    = null; // { b64, mime, targetDateStr, thumb } — kept while retry is possible
 let viewingWeekNum   = null; // week shown in train nav
 let selectedDayOverride = null; // day pill selection (null = smart default)
 let dayTab = "overview"; // "overview" | "training" | "nutrition" | "fitness"
@@ -3808,64 +3843,155 @@ function showGeminiError(msg) {
 
 /* ---------- Photo retry sheet ---------- */
 
-function showPhotoRetrySheet(errMsg) {
-  if (!_pendingPhoto) { showGeminiError(errMsg); return; }
-  const { b64, mime, targetDateStr, thumb } = _pendingPhoto;
+/* ---------- Multi-photo analysis queue ---------- */
 
-  const isQuota = /quota|limit|billing|rate/i.test(errMsg || "");
-  const friendly = isQuota
-    ? "Daily Gemini quota reached. Try again after midnight Pacific time, or enter the meal manually."
-    : (errMsg || "Gemini API unavailable — check your connection or API key.");
+/**
+ * Several photos of one meal, analysed one at a time and merged into a single
+ * meal to review. Sequential rather than parallel on purpose: Gemini's free
+ * tier is rate-limited per minute, and firing five photos at once is the
+ * reliable way to get four of them rejected.
+ *
+ * Each photo retries automatically once, then offers a manual retry, and any
+ * that never succeed can simply be skipped — a partial result is still worth
+ * more than starting over.
+ */
+function showPhotoQueueSheet(files, targetDateStr) {
+  const shots = files.map((f, i) => ({
+    id: "p" + i + "_" + Date.now().toString(36),
+    file: f,
+    thumb: null,
+    b64: null,
+    mime: f.type || "image/jpeg",
+    status: "queued",          // queued | working | done | failed
+    attempt: 0,
+    error: "",
+    items: [],
+    notes: ""
+  }));
 
   const overlay = document.createElement("div");
-  overlay.className = "photo-retry-overlay";
-  overlay.innerHTML = `
-    <div class="photo-retry-sheet" role="dialog" aria-modal="true">
-      ${thumb ? `<img class="photo-retry-thumb" src="${thumb}" alt="Captured meal photo">` : `<div class="photo-retry-icon">📷</div>`}
-      <div class="photo-retry-title">Analysis failed</div>
-      <div class="photo-retry-msg">${escapeHtml(friendly)}</div>
-      <div class="photo-retry-actions">
-        ${isQuota ? "" : `<button class="photo-retry-btn photo-retry-primary" id="prs-retry">↺ Retry analysis</button>`}
-        <button class="photo-retry-btn photo-retry-secondary" id="prs-manual">✏️ Enter manually</button>
-        <button class="photo-retry-btn photo-retry-cancel" id="prs-cancel">Discard photo</button>
-      </div>
-    </div>`;
+  overlay.className = "fuel-edit-overlay";
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add("open"));
+  const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
 
-  const close = () => {
-    overlay.classList.remove("open");
-    setTimeout(() => overlay.remove(), 260);
+  const readFile = (file) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = (ev) => resolve(ev.target.result.split(",")[1]);
+    r.onerror = () => reject(new Error("Couldn't read that image"));
+    r.readAsDataURL(file);
+  });
+
+  const statusHtml = (sh) => {
+    if (sh.status === "done")    return `<span class="pq-status pq-done">✓ ${sh.items.length} item${sh.items.length === 1 ? "" : "s"}</span>`;
+    if (sh.status === "working") return `<span class="pq-status pq-working"><span class="pq-spin"></span>Analysing${sh.attempt > 1 ? ` · retry ${sh.attempt - 1}` : ""}…</span>`;
+    if (sh.status === "failed")  return `<span class="pq-status pq-failed">✗ ${escapeHtml(sh.error)}</span>`;
+    return `<span class="pq-status pq-queued">Queued</span>`;
   };
 
-  overlay.querySelector("#prs-retry")?.addEventListener("click", async () => {
+  const render = () => {
+    const done   = shots.filter((x) => x.status === "done");
+    const failed = shots.filter((x) => x.status === "failed");
+    const busy   = shots.some((x) => x.status === "working" || x.status === "queued");
+    const totalItems = done.reduce((n, x) => n + x.items.length, 0);
+
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="pq-cancel">Cancel</button>
+          <span class="fuel-edit-title">${shots.length} photo${shots.length === 1 ? "" : "s"}</span>
+          <button class="fuel-edit-save" id="pq-continue"${busy || !done.length ? " disabled" : ""}>Review</button>
+        </div>
+        <div class="fuel-edit-scroll" style="padding:16px 16px 24px">
+          <p class="menu-intro">${busy
+            ? "Analysing one photo at a time so none get rate-limited. You can leave this open."
+            : done.length
+              ? `Found ${totalItems} item${totalItems === 1 ? "" : "s"} across ${done.length} photo${done.length === 1 ? "" : "s"}. Tap Review to check and save them as one meal.`
+              : "No photos came back with anything. Retry below, or enter the meal manually."}</p>
+
+          ${shots.map((sh) => `
+            <div class="pq-row">
+              ${sh.thumb ? `<img class="pq-thumb" src="${sh.thumb}" alt="">` : `<div class="pq-thumb pq-thumb-blank">📷</div>`}
+              <div class="pq-main">
+                <div class="pq-name">${escapeHtml(sh.file.name || "Photo")}</div>
+                ${statusHtml(sh)}
+              </div>
+              ${sh.status === "failed" ? `<button class="menu-row-btn" data-retry="${sh.id}" aria-label="Retry">↺</button>` : ""}
+            </div>`).join("")}
+
+          ${!busy && failed.length ? `<button class="menu-add-btn" id="pq-retry-all" style="margin-top:6px">↺ Retry ${failed.length} failed photo${failed.length === 1 ? "" : "s"}</button>` : ""}
+          ${!busy && !done.length ? `<button class="menu-add-btn" id="pq-manual" style="margin-top:6px">✏️ Enter manually instead</button>` : ""}
+        </div>
+      </div>`;
+
+    overlay.querySelector("#pq-cancel").addEventListener("click", close);
+    overlay.querySelector("#pq-continue")?.addEventListener("click", finish);
+    overlay.querySelector("#pq-retry-all")?.addEventListener("click", () => {
+      failed.forEach((sh) => { sh.status = "queued"; sh.error = ""; sh.attempt = 0; });
+      render();
+      runQueue();
+    });
+    overlay.querySelectorAll("[data-retry]").forEach((b) => b.addEventListener("click", () => {
+      const sh = shots.find((x) => x.id === b.dataset.retry);
+      if (!sh) return;
+      sh.status = "queued"; sh.error = ""; sh.attempt = 0;
+      render();
+      runQueue();
+    }));
+    overlay.querySelector("#pq-manual")?.addEventListener("click", () => {
+      close();
+      setTimeout(() => showMealEditSheet([], "", "photo", targetDateStr, null,
+        shots[0] && shots[0].thumb), 300);
+    });
+  };
+
+  const finish = () => {
+    const done = shots.filter((x) => x.status === "done");
+    const items = done.flatMap((x) => x.items);
+    const notes = done.map((x) => x.notes).filter(Boolean).join(" · ");
     close();
-    const loader = document.createElement("div");
-    loader.className = "fuel-loader";
-    loader.innerHTML = `<div class="fuel-loader-inner">${thumb ? `<img class="fuel-loader-thumb" src="${thumb}" alt="">` : ""}<div class="fuel-spinner"></div><div class="fuel-loader-text">Retrying…</div><div class="fuel-loader-sub">Sending photo to Gemini again</div></div>`;
-    document.body.appendChild(loader);
+    // Merged into one meal: several photos of one sitting is the whole point.
+    setTimeout(() => showMealEditSheet(items, notes, "photo", targetDateStr, null,
+      done[0] ? done[0].thumb : null), 300);
+  };
+
+  let running = false;
+  const runQueue = async () => {
+    if (running) return;
+    running = true;
     try {
-      const result = await analyzeFood(b64, mime);
-      loader.remove();
-      _pendingPhoto = null;
-      showMealEditSheet(result.items || [], result.notes || "", "photo", targetDateStr, null, thumb);
-    } catch (err2) {
-      loader.remove();
-      showPhotoRetrySheet(err2.message); // keep showing retry sheet
+      for (const sh of shots) {
+        if (sh.status !== "queued") continue;
+        sh.status = "working";
+        sh.attempt = 1;
+        render();
+        try {
+          if (!sh.b64) {
+            sh.b64 = await readFile(sh.file);
+            sh.thumb = await compressToThumb(sh.b64, sh.mime);
+          }
+          const result = await analyzeFoodWithRetry(sh.b64, sh.mime, (n) => {
+            sh.attempt = n;
+            render();
+          });
+          sh.items = result.items || [];
+          sh.notes = result.notes || "";
+          sh.status = sh.items.length ? "done" : "failed";
+          if (!sh.items.length) sh.error = "Nothing recognised";
+        } catch (err) {
+          sh.status = "failed";
+          sh.error = err.message || "Failed";
+        }
+        render();
+      }
+    } finally {
+      running = false;
     }
-  });
+    render();
+  };
 
-  overlay.querySelector("#prs-manual").addEventListener("click", () => {
-    close();
-    _pendingPhoto = null;
-    // Open edit sheet pre-loaded with photo thumb (items empty — user fills manually)
-    showMealEditSheet([], "", "photo", targetDateStr, null, thumb);
-  });
-
-  overlay.querySelector("#prs-cancel").addEventListener("click", () => {
-    close();
-    _pendingPhoto = null;
-  });
+  render();
+  runQueue();
 }
 
 /* ---------- Log meal sheet (camera / library / manual) ---------- */
@@ -3883,8 +4009,8 @@ function showLogMealSheet(targetDateStr) {
           <input type="file" accept="image/*" capture="environment" id="meal-cam" style="display:none" />
         </label>
         <label class="action-sheet-btn" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">
-          🖼️ Choose from library
-          <input type="file" accept="image/*" id="meal-lib" style="display:none" />
+          🖼️ Choose from library<span class="sheet-hint">pick several at once</span>
+          <input type="file" accept="image/*" multiple id="meal-lib" style="display:none" />
         </label>
         <button class="action-sheet-btn" id="meal-voice-btn">🎤 Say what you ate</button>
         <button class="action-sheet-btn" id="meal-saved-btn">📒 Pick from my menu${savedCount ? ` <span class="sheet-badge">${savedCount}</span>` : ""}</button>
@@ -3897,43 +4023,15 @@ function showLogMealSheet(targetDateStr) {
 
   const close = () => { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 260); };
 
-  const processFile = (file) => {
-    if (!file) return;
+  const queueFiles = (fileList) => {
+    const files = [...(fileList || [])].filter((f) => f && f.type.startsWith("image/"));
+    if (!files.length) return;
     close();
-    const loader = document.createElement("div");
-    loader.className = "fuel-loader";
-    loader.innerHTML = `<div class="fuel-loader-inner"><div class="fuel-spinner"></div><div class="fuel-loader-text">Analysing meal…</div><div class="fuel-loader-sub">Gemini Flash is estimating calories &amp; macros</div></div>`;
-    document.body.appendChild(loader);
-
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const b64  = ev.target.result.split(",")[1];
-      const mime = file.type || "image/jpeg";
-      // Compress immediately → thumbnail stays in memory for retry UI and gets saved with the meal
-      const thumb = await compressToThumb(b64, mime);
-      _pendingPhoto = { b64, mime, targetDateStr, thumb };
-      // Show thumbnail in loader while waiting
-      if (thumb) {
-        const thumbEl = document.createElement("img");
-        thumbEl.src = thumb;
-        thumbEl.className = "fuel-loader-thumb";
-        loader.querySelector(".fuel-loader-inner").prepend(thumbEl);
-      }
-      try {
-        const result = await analyzeFood(b64, mime);
-        loader.remove();
-        _pendingPhoto = null;
-        showMealEditSheet(result.items || [], result.notes || "", "photo", targetDateStr, null, thumb);
-      } catch (err) {
-        loader.remove();
-        showPhotoRetrySheet(err.message);
-      }
-    };
-    reader.readAsDataURL(file);
+    setTimeout(() => showPhotoQueueSheet(files, targetDateStr), 260);
   };
 
-  sheet.querySelector("#meal-cam").addEventListener("change", (e) => processFile(e.target.files[0]));
-  sheet.querySelector("#meal-lib").addEventListener("change", (e) => processFile(e.target.files[0]));
+  sheet.querySelector("#meal-cam").addEventListener("change", (e) => queueFiles(e.target.files));
+  sheet.querySelector("#meal-lib").addEventListener("change", (e) => queueFiles(e.target.files));
   sheet.querySelector("#meal-voice-btn").addEventListener("click", () => { close(); showVoiceMealSheet(targetDateStr); });
   sheet.querySelector("#meal-saved-btn").addEventListener("click", () => { close(); setTimeout(() => showSavedMealsSheet(targetDateStr), 280); });
   sheet.querySelector("#meal-manual-btn").addEventListener("click", () => { close(); showMealEditSheet([], "", "manual", targetDateStr); });
@@ -4458,7 +4556,6 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
         source: source || "manual",
         photo: photoThumb || (editMeal && editMeal.photo) || null,
       }, targetDateStr);
-      _pendingPhoto = null; // photo safely stored — clear pending
       close();
       const rn = getRoute().name;
       if (rn === "fuel" || rn === "today") route();
