@@ -1,0 +1,20 @@
+# A static check, not a deploy gate (Pages deploys from the branch regardless).
+# It exists because v58 deleted the voice-meal feature in a refactor and nothing
+# noticed for hours: `no-undef` flags a call to a function that no longer exists.
+name: Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint

@@ -2,7 +2,8 @@
 
 import {
   store, initAuth, getCurrentUser, signOut,
-  pushDirty, setSyncStatusHandler, hasLoadedRemote
+  pushDirty, syncNow, pendingCount, setSyncStatusHandler, setRemoteChangeHandler, reportSyncStatus,
+  canRunFromCache
 } from "./auth.js";
 
 const APP_VERSION_KEY = "hyrox.app.version";
@@ -24,7 +25,6 @@ const SAVED_MEALS_KEY = "hyrox.savedMeals";
 const PANTRY_KEY      = "hyrox.pantry";   // what you said you had, for next time
 const SET_ENTRIES_KEY = "hyrox.setEntries";
 const ACTUALS_KEY = "hyrox.actuals";
-const PLAN_URL = "plan.json";
 
 /* ---------- Available training programs ---------- */
 // Each program is a self-contained plan file using the same relative
@@ -205,12 +205,12 @@ function getOverrides() {
 
 function getBlockOverride(weekNum, sessionId, blockIdx) {
   const o = getOverrides();
-  return o[`W${weekNum}.${sessionId}.b${blockIdx}`] ?? null;
+  return o[`${sessionKey(weekNum, sessionId)}.b${blockIdx}`] ?? null;
 }
 
 function setBlockOverride(weekNum, sessionId, blockIdx, kg) {
   const o = getOverrides();
-  const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+  const key = `${sessionKey(weekNum, sessionId)}.b${blockIdx}`;
   if (kg == null) delete o[key];
   else o[key] = kg;
   store.set(OVERRIDES_KEY, JSON.stringify(o));
@@ -221,14 +221,14 @@ function setBlockOverride(weekNum, sessionId, blockIdx, kg) {
 function getUserBlocks(weekNum, sessionId) {
   try {
     const all = JSON.parse(store.get(USER_BLOCKS_KEY) || "{}");
-    return all[`W${weekNum}.${sessionId}`] || [];
+    return all[sessionKey(weekNum, sessionId)] || [];
   } catch { return []; }
 }
 
 function addUserBlock(weekNum, sessionId, block) {
   try {
     const all = JSON.parse(store.get(USER_BLOCKS_KEY) || "{}");
-    const key = `W${weekNum}.${sessionId}`;
+    const key = sessionKey(weekNum, sessionId);
     if (!all[key]) all[key] = [];
     all[key].push({ ...block, id: "ub" + Date.now() });
     store.set(USER_BLOCKS_KEY, JSON.stringify(all));
@@ -238,7 +238,7 @@ function addUserBlock(weekNum, sessionId, block) {
 function deleteUserBlock(weekNum, sessionId, blockId) {
   try {
     const all = JSON.parse(store.get(USER_BLOCKS_KEY) || "{}");
-    const key = `W${weekNum}.${sessionId}`;
+    const key = sessionKey(weekNum, sessionId);
     if (all[key]) all[key] = all[key].filter((b) => b.id !== blockId);
     store.set(USER_BLOCKS_KEY, JSON.stringify(all));
   } catch {}
@@ -249,15 +249,15 @@ function deleteUserBlock(weekNum, sessionId, blockId) {
 function getJournalNote(weekNum, sessionId) {
   try {
     const all = JSON.parse(store.get(JOURNAL_KEY) || "{}");
-    return all[`W${weekNum}.${sessionId}`] || "";
+    return all[sessionKey(weekNum, sessionId)] || "";
   } catch { return ""; }
 }
 
 function saveJournalNote(weekNum, sessionId, text) {
   try {
     const all = JSON.parse(store.get(JOURNAL_KEY) || "{}");
-    if (text) all[`W${weekNum}.${sessionId}`] = text;
-    else delete all[`W${weekNum}.${sessionId}`];
+    if (text) all[sessionKey(weekNum, sessionId)] = text;
+    else delete all[sessionKey(weekNum, sessionId)];
     store.set(JOURNAL_KEY, JSON.stringify(all));
   } catch {}
 }
@@ -267,14 +267,14 @@ function saveJournalNote(weekNum, sessionId, text) {
 function getBlockLogs(weekNum, sessionId, blockIdx) {
   try {
     const all = JSON.parse(store.get(SESSION_LOGS_KEY) || "{}");
-    return all[`W${weekNum}.${sessionId}.b${blockIdx}`] || [];
+    return all[`${sessionKey(weekNum, sessionId)}.b${blockIdx}`] || [];
   } catch { return []; }
 }
 
 function addBlockLog(weekNum, sessionId, blockIdx, entry) {
   try {
     const all = JSON.parse(store.get(SESSION_LOGS_KEY) || "{}");
-    const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+    const key = `${sessionKey(weekNum, sessionId)}.b${blockIdx}`;
     if (!all[key]) all[key] = [];
     all[key].push({ ...entry, id: "l" + Date.now() });
     store.set(SESSION_LOGS_KEY, JSON.stringify(all));
@@ -295,7 +295,7 @@ function addBlockLog(weekNum, sessionId, blockIdx, entry) {
 function deleteBlockLog(weekNum, sessionId, blockIdx, logId) {
   try {
     const all = JSON.parse(store.get(SESSION_LOGS_KEY) || "{}");
-    const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+    const key = `${sessionKey(weekNum, sessionId)}.b${blockIdx}`;
     if (all[key]) all[key] = all[key].filter((l) => l.id !== logId);
     store.set(SESSION_LOGS_KEY, JSON.stringify(all));
   } catch {}
@@ -356,10 +356,6 @@ function showPRToast(blockName, kg) {
 function getNutritionLog() {
   try { return JSON.parse(store.get(NUTRITION_KEY) || "{}"); }
   catch { return {}; }
-}
-
-function getTodayMeals() {
-  return getDayMeals(ymd(today()));
 }
 
 function getDayMeals(dateStr) {
@@ -583,14 +579,14 @@ function getFrequentItemsForMeal(mealLabel, limit = 5) {
 function getSessionActuals(weekNum, sessionId) {
   try {
     const all = JSON.parse(store.get(ACTUALS_KEY) || "{}");
-    return all[`W${weekNum}.${sessionId}`] || null;
+    return all[sessionKey(weekNum, sessionId)] || null;
   } catch { return null; }
 }
 
 function saveSessionActuals(weekNum, sessionId, actuals) {
   try {
     const all = JSON.parse(store.get(ACTUALS_KEY) || "{}");
-    all[`W${weekNum}.${sessionId}`] = actuals;
+    all[sessionKey(weekNum, sessionId)] = actuals;
     store.set(ACTUALS_KEY, JSON.stringify(all));
   } catch {}
 }
@@ -955,12 +951,103 @@ function renderWorkoutCard(w, showDate = false) {
 
 /* ---------- Gemini Flash API ---------- */
 
-const PHOTO_TIMEOUT_MS = 60000;   // a photo that hasn't come back in a minute isn't coming back
+const PHOTO_TIMEOUT_MS = 60000;   // a request that hasn't come back in a minute isn't coming back
 const PHOTO_ATTEMPTS    = 2;      // one automatic retry; the queue offers manual retries after that
 
+// AI-supplied numbers end up in value="…" attributes and in the day's totals.
+// Coerce at the door: a string like `"><img onerror=…>` becomes 0, and NaN,
+// negatives and Infinity can't reach the arithmetic.
+const num0 = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : 0; };
+
 /**
- * Analyse one photo, retrying transient failures. A bad key or an exhausted
- * quota won't fix itself, so those fail fast rather than burning the retry.
+ * Pull the JSON out of a model reply. Models wrap it in a fence, or put a
+ * sentence before/after it; the old fence-strip + JSON.parse threw on both.
+ */
+function parseGeminiJSON(text) {
+  let t = String(text || "").trim();
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(t);
+  if (fence) t = fence[1].trim();
+  try { return JSON.parse(t); } catch { /* fall through to the bracket scan */ }
+  const o = t.indexOf("{"), a = t.indexOf("[");
+  const start = o === -1 ? a : a === -1 ? o : Math.min(o, a);
+  const end = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(t.slice(start, end + 1)); } catch { /* give up below */ }
+  }
+  throw new Error("Couldn't read the AI's reply. Please try again.");
+}
+
+/**
+ * The one place a Gemini request is made.
+ *  - key goes in a header, not the URL (URLs land in history and timing logs)
+ *  - hard timeout, plus an optional caller signal so a spinner can be cancelled
+ *  - an empty/blocked reply is reported as such, not as "Unexpected end of JSON"
+ * Returns the parsed JSON the model produced.
+ */
+async function callGemini({ model, parts, temperature = 0.1, timeoutMs = PHOTO_TIMEOUT_MS, signal }) {
+  const st = getSettings();
+  const apiKey = (st.nutrition && st.nutrition.geminiKey) ? st.nutrition.geminiKey.trim() : "";
+  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const relay = () => ctrl.abort();
+  if (signal) {
+    if (signal.aborted) ctrl.abort();
+    else signal.addEventListener("abort", relay, { once: true });
+  }
+
+  let res;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      signal: ctrl.signal,
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature } })
+    });
+  } catch (err) {
+    if (signal && signal.aborted) { const e = new Error("Cancelled"); e.name = "Cancelled"; throw e; }
+    if (err.name === "AbortError") throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener("abort", relay);
+  }
+
+  if (!res.ok) {
+    let msg = `Gemini error ${res.status}`;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch { /* not JSON */ }
+    throw new Error(msg);
+  }
+
+  const data = await res.json();
+  const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim();
+  if (!text) {
+    const why = data.promptFeedback?.blockReason || data.candidates?.[0]?.finishReason;
+    throw new Error(why ? `Gemini returned nothing (${why}).` : "Gemini returned an empty reply.");
+  }
+  return parseGeminiJSON(text);
+}
+
+// Shape a meal reply into what the edit sheet expects, with every field safe.
+function normalizeMealResult(r) {
+  const items = Array.isArray(r && r.items) ? r.items : [];
+  return {
+    ...(r && typeof r === "object" ? r : {}),
+    items: items.map((it) => ({
+      ...it,
+      name: String((it && it.name) || "").slice(0, 120),
+      qty:  it && it.qty != null ? String(it.qty).slice(0, 60) : "",
+      kcal: num0(it && it.kcal), p: num0(it && it.p), c: num0(it && it.c), f: num0(it && it.f)
+    })),
+    notes: r && r.notes != null ? String(r.notes) : "",
+    transcript: r && r.transcript != null ? String(r.transcript) : ""
+  };
+}
+
+/**
+ * Analyse one photo, retrying transient failures. A bad key, an exhausted
+ * quota or a blocked image won't fix itself, so those fail fast.
  */
 async function analyzeFoodWithRetry(b64, mime, onAttempt) {
   let lastErr;
@@ -970,60 +1057,21 @@ async function analyzeFoodWithRetry(b64, mime, onAttempt) {
       return await analyzeFood(b64, mime);
     } catch (err) {
       lastErr = err;
-      if (/api key|quota|billing/i.test(err.message || "")) break;
+      if (err.name === "Cancelled" || /api key|quota|billing|returned nothing/i.test(err.message || "")) break;
       if (attempt < PHOTO_ATTEMPTS) await new Promise((r) => setTimeout(r, 1200 * attempt));
     }
   }
   throw lastErr;
 }
 
-async function analyzeFood(base64Data, mimeType, timeoutMs = PHOTO_TIMEOUT_MS) {
-  const s = getSettings();
-  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
-  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
-
+async function analyzeFood(base64Data, mimeType, timeoutMs = PHOTO_TIMEOUT_MS, signal) {
   const prompt = `You are a professional nutritionist. Analyse this meal photo carefully.\nReturn ONLY valid JSON (no markdown, no code fences) in this exact schema:\n{"items":[{"name":"string","qty":"string","kcal":number,"p":number,"c":number,"f":number}],"total":{"kcal":number,"p":number,"c":number,"f":number},"confidence":"high|medium|low","notes":"string"}\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Estimate portions from plate/bowl size and visual cues. Be realistic — do not underestimate. Return ONLY the JSON object.`;
-
-  // Without this a stalled request hangs the whole queue behind it.
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res;
-  try {
-    res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: ctrl.signal,
-        body: JSON.stringify({
-          contents: [{ parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64Data } }
-          ]}],
-          generationConfig: { temperature: 0.1 }
-        })
-      }
-    );
-  } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!res.ok) {
-    let msg = `Gemini error ${res.status}`;
-    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
-    throw new Error(msg);
-  }
-
-  const data = await res.json();
-  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-  // Strip markdown fences if Gemini wraps anyway
-  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
-  return JSON.parse(clean);
+  const result = await callGemini({
+    model: "gemini-2.5-flash",
+    parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64Data } }],
+    timeoutMs, signal
+  });
+  return normalizeMealResult(result);
 }
 
 /* ---------- AI nutrition estimation (spoken description) ---------- */
@@ -1034,11 +1082,7 @@ async function analyzeFood(base64Data, mimeType, timeoutMs = PHOTO_TIMEOUT_MS) {
  * speaker states authoritative — if they say a bagel is 105 kcal/100g, that
  * is what gets used rather than the model's own guess for "bagel".
  */
-async function analyzeFoodAudio(base64Data, mimeType) {
-  const s = getSettings();
-  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
-  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
-
+async function analyzeFoodAudio(base64Data, mimeType, signal) {
   const prompt = [
     "You are a professional nutritionist. The audio is someone describing a meal they ate.",
     "",
@@ -1061,72 +1105,35 @@ async function analyzeFoodAudio(base64Data, mimeType) {
     "Return ONLY the JSON object."
   ].join("\n");
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [
-          { text: prompt },
-          { inlineData: { mimeType, data: base64Data } }
-        ] }],
-        generationConfig: { temperature: 0.1 }
-      })
-    }
-  );
-
-  if (!res.ok) {
-    let msg = `Gemini error ${res.status}`;
-    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
-    throw new Error(msg);
-  }
-
-  const data = await res.json();
-  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
-  let parsed;
-  try { parsed = JSON.parse(clean); }
-  catch { throw new Error("Couldn't read the response. Try again, or add the meal manually."); }
-  if (!parsed.items || !parsed.items.length) {
-    throw new Error(parsed.notes || "No food detected in that recording. Try again, closer to the mic.");
-  }
-  return parsed;
+  const result = await callGemini({
+    model: "gemini-2.5-flash",
+    parts: [{ text: prompt }, { inlineData: { mimeType, data: base64Data } }],
+    signal
+  });
+  return normalizeMealResult(result);
 }
 
 /* ---------- AI nutrition estimation (text-only, no image) ---------- */
 
 async function estimateItemNutrition(autoItems) {
-  const s = getSettings();
-  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
-  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
-
-  const list = autoItems.map((it, i) => `${i + 1}. ${it.name}${it.qty ? " — " + it.qty : ""}`).join("\n");
-  const prompt = `You are a professional nutritionist. Estimate nutritional values for each food item below.\nReturn ONLY valid JSON (no markdown, no code fences) as an array with exactly ${autoItems.length} object(s) in this schema:\n[{"name":"string","kcal":number,"p":number,"c":number,"f":number}]\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Use the quantity given. Be accurate and realistic.\nItems:\n${list}\nReturn ONLY the JSON array.`;
+  // The edit sheet keeps quantity as qtyNum + unit, never as `qty`, so the old
+  // prompt asked Gemini to cost "Rice" with no amount and the total was wrong.
+  const qtyOf = (it) => it.qty || (it.qtyNum ? `${it.qtyNum} ${it.unit || "g"}` : "");
+  const list = autoItems.map((it, i) => `${i + 1}. ${it.name}${qtyOf(it) ? " — " + qtyOf(it) : ""}`).join("\n");
+  const prompt = `You are a professional nutritionist. Estimate nutritional values for each food item below.\nReturn ONLY valid JSON (no markdown, no code fences) as an array with exactly ${autoItems.length} object(s) in this schema:\n[{"name":"string","kcal":number,"p":number,"c":number,"f":number}]\nRules: p=protein(g), c=carbohydrates(g), f=fat(g). Use the quantity given — the numbers are for that amount, not per 100 g. Be accurate and realistic.\nItems:\n${list}\nReturn ONLY the JSON array.`;
 
   // Text-only → gemini-3.1-flash-lite (500 RPD free, separate pool from photo model)
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1 }
-      })
-    }
-  );
-
-  if (!res.ok) {
-    let msg = `Gemini error ${res.status}`;
-    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
-    throw new Error(msg);
-  }
-
-  const data = await res.json();
-  const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
-  const result = JSON.parse(clean);
+  const raw = await callGemini({
+    model: "gemini-3.1-flash-lite",
+    parts: [{ text: prompt }]
+  });
+  // Tolerate {"items":[…]} as well as a bare array.
+  const arr = Array.isArray(raw) ? raw : (raw && (raw.items || raw.results)) || [];
+  if (!Array.isArray(arr) || !arr.length) throw new Error("The AI didn't return any estimates. Please try again.");
+  const result = arr.map((r) => ({
+    name: String((r && r.name) || ""),
+    kcal: num0(r && r.kcal), p: num0(r && r.p), c: num0(r && r.c), f: num0(r && r.f)
+  }));
   // Track usage for the tier bar (resets when sessionStorage is cleared / new day)
   const prev = parseInt(sessionStorage.getItem("hyrox.text.estimates.today") || "0", 10);
   sessionStorage.setItem("hyrox.text.estimates.today", String(prev + autoItems.length));
@@ -1150,9 +1157,25 @@ function saveReadiness(data) {
   } catch {}
 }
 
+// Which day the check-in was last skipped. Device-local on purpose: it's a
+// "don't nag me again today" flag, not training data worth syncing.
+const READINESS_SKIP_KEY = "hyrox.readiness.skipped";
+
+function readinessSkippedToday() {
+  try { return localStorage.getItem(READINESS_SKIP_KEY) === ymd(today()); } catch { return false; }
+}
+
+function markReadinessSkipped() {
+  try { localStorage.setItem(READINESS_SKIP_KEY, ymd(today())); } catch { /* private mode */ }
+}
+
 function showReadinessCheck(onDone) {
+  // The sheet lives on <body>, outside the router, so without this a second
+  // visit while it's still open stacks another one on top of it.
+  if (document.querySelector("[data-readiness-sheet]")) return;
   const sheet = document.createElement("div");
   sheet.className = "action-sheet-backdrop";
+  sheet.dataset.readinessSheet = "1";
   const makeRow = (id, label, emoji) => `
     <div class="readiness-row">
       <div class="readiness-label">${emoji} ${label}</div>
@@ -1190,9 +1213,16 @@ function showReadinessCheck(onDone) {
   });
 
   function close() { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 200); }
-  sheet.querySelector("[data-cancel]").addEventListener("click", () => { close(); onDone && onDone(); });
-  document.getElementById("save-readiness").addEventListener("click", () => {
+  // "Once per day" used to rest on a rating having been saved, so Skip — or
+  // tapping Let's go without rating anything — meant the sheet came straight
+  // back on the next session page you opened.
+  sheet.querySelector("[data-cancel]").addEventListener("click", () => {
+    markReadinessSkipped();
+    close(); onDone && onDone();
+  });
+  sheet.querySelector("#save-readiness").addEventListener("click", () => {
     if (Object.keys(ratings).length > 0) saveReadiness(ratings);
+    else markReadinessSkipped();
     close(); onDone && onDone();
   });
 }
@@ -1212,16 +1242,11 @@ function getRefValue(ref, settings) {
 
 function formatSecToPace(sec) {
   if (sec == null || isNaN(sec)) return "—";
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
+  // Round the TOTAL first: rounding only the seconds part turned 3:59.6 into "3:60".
+  const total = Math.round(sec);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function formatKg(kg, rounding) {
-  if (kg == null) return "—";
-  const r = rounding || 2.5;
-  const v = Math.round(kg / r) * r;
-  return `${v % 1 === 0 ? v : v.toFixed(1)} kg`;
 }
 
 function formatTotalSecs(sec) {
@@ -1299,6 +1324,29 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;");
 }
 
+/* ---------- Block-scoped session keys ---------- */
+
+/**
+ * Session state (ticks, weights, notes, set logs, actuals, day moves) is keyed
+ * per (week, session). Both plans reuse the same ids (W01S1…) and so does
+ * restarting a plan, so without a scope a new block inherits every tick and
+ * note from the last one and shows as already done.
+ *
+ * `settings.blockId` is minted when a block genuinely restarts. Accounts that
+ * never restarted have none and keep the original `W{n}.{id}` keys, so nothing
+ * already logged moves.
+ */
+function sessionKey(weekNum, sessionId) {
+  const b = getSettings().blockId;
+  return b ? `${b}:W${weekNum}.${sessionId}` : `W${weekNum}.${sessionId}`;
+}
+
+// Inverse of sessionKey, for screens that walk the stored keys.
+function parseSessionKey(key) {
+  const m = /^(?:([^:.]+):)?W(\d+)\.(.+)$/.exec(key);
+  return m ? { block: m[1] || "", weekNum: Number(m[2]), sessionId: m[3] } : null;
+}
+
 /* ---------- Date / week helpers ---------- */
 
 function parseDate(s) {
@@ -1320,7 +1368,21 @@ function ymd(d) {
 }
 
 function daysBetween(a, b) {
+  // Rounded, so a 23- or 25-hour DST day still counts as one day.
   return Math.round((b - a) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Calendar-day arithmetic. Never do `date.getTime() + n * 86400000` for this:
+ * twice a year a local day is 23 or 25 hours long, so after the autumn clock
+ * change that lands on 23:00 the PREVIOUS day — every pill, meal key and
+ * workout date for the rest of winter ends up a day early. setDate() moves by
+ * calendar days and keeps local midnight.
+ */
+function addDays(d, n) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
 }
 
 function getWeekIndex(settings) {
@@ -1338,11 +1400,6 @@ function startOfWeek(d) {
   r.setDate(d.getDate() + diff);
   r.setHours(0, 0, 0, 0);
   return r;
-}
-
-function getCurrentWeek(plan, settings) {
-  const idx = Math.max(1, getWeekIndex(settings));
-  return plan.weeks.find((w) => w.number === idx) || plan.weeks[plan.weeks.length - 1];
 }
 
 function getCurrentPhase(plan, weekNum) {
@@ -1365,8 +1422,15 @@ function isProgramComplete(settings) {
  * makes the same plan file work for a fresh start and for aligning to an
  * original programme calendar.
  */
-async function startNewBlock({ programId, startMonday, raceDate }) {
+async function startNewBlock({ programId, startMonday, raceDate, restart = true }) {
   const settings = getSettings();
+  // A restart (or a different programme) begins with a clean session log. A
+  // plain re-alignment of the SAME programme's calendar keeps your progress —
+  // moving the dates must not make Week 9 look untouched. The old block's data
+  // isn't deleted, just no longer in view.
+  if (restart || settings.programId !== programId) {
+    settings.blockId = "b" + Date.now().toString(36);
+  }
   settings.programId = programId;
   settings.startDate = ymd(startMonday);
   settings.raceDate  = raceDate;
@@ -1390,12 +1454,12 @@ function week1MondayFor(program, mode) {
 
 // Last calendar day of the final week of a program starting on `startMonday`.
 function programEndDate(program, startMonday) {
-  return new Date(startMonday.getTime() + ((program.weeks - 1) * 7 + 6) * 86400000);
+  return addDays(startMonday, (program.weeks - 1) * 7 + 6);
 }
 
 // Which week of the program today falls in, for a given Week-1 Monday.
 function weekIndexFor(startMonday) {
-  return Math.floor((startOfWeek(today()) - startMonday) / (7 * 86400000)) + 1;
+  return Math.floor(daysBetween(startMonday, startOfWeek(today())) / 7) + 1;
 }
 
 function showNewBlockSheet(opts = {}) {
@@ -1481,7 +1545,7 @@ function showNewBlockSheet(opts = {}) {
         <div class="fuel-edit-scroll" style="padding:20px">
           <p class="nb-intro">${isFirstRun
             ? "Two programs to choose from: one Claude writes around your own numbers, or your coach's programme imported from Fitr exactly as written. You can switch later from Settings."
-            : "Switching program or restarting keeps all your history, notes, PBs, nutrition and fitness logs."}</p>
+            : "Your nutrition, fitness logs and PBs are always kept. Starting from Week 1 or switching programme begins a clean session log (your old sessions stay saved on your account). Continuing where the programme is now just moves the dates."}</p>
           <div class="section-header">Where the program comes from</div>
           <div class="prog-list">${programCards}</div>
           ${startOptions}
@@ -1519,7 +1583,9 @@ function showNewBlockSheet(opts = {}) {
       await startNewBlock({
         programId: program.id,
         startMonday,
-        raceDate: ymd(endDate)
+        raceDate: ymd(endDate),
+        // "Continue where the programme is now" is a calendar fix, not a restart.
+        restart: startMode !== "aligned"
       });
       close();
       navigate("today");
@@ -1538,20 +1604,20 @@ function showNewBlockSheet(opts = {}) {
 
 function getDateForDayInWeek(weekNum, dayName, settings) {
   const planMonday = startOfWeek(parseDate(settings.startDate));
-  const weekMonday = new Date(planMonday.getTime() + (weekNum - 1) * 7 * 86400000);
+  const weekMonday = addDays(planMonday, (weekNum - 1) * 7);
   const DAY_ORDER  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const idx = Math.max(0, DAY_ORDER.indexOf(dayName));
-  return new Date(weekMonday.getTime() + idx * 86400000);
+  return addDays(weekMonday, idx);
 }
 
 function getNutritionWeekSummary(weeksAgo) {
   const mon = startOfWeek(today());
-  const targetMon = new Date(mon.getTime() - weeksAgo * 7 * 86400000);
+  const targetMon = addDays(mon, -weeksAgo * 7);
   let loggedDays = 0, kcal = 0, p = 0, c = 0, f = 0;
   const daily = [];
   const DAY_ABBR = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
   for (let i = 0; i < 7; i++) {
-    const d   = new Date(targetMon.getTime() + i * 86400000);
+    const d   = addDays(targetMon, i);
     const ds  = ymd(d);
     const meals = getDayMeals(ds);
     const t   = getDayTotals(meals);
@@ -1575,13 +1641,13 @@ function getNutritionWeekSummary(weeksAgo) {
 
 function getSessionDay(weekNum, sessionId, defaultDay) {
   const overrides = getDayOverrides();
-  const key = `W${weekNum}.${sessionId}`;
+  const key = sessionKey(weekNum, sessionId);
   return overrides.overrides[key] || defaultDay;
 }
 
 function setSessionDay(weekNum, sessionId, day) {
   const o = getDayOverrides();
-  o.overrides[`W${weekNum}.${sessionId}`] = day;
+  o.overrides[sessionKey(weekNum, sessionId)] = day;
   saveJSON(DAY_OVERRIDES_KEY, o);
 }
 
@@ -1589,12 +1655,12 @@ function setSessionDay(weekNum, sessionId, day) {
 
 function isSessionDone(weekNum, sessionId) {
   const p = getProgress();
-  return Boolean(p.sessions[`W${weekNum}.${sessionId}`]);
+  return Boolean(p.sessions[sessionKey(weekNum, sessionId)]);
 }
 
 function toggleSessionDone(weekNum, sessionId) {
   const p = getProgress();
-  const key = `W${weekNum}.${sessionId}`;
+  const key = sessionKey(weekNum, sessionId);
   if (p.sessions[key]) {
     delete p.sessions[key];
   } else {
@@ -1605,13 +1671,13 @@ function toggleSessionDone(weekNum, sessionId) {
 
 function isBlockDone(weekNum, sessionId, blockIdx) {
   const p = getProgress();
-  const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+  const key = `${sessionKey(weekNum, sessionId)}.b${blockIdx}`;
   return Boolean(p.sessions[key]);
 }
 
 function toggleBlockDone(weekNum, sessionId, blockIdx) {
   const p = getProgress();
-  const key = `W${weekNum}.${sessionId}.b${blockIdx}`;
+  const key = `${sessionKey(weekNum, sessionId)}.b${blockIdx}`;
   if (p.sessions[key]) delete p.sessions[key];
   else p.sessions[key] = { completedAt: new Date().toISOString() };
   saveJSON(PROGRESS_KEY, p);
@@ -1667,19 +1733,28 @@ function markSettingsGear() {
 
 /** Reload defeating both the service worker and the HTTP cache. */
 async function hardReload() {
+  // Offline, this would delete the only copy of the app on the device and then
+  // fail to fetch a new one — leaving nothing that opens.
+  if (!navigator.onLine) {
+    showToast("You're offline — the app can't refresh right now");
+    return;
+  }
   if (PLAN && PLAN.version) {
-    try { localStorage.setItem(APP_VERSION_KEY, PLAN.version); } catch {}
+    try { localStorage.setItem(APP_VERSION_KEY, PLAN.version); } catch { /* private mode */ }
   }
   if ("serviceWorker" in navigator) {
+    // github.io hosts every project under one origin, so getRegistrations() and
+    // caches.keys() return other apps' too. Touch only this app's.
+    const base = location.origin + location.pathname.replace(/[^/]*$/, "");
     try {
       const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) await r.unregister();
-    } catch {}
+      for (const r of regs) if (r.scope.startsWith(base)) await r.unregister();
+    } catch { /* best effort */ }
     if (window.caches) {
       try {
         const keys = await caches.keys();
-        for (const k of keys) await caches.delete(k);
-      } catch {}
+        for (const k of keys) if (k.startsWith("hyrox-")) await caches.delete(k);
+      } catch { /* best effort */ }
     }
   }
   location.replace(location.pathname + "?v=" + Date.now() + location.hash);
@@ -1739,15 +1814,25 @@ async function route() {
   }
 }
 
+// What was on screen after the last render — lets an in-place refresh (after
+// ticking a session, saving a meal…) be told apart from actually navigating.
+let _lastRouteName = "";
+let _lastRouteKey  = "";
+let _dayAtRender   = "";   // the calendar day the screen was last drawn for
+
 async function _doRoute() {
   const r = getRoute();
   const fn = ROUTES[r.name] || renderMain;
+  const routeKey = r.name + "/" + r.params.join("/");
   document.querySelectorAll(".tab").forEach((el) => {
     el.classList.toggle("active", el.dataset.tab === r.name);
   });
 
-  // When navigating away from Train and back, reset day selection
-  if (r.name === "today") {
+  // Reset the day/week selection only when ARRIVING at Today from somewhere
+  // else. It used to reset on every route() — so marking Monday done while
+  // viewing Thursday, or back-logging yesterday's lunch, threw you back to
+  // today's date and made the thing you just did look like it vanished.
+  if (r.name === "today" && _lastRouteName !== "today") {
     viewingWeekNum      = null;
     selectedDayOverride = null;
     // keep dayTab so user stays on whichever tab they last picked
@@ -1767,11 +1852,30 @@ async function _doRoute() {
     const [date, aStr, bStr] = r.params;
     const ds = /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date : ymd(today());
     const num = (v) => {
-      // Shortcuts can hand over "1,234" or "1 234,5" depending on locale.
-      const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(/,(?=\d{3}\b)/g, "").replace(",", "."));
-      return isFinite(n) && n > 0 ? n : 0;
+      // Shortcuts hands over numbers in the phone's locale: "1,300", "1.300",
+      // "1300,6", "1342,156", "1,342.5", "1.342,5". The LAST separator is the
+      // decimal one when both appear; a lone one is a thousands separator only
+      // when it splits clean groups of three ("1,300" / "1.300").
+      let t = String(v ?? "").replace(/\s/g, "");
+      if (!t) return 0;
+      const hasComma = t.includes(","), hasDot = t.includes(".");
+      if (hasComma && hasDot) {
+        t = t.lastIndexOf(",") > t.lastIndexOf(".")
+          ? t.replace(/\./g, "").replace(",", ".")
+          : t.replace(/,/g, "");
+      } else if (hasComma) {
+        t = /^\d{1,3}(,\d{3})+$/.test(t) ? t.replace(/,/g, "") : t.replace(",", ".");
+      } else if (hasDot && /^\d{1,3}(\.\d{3})+$/.test(t)) {
+        t = t.replace(/\./g, "");
+      }
+      const n = parseFloat(t);
+      return Number.isFinite(n) && n > 0 ? n : 0;
     };
-    const kcal = Math.round(num(aStr) + num(bStr));
+    let kcal = Math.round(num(aStr) + num(bStr));
+    // No human burns 12,000 kcal in a day; this is a mis-parsed number or a
+    // hand-crafted link, and without a ceiling it overwrote the day's real value.
+    const tooBig = kcal > 12000;
+    if (tooBig) kcal = 0;
     history.replaceState(null, "", location.pathname + "#/today");
     document.querySelectorAll(".tab").forEach((el) => {
       el.classList.toggle("active", el.dataset.tab === "today");
@@ -1786,7 +1890,9 @@ async function _doRoute() {
     } catch (e) { /* best-effort background render */ }
     showToast(kcal > 0
       ? `🔥 ${kcal.toLocaleString()} kcal burned synced`
+      : tooBig ? "Ignored an unrealistic burn value"
       : "No burn data received");
+    _lastRouteName = "today"; _lastRouteKey = "today/";
     return;
   }
 
@@ -1807,7 +1913,13 @@ async function _doRoute() {
     } catch (e) { /* best-effort background render */ }
     showFitnessImportSheet({
       date:     date || ymd(today()),
-      type:     decodeURIComponent(rawType || "Other"),
+      // A link can carry anything here. A stray "%" would throw and break
+      // routing, and the label is later rendered, so keep it plain text.
+      type:     (() => {
+        let t = "Other";
+        try { t = decodeURIComponent(rawType || "Other"); } catch { /* keep "Other" */ }
+        return t.replace(/[<>"'`&]/g, "").trim().slice(0, 40) || "Other";
+      })(),
       duration: Math.round(parseFloat(durStr || "0")),
       kcal:     Math.round(parseFloat(kcalStr || "0")),
       hr:       Math.round(parseFloat(hrStr || "0")),
@@ -1818,109 +1930,34 @@ async function _doRoute() {
   }
 
   const app = document.getElementById("app");
+  // Re-rendering the same screen (an action refreshed it) should leave you
+  // where you were instead of snapping back to the top of the page.
+  const keepScroll = routeKey === _lastRouteKey ? app.scrollTop : 0;
   try {
     if (!PLAN) await loadPlan();
     renderTopBar();
     app.innerHTML = "";
     await fn(app, r.params);
+    if (keepScroll) app.scrollTop = keepScroll;
   } catch (e) {
     console.error(e);
     app.innerHTML = `<div class="alert alert-warn">Error: ${escapeHtml(e.message)}</div>`;
   }
+  _lastRouteName = r.name;
+  _lastRouteKey  = routeKey;
+  _dayAtRender   = ymd(today());
 }
 
-/* ---------- Week strip ---------- */
-
-function getViewingWeekNum() {
-  if (!PLAN) return 1;
-  if (viewingWeekNum === null) {
-    const settings = getSettings();
-    viewingWeekNum = getWeekIndex(settings);
-  }
-  return Math.max(1, Math.min(PLAN.weeks.length, viewingWeekNum));
-}
-
-function renderWeekStrip() {
-  const strip = document.getElementById("weekstrip");
-  if (!strip || !PLAN) return;
-
-  const settings = getSettings();
-  const wn = getViewingWeekNum();
-  const week = PLAN.weeks.find((w) => w.number === wn);
-  const phase = getCurrentPhase(PLAN, wn);
-  const todayName = DAY_NAMES[new Date().getDay()];
-  const curWeekNum = getWeekIndex(settings);
-  const dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-  // Determine which day is currently active (from route)
-  const r = getRoute();
-  let activeDayName = null;
-  if ((r.name === "session" || r.name === "today") && week) {
-    const sid = r.name === "session" ? r.params[1] : null;
-    if (sid) {
-      const s = week.sessions.find((s) => s.id === sid);
-      if (s) activeDayName = getSessionDay(wn, s.id, s.defaultDay);
-    } else if (r.name === "today") {
-      // Highlight today's day
-      activeDayName = todayName;
-    }
-  }
-
-  const dayMap = {};
-  if (week) {
-    for (const s of week.sessions) {
-      const d = getSessionDay(wn, s.id, s.defaultDay);
-      if (!dayMap[d]) dayMap[d] = s;
-    }
-  }
-
-  const daysHtml = dayOrder.map((d) => {
-    const s = dayMap[d];
-    const isToday = d === todayName && wn === curWeekNum;
-    const isActive = d === activeDayName;
-    const isDone = s && isSessionDone(wn, s.id);
-
-    let cls = "ws-day";
-    if (isActive && s) cls += " ws-active";
-    else if (isToday && s) cls += " ws-today";
-    else if (isToday && !s) cls += " ws-today-rest";
-    if (!s) cls += " ws-rest";
-    if (isDone && !isActive) cls += " ws-done";
-
-    const focusDot = s ? `<span class="ws-dot ws-dot-${s.focus}"></span>` : `<span class="ws-dot ws-dot-empty"></span>`;
-    const checkMark = isDone ? `<span class="ws-check">✓</span>` : "";
-    const inner = `<span class="ws-day-label">${d.slice(0, 2)}</span>${focusDot}${checkMark}`;
-
-    if (s) {
-      return `<a href="#/session/${wn}/${escapeHtml(s.id)}" class="${cls}" title="${escapeHtml(s.title)}">${inner}</a>`;
-    }
-    return `<div class="${cls}">${inner}</div>`;
-  }).join("");
-
-  const isTestWeek = week && week.test;
-  const phaseLabel = phase ? phase.name : "";
-
-  strip.innerHTML = `
-    <div class="ws-inner">
-      <button class="ws-arrow" id="ws-prev" ${wn <= 1 ? "disabled" : ""} aria-label="Previous week">‹</button>
-      <div class="ws-days">${daysHtml}</div>
-      <button class="ws-arrow" id="ws-next" ${wn >= PLAN.weeks.length ? "disabled" : ""} aria-label="Next week">›</button>
-    </div>
-    <div class="ws-label">
-      <span class="ws-wk">Wk ${wn}/${PLAN.weeks.length}${isTestWeek ? " · TEST" : ""}</span>
-      ${phaseLabel ? `<span class="ws-phase"> · ${escapeHtml(phaseLabel)}</span>` : ""}
-    </div>
-  `;
-
-  document.getElementById("ws-prev")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    if (wn > 1) { viewingWeekNum = wn - 1; renderWeekStrip(); }
-  });
-  document.getElementById("ws-next")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    if (wn < PLAN.weeks.length) { viewingWeekNum = wn + 1; renderWeekStrip(); }
-  });
-}
+// An installed PWA can sit in memory for days. Past midnight the screen still
+// says "Today", and a meal logged from it is filed under yesterday's date
+// because the date is captured when the view is drawn. Redraw on resume.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (!_dayAtRender || ymd(today()) === _dayAtRender) return;
+  viewingWeekNum = null;
+  selectedDayOverride = null;
+  route();
+});
 
 /* ---------- Top bar ---------- */
 
@@ -2110,12 +2147,14 @@ async function renderMain(app) {
     // Energy balance: eaten minus total Move ring calories
     const netKcal   = kcal - moveKcal;
     const hasBurn   = moveKcal > 0;
-    const netLabel  = netKcal < 0 ? "surplus" : "net eaten";
+    // eaten − burned: below zero means you ate LESS than you burned (a deficit).
+    // This used to call that case "surplus" — backwards, and shown in green.
+    const netLabel  = netKcal < 0 ? "deficit" : "surplus";
 
     // 7-day rolling average (7 days before selDate, excluding today)
     let avgKcalSum = 0, avgBurnSum = 0, avgDaysCnt = 0, avgBurnDays = 0;
     for (let i = 1; i <= 7; i++) {
-      const d  = new Date(selDate.getTime() - i * 86400000);
+      const d  = addDays(selDate, -i);
       const ds = ymd(d);
       const dm = getDayMeals(ds);
       if (dm.length > 0) { avgKcalSum += getDayTotals(dm).kcal; avgDaysCnt++; }
@@ -2147,7 +2186,7 @@ async function renderMain(app) {
           <div class="osc-icon">⌚</div>
           <div class="osc-label">Fitness</div>
           <div class="osc-value">${fitMin > 0 ? fitMin + " min" : moveKcal > 0 ? moveKcal.toLocaleString() + " kcal" : "–"}</div>
-          <div class="osc-meta">${moveKcal > 0 ? "🔥 " + moveKcal.toLocaleString() + " kcal burned" : fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? dayWorkouts[0].label : "No workout"}</div>
+          <div class="osc-meta">${moveKcal > 0 ? "🔥 " + moveKcal.toLocaleString() + " kcal burned" : fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? escapeHtml(dayWorkouts[0].label) : "No workout"}</div>
         </button>
       </div>
       ${hasBurn && kcal > 0 ? `
@@ -2216,10 +2255,16 @@ async function renderMain(app) {
 
   } else if (dayTab === "training") {
     if (isSelToday) {
-      const yName = DAY_NAMES[((new Date().getDay() - 1 + 7) % 7)];
-      const missed = week.sessions.find((s) => {
-        const d = getSessionDay(wn, s.id, s.defaultDay);
-        return d === yName && !isSessionDone(wn, s.id) && (!selSession || s.id !== selSession.id);
+      // Yesterday was in LAST week when today is Monday. Looking for "Sun" in
+      // this week found next Sunday's session and offered to skip or move it.
+      const todayIdx = new Date().getDay();            // 0 = Sun … 1 = Mon
+      const yName = DAY_NAMES[(todayIdx + 6) % 7];
+      const missWn = todayIdx === 1 ? wn - 1 : wn;
+      const missWeek = PLAN.weeks.find((w) => w.number === missWn);
+      const missed = missWeek && missWeek.sessions.find((s) => {
+        const d = getSessionDay(missWn, s.id, s.defaultDay);
+        return d === yName && !isSessionDone(missWn, s.id)
+          && !(missWn === wn && selSession && s.id === selSession.id);
       });
       if (missed) {
         tabContent += `<div class="catchup-banner">
@@ -2228,8 +2273,8 @@ async function renderMain(app) {
             <div class="catchup-name">${escapeHtml(missed.title)}</div>
           </div>
           <div class="catchup-actions">
-            <button class="catchup-btn" data-catchup-move="${escapeHtml(missed.id)}">Move here</button>
-            <button class="catchup-btn catchup-skip" data-catchup-skip="${escapeHtml(missed.id)}">Skip</button>
+            ${missWn === wn ? `<button class="catchup-btn" data-catchup-move="${escapeHtml(missed.id)}">Move here</button>` : ""}
+            <button class="catchup-btn catchup-skip" data-catchup-skip="${escapeHtml(missed.id)}" data-catchup-week="${missWn}">Skip</button>
           </div>
         </div>`;
       }
@@ -2281,7 +2326,7 @@ async function renderMain(app) {
     // 7-day rolling average (7 days before selDate)
     let avgKcal = 0, avgP = 0, avgC = 0, avgF = 0, avgDays = 0;
     for (let i = 1; i <= 7; i++) {
-      const d  = new Date(selDate.getTime() - i * 86400000);
+      const d  = addDays(selDate, -i);
       const ds = ymd(d);
       const dm = getDayMeals(ds);
       if (dm.length > 0) {
@@ -2290,7 +2335,8 @@ async function renderMain(app) {
         avgDays++;
       }
     }
-    const has7dAvg = avgDays > 0;
+    // Nothing logged yet today isn't "−2100 vs average" — it's just not eaten yet.
+    const has7dAvg = avgDays > 0 && totals.kcal > 0;
     let kcalDelta = 0, pDelta = 0, cDelta = 0, fDelta = 0;
     if (has7dAvg) {
       avgKcal = Math.round(avgKcal / avgDays);
@@ -2540,7 +2586,10 @@ async function renderMain(app) {
       });
     });
     app.querySelectorAll("[data-catchup-skip]").forEach((btn) => {
-      btn.addEventListener("click", () => { toggleSessionDone(wn, btn.dataset.catchupSkip); renderMain(app); });
+      btn.addEventListener("click", () => {
+        toggleSessionDone(Number(btn.dataset.catchupWeek) || wn, btn.dataset.catchupSkip);
+        renderMain(app);
+      });
     });
   }
 
@@ -2647,7 +2696,6 @@ function renderSessionCard(session, weekNum, expanded) {
   const done = isSessionDone(weekNum, session.id);
 
   const week = PLAN.weeks.find((w) => w.number === weekNum);
-  const daysAll = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const currentDay = getSessionDay(weekNum, session.id, session.defaultDay);
 
   const dayMap = {};
@@ -2661,15 +2709,6 @@ function renderSessionCard(session, weekNum, expanded) {
   const focusLabel = {
     strength: "Strength", run: "Run", hybrid: "Hybrid", sim: "Hyrox sim", test: "Test"
   }[session.focus] || session.focus;
-
-  const dayChipsHtml = daysAll.map((d) => {
-    const sess = dayMap[d];
-    const isCurrent = sess && sess.id === session.id;
-    if (!sess) {
-      return `<span class="day-pill rest">${d}</span>`;
-    }
-    return `<a href="#/session/${weekNum}/${escapeHtml(sess.id)}" class="day-pill ${isCurrent ? "selected" : "has-session"}">${d}</a>`;
-  }).join("");
 
   // Plans converted from Fitr carry an ordered `sections` list; the 19-week
   // plan doesn't, and falls back to the flat warm-up / main / cooldown layout.
@@ -2794,7 +2833,7 @@ function renderSessionCard(session, weekNum, expanded) {
       ${(session.exercises && session.exercises.length) ? `
         <div class="section-header">Exercises · log your sets</div>
         ${session.exercises.map((ex, i) =>
-          renderSetGrid(`W${weekNum}.${session.id}.e${i}`, ex.name, ex.setPlan)
+          renderSetGrid(`${sessionKey(weekNum, session.id)}.e${i}`, ex.name, ex.setPlan)
           + exerciseVideoChips({ name: ex.name })
         ).join("")}` : ""}
 
@@ -2870,7 +2909,7 @@ function deriveSetPlan(block) {
   if (!(sets >= 1 && sets <= 12 && per >= 1)) return null;
 
   const raw = (m[3] || "").toLowerCase();
-  const metric = /^(s|sec|min)/.test(raw) ? "time" : /^m$/.test(raw) ? "distance_m" : "reps";
+  const metric = /^(s|sec|min)$/.test(raw) ? "time" : /^m$/.test(raw) ? "distance_m" : "reps";
   const unit   = metric === "time" ? (raw.startsWith("min") ? "min" : "s")
                : metric === "distance_m" ? "m"
                : (raw.startsWith("step") ? "steps" : "reps");
@@ -2952,9 +2991,16 @@ function attachSetGridHandlers(root) {
       const idx = Number(row.dataset.set);
       const num = (el) => el.value.trim() === "" ? null : Number(el.value);
 
+      // Save as you type, not on blur. "change" only fires when the field loses
+      // focus, and iOS doesn't blur an input when you tap a <button>: type a
+      // weight, tap ✓, lock the phone — and the weight was never stored.
+      row.querySelector(".setrow-actual")?.addEventListener("input", (e) =>
+        saveSetEntry(slotKey, idx, { actual: num(e.target) }));
       row.querySelector(".setrow-actual")?.addEventListener("change", (e) =>
         saveSetEntry(slotKey, idx, { actual: num(e.target) }));
 
+      row.querySelector(".setrow-weight")?.addEventListener("input", (e) =>
+        saveSetEntry(slotKey, idx, { weight: num(e.target) }));
       row.querySelector(".setrow-weight")?.addEventListener("change", (e) => {
         const kg = num(e.target);
         saveSetEntry(slotKey, idx, { weight: kg });
@@ -2973,11 +3019,15 @@ function attachSetGridHandlers(root) {
         row.querySelector(".setrow-tick").textContent = now ? "✓" : "";
         // Ticking with an empty box means "did the target"
         const a = row.querySelector(".setrow-actual");
+        const w = row.querySelector(".setrow-weight");
         const patch = { done: now };
         if (now && a && a.value.trim() === "") {
           patch.actual = Number(a.placeholder);
           a.value = a.placeholder;
+        } else if (a && a.value.trim() !== "") {
+          patch.actual = Number(a.value);          // whatever is typed right now
         }
+        if (w && w.value.trim() !== "") patch.weight = Number(w.value);
         saveSetEntry(slotKey, idx, patch);
         refreshCount();
       });
@@ -3105,7 +3155,7 @@ function renderExerciseGroups(block, weekNum, sessionId, blockIdx) {
     <div class="ex-group">
       ${g.label ? `<div class="ex-group-label">${escapeHtml(g.label)}</div>` : ""}
       ${g.items.map((it, ii) =>
-        renderExerciseItem(it, `W${weekNum}.${sessionId}.b${blockIdx}.g${gi}.e${ii}`)).join("")}
+        renderExerciseItem(it, `${sessionKey(weekNum, sessionId)}.b${blockIdx}.g${gi}.e${ii}`)).join("")}
     </div>`).join("");
 }
 
@@ -3210,7 +3260,7 @@ function renderBlock(block, settings, weekNum, sessionId, blockIdx) {
         ${inlineLoadHtml}
         ${block.text ? `<div class="block-text">${escapeHtml(block.text)}</div>` : ""}
         ${block.note ? `<div class="block-note">${escapeHtml(block.note)}</div>` : ""}
-        ${renderSetGrid(`W${weekNum}.${sessionId}.b${blockIdx}`, block.name, deriveSetPlan(block), false)}
+        ${renderSetGrid(`${sessionKey(weekNum, sessionId)}.b${blockIdx}`, block.name, deriveSetPlan(block), false)}
         ${exerciseVideoChips(block)}
         ${logPillsHtml}
         ${actionsHtml}
@@ -3313,12 +3363,6 @@ async function renderWeek(app, params) {
   const phase = getCurrentPhase(PLAN, weekNum);
   const doneCount = week.sessions.filter((s) => isSessionDone(weekNum, s.id)).length;
 
-  const dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const ordered = [...week.sessions].sort((a, b) => {
-    const da = getSessionDay(weekNum, a.id, a.defaultDay);
-    const db = getSessionDay(weekNum, b.id, b.defaultDay);
-    return dayOrder.indexOf(da) - dayOrder.indexOf(db);
-  });
 
   // Build per-day list including rest days
   const dayMap = {};
@@ -3338,6 +3382,7 @@ async function renderWeek(app, params) {
     <div class="list">
   `;
 
+  const dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   for (const d of dayOrder) {
     const s = dayMap[d];
     const isToday = d === DAY_NAMES[new Date().getDay()] && weekNum === getWeekIndex(settings);
@@ -3508,9 +3553,12 @@ async function renderHistory(app) {
   const completed = Object.entries(progress.sessions || {})
     .filter(([key, v]) => v && v.completedAt && !key.includes(".b"))
     .map(([key, v]) => {
-      const parts = key.split(".");
-      const wn = parseInt(parts[0].replace("W", ""));
-      const sId = parts.slice(1).join(".");
+      const pk = parseSessionKey(key);
+      // Sessions from an earlier block share ids with this one; showing them
+      // against this plan would mislabel them, so list the current block only.
+      if (!pk || pk.block !== (getSettings().blockId || "")) return null;
+      const wn = pk.weekNum;
+      const sId = pk.sessionId;
       const week = PLAN.weeks.find((w) => w.number === wn);
       const session = week && week.sessions.find((s) => s.id === sId);
       if (!session) return null;
@@ -3571,260 +3619,6 @@ ROUTES.fuel = async (app) => { dayTab = "nutrition"; await renderMain(app); };
 
 // Module-level state for Fuel period picker
 let fuelSummaryPeriod = 0; // 0 = this week, 1 = last week
-let fuelViewDate = null; // null = today; "YYYY-MM-DD" for historical days
-
-async function renderFuel(app) {
-  const s   = getSettings();
-  const tgt = s.nutrition;
-
-  // Day navigation
-  const todayDs  = ymd(today());
-  const viewDs   = fuelViewDate || todayDs;
-  // Parse the viewed date in local time
-  const vpParts  = viewDs.split("-").map(Number);
-  const viewDate = new Date(vpParts[0], vpParts[1] - 1, vpParts[2]);
-  const isToday  = viewDs === todayDs;
-
-  const meals  = getDayMeals(viewDs);
-  const totals = getDayTotals(meals);
-
-  const kcalLeft = tgt.kcalTarget - Math.round(totals.kcal);
-  const isOver   = kcalLeft < 0;
-
-  const pPct = tgt.proteinTarget > 0 ? Math.min(100, Math.round(totals.p / tgt.proteinTarget * 100)) : 0;
-  const cPct = tgt.carbTarget    > 0 ? Math.min(100, Math.round(totals.c / tgt.carbTarget    * 100)) : 0;
-  const fPct = tgt.fatTarget     > 0 ? Math.min(100, Math.round(totals.f / tgt.fatTarget     * 100)) : 0;
-
-  // 7-day rolling average (7 days prior to viewDate, excluding viewDate itself)
-  let avgKcal = 0, avgP = 0, avgC = 0, avgF = 0, avgDays = 0;
-  for (let i = 1; i <= 7; i++) {
-    const d  = new Date(viewDate.getTime() - i * 86400000);
-    const ds = ymd(d);
-    const dm = getDayMeals(ds);
-    if (dm.length > 0) {
-      const t = getDayTotals(dm);
-      avgKcal += t.kcal; avgP += t.p; avgC += t.c; avgF += t.f;
-      avgDays++;
-    }
-  }
-  const has7dAvg = avgDays > 0;
-  if (has7dAvg) {
-    avgKcal = Math.round(avgKcal / avgDays);
-    avgP    = Math.round(avgP    / avgDays * 10) / 10;
-    avgC    = Math.round(avgC    / avgDays * 10) / 10;
-    avgF    = Math.round(avgF    / avgDays * 10) / 10;
-  }
-  const kcalDelta = Math.round(totals.kcal - avgKcal);
-  const pDelta    = Math.round(totals.p    - avgP);
-  const cDelta    = Math.round(totals.c    - avgC);
-  const fDelta    = Math.round(totals.f    - avgF);
-
-  // Nav constraints: can go back 90 days max
-  const minDate      = new Date(today().getTime() - 90 * 86400000);
-  const canGoBack    = viewDate > minDate;
-  const canGoForward = viewDs < todayDs;
-
-  // Date header label
-  const dateLabel = isToday
-    ? "Today"
-    : viewDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-
-  // Meal cards
-  const MEAL_LABELS = { breakfast: "Breakfast 🌅", lunch: "Lunch ☀️", dinner: "Dinner 🌙", snack: "Snack 🍎" };
-  const mealsHtml = meals.length === 0
-    ? `<div class="empty-state"><h3>Nothing logged</h3><p>Tap + Log meal to add a meal${isToday ? " today" : " for this day"}.</p></div>`
-    : meals.map((meal) => `
-        <div class="meal-card">
-          <div class="meal-card-header">
-            <div>
-              <div class="meal-card-label">${escapeHtml(MEAL_LABELS[meal.label] || meal.label)}</div>
-              <div class="meal-card-time">${escapeHtml(meal.time)}</div>
-            </div>
-            <div style="text-align:right;flex:1;min-width:0">
-              <div class="meal-card-kcal">${meal.total.kcal} kcal</div>
-              <div class="meal-card-macros">${meal.total.p}g P · ${meal.total.c}g C · ${meal.total.f}g F</div>
-            </div>
-            <button class="meal-card-del" data-action="delete-meal" data-mid="${escapeHtml(meal.id)}" data-date="${escapeHtml(viewDs)}">×</button>
-          </div>
-          <div class="meal-items-list">
-            ${meal.items.map((it) => `
-              <div class="meal-item">
-                <span class="meal-item-name">${escapeHtml(it.name)}</span>
-                <span class="meal-item-qty dim">${escapeHtml(it.qty)}</span>
-                <span class="meal-item-kcal">${it.kcal}</span>
-              </div>`).join("")}
-          </div>
-        </div>`).join("");
-
-  // Weekly summary
-  const wSumm   = getNutritionWeekSummary(fuelSummaryPeriod);
-  const wkTitle = fuelSummaryPeriod === 0 ? "This Week" : "Last Week";
-  const wkStart = wSumm.startDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  const weekStatHtml = wSumm.loggedDays === 0
-    ? `<div class="empty-state" style="margin:0;padding:12px 0 4px"><p style="font-size:14px">No data logged for ${wkTitle.toLowerCase()}.</p></div>`
-    : `<div class="fuel-week-stat-grid">
-        <div class="fuel-week-stat">
-          <div class="fuel-week-stat-num fuel-stat-kcal">${wSumm.avgKcal.toLocaleString()}</div>
-          <div class="fuel-week-stat-label">Avg kcal</div>
-          <div class="fuel-week-stat-sub">Total ${wSumm.totalKcal.toLocaleString()}</div>
-        </div>
-        <div class="fuel-week-stat">
-          <div class="fuel-week-stat-num fuel-stat-p">${wSumm.avgP}g</div>
-          <div class="fuel-week-stat-label">Avg P</div>
-          <div class="fuel-week-stat-sub">Total ${wSumm.totalP}g</div>
-        </div>
-        <div class="fuel-week-stat">
-          <div class="fuel-week-stat-num fuel-stat-c">${wSumm.avgC}g</div>
-          <div class="fuel-week-stat-label">Avg C</div>
-          <div class="fuel-week-stat-sub">Total ${wSumm.totalC}g</div>
-        </div>
-        <div class="fuel-week-stat">
-          <div class="fuel-week-stat-num fuel-stat-f">${wSumm.avgF}g</div>
-          <div class="fuel-week-stat-label">Avg F</div>
-          <div class="fuel-week-stat-sub">Total ${wSumm.totalF}g</div>
-        </div>
-      </div>
-      <div class="fuel-week-daily-row">
-        ${wSumm.daily.map((day) => {
-          const isTodayCol = day.ds === todayDs;
-          return `<div class="fuel-week-day-col${isTodayCol ? " is-today" : ""}">
-            <div class="fuel-week-day-label">${day.label}</div>
-            <div class="fuel-week-day-dot${day.hasData ? " has-data" : ""}"></div>
-            <div class="fuel-week-day-kcal">${day.hasData ? Math.round(day.kcal).toLocaleString() : ""}</div>
-          </div>`;
-        }).join("")}
-      </div>`;
-
-  // Quota tier bar
-  const noKey = !tgt.geminiKey;
-  const photoAnalysesToday = getDayMeals(todayDs).filter((m) => m.source === "photo").length;
-  const PHOTO_LIMIT = 20;
-  const TEXT_LIMIT  = 500;
-  const textEstimatesToday = parseInt(sessionStorage.getItem("hyrox.text.estimates.today") || "0", 10);
-  const photoPct = Math.min(100, Math.round(photoAnalysesToday / PHOTO_LIMIT * 100));
-  const textPct  = Math.min(100, Math.round(textEstimatesToday  / TEXT_LIMIT  * 100));
-
-  app.innerHTML = `
-    <div class="fuel-day-nav">
-      <button class="fuel-day-arrow" id="fuel-prev-day"${canGoBack ? "" : " disabled"}>‹</button>
-      <div class="fuel-day-center">
-        <div class="fuel-day-label">${dateLabel}</div>
-        ${!isToday ? `<button class="fuel-day-today-btn" id="fuel-goto-today">Today</button>` : ""}
-      </div>
-      <button class="fuel-day-arrow" id="fuel-next-day"${canGoForward ? "" : " disabled"}>›</button>
-    </div>
-
-    <div class="fuel-hero">
-      <div class="fuel-kcal-block">
-        <div class="fuel-kcal-num${isOver ? " fuel-over" : ""}">${Math.abs(kcalLeft)}</div>
-        <div class="fuel-kcal-label">${isOver ? "kcal over target" : "kcal remaining"}</div>
-        <div class="fuel-kcal-sub">${Math.round(totals.kcal)} eaten · ${tgt.kcalTarget} target</div>
-      </div>
-      <div class="fuel-macro-stack">
-        <div class="fuel-macro-row">
-          <span class="fuel-macro-name">Protein</span>
-          <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-protein" style="width:${pPct}%"></div></div>
-          <span class="fuel-macro-gram">${Math.round(totals.p)}<span class="fuel-macro-tgt">/${tgt.proteinTarget}g</span></span>
-        </div>
-        <div class="fuel-macro-row">
-          <span class="fuel-macro-name">Carbs</span>
-          <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-carb" style="width:${cPct}%"></div></div>
-          <span class="fuel-macro-gram">${Math.round(totals.c)}<span class="fuel-macro-tgt">/${tgt.carbTarget}g</span></span>
-        </div>
-        <div class="fuel-macro-row">
-          <span class="fuel-macro-name">Fat</span>
-          <div class="fuel-macro-bar-bg"><div class="fuel-macro-bar-fill fuel-macro-fat" style="width:${fPct}%"></div></div>
-          <span class="fuel-macro-gram">${Math.round(totals.f)}<span class="fuel-macro-tgt">/${tgt.fatTarget}g</span></span>
-        </div>
-      </div>
-    </div>
-
-    ${has7dAvg ? `<div class="fuel-avg-compare">
-      <span class="fuel-avg-label">vs 7d avg</span>
-      <span class="fuel-avg-item${kcalDelta > 0 ? " avg-pos" : kcalDelta < 0 ? " avg-neg" : ""}">${kcalDelta > 0 ? "+" : ""}${kcalDelta} kcal</span>
-      <span class="fuel-avg-sep">·</span>
-      <span class="fuel-avg-item${pDelta > 0 ? " avg-pos" : pDelta < 0 ? " avg-neg" : ""}">${pDelta > 0 ? "+" : ""}${pDelta}g P</span>
-      <span class="fuel-avg-sep">·</span>
-      <span class="fuel-avg-item${cDelta > 0 ? " avg-pos" : cDelta < 0 ? " avg-neg" : ""}">${cDelta > 0 ? "+" : ""}${cDelta}g C</span>
-      <span class="fuel-avg-sep">·</span>
-      <span class="fuel-avg-item${fDelta > 0 ? " avg-pos" : fDelta < 0 ? " avg-neg" : ""}">${fDelta > 0 ? "+" : ""}${fDelta}g F</span>
-    </div>` : ""}
-
-    <button class="btn" id="log-meal-btn">+ Log meal</button>
-    <button class="btn btn-secondary" id="my-menu-btn" style="margin-top:10px">📒 My menu${
-      getSavedMeals().length ? ` · ${getSavedMeals().length}` : ""}</button>
-    <button class="btn btn-secondary" id="recipes-btn" style="margin-top:10px">🍳 Recipes &amp; ideas</button>
-
-    <div class="section-header">Meals</div>
-    ${mealsHtml}
-
-    <div class="section-header" style="margin-top:24px">Weekly summary</div>
-    <div class="fuel-period-picker">
-      <button class="fuel-period-btn${fuelSummaryPeriod === 0 ? " fuel-period-btn-active" : ""}" data-period="0">This Week</button>
-      <button class="fuel-period-btn${fuelSummaryPeriod === 1 ? " fuel-period-btn-active" : ""}" data-period="1">Last Week</button>
-    </div>
-    <div class="fuel-week-summary">
-      <div class="fuel-week-summary-title">${wkTitle} · w/c ${wkStart} · ${wSumm.loggedDays}/7 days logged</div>
-      ${weekStatHtml}
-    </div>
-
-    ${noKey ? `<div class="alert alert-warn" style="margin-top:16px">
-      <strong>Gemini key missing</strong>
-      Add it in <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a> to enable photo analysis.
-    </div>` : `<div class="fuel-tier-bar">
-      <div class="fuel-tier-label">
-        <span>📷 Photos <span class="fuel-tier-model">2.5 Flash</span></span>
-        <span class="fuel-tier-count">${photoAnalysesToday} / ${PHOTO_LIMIT} today</span>
-      </div>
-      <div class="fuel-tier-track"><div class="fuel-tier-fill" style="width:${photoPct}%"></div></div>
-      <div class="fuel-tier-label" style="margin-top:8px">
-        <span>✨ Text estimates <span class="fuel-tier-model">3.1 Flash Lite</span></span>
-        <span class="fuel-tier-count">${textEstimatesToday} / ${TEXT_LIMIT} today</span>
-      </div>
-      <div class="fuel-tier-track"><div class="fuel-tier-fill fuel-tier-fill-text" style="width:${textPct}%"></div></div>
-    </div>`}
-  `;
-
-  // Day navigation event handlers
-  document.getElementById("fuel-prev-day")?.addEventListener("click", () => {
-    const cur = fuelViewDate ? new Date(fuelViewDate + "T00:00:00") : today();
-    const prev = new Date(cur.getTime() - 86400000);
-    fuelViewDate = ymd(prev);
-    renderFuel(app);
-  });
-  document.getElementById("fuel-next-day")?.addEventListener("click", () => {
-    const cur = fuelViewDate ? new Date(fuelViewDate + "T00:00:00") : today();
-    const next = new Date(cur.getTime() + 86400000);
-    const nextDs = ymd(next);
-    fuelViewDate = nextDs >= todayDs ? null : nextDs;
-    renderFuel(app);
-  });
-  document.getElementById("fuel-goto-today")?.addEventListener("click", () => {
-    fuelViewDate = null;
-    renderFuel(app);
-  });
-
-  document.getElementById("log-meal-btn").addEventListener("click", () => showLogMealSheet(viewDs));
-  document.getElementById("my-menu-btn")?.addEventListener("click", showMenuSheet);
-  document.getElementById("recipes-btn")?.addEventListener("click", () => showRecipeLibrarySheet(viewDs));
-
-  app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (confirm("Delete this meal?")) {
-        deleteMeal(btn.dataset.mid, btn.dataset.date);
-        renderFuel(app);
-      }
-    });
-  });
-
-  app.querySelectorAll(".fuel-period-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      fuelSummaryPeriod = Number(btn.dataset.period);
-      renderFuel(app);
-    });
-  });
-}
 
 /* ---------- Gemini error toast ---------- */
 
@@ -3929,7 +3723,10 @@ function showPhotoQueueSheet(files, targetDateStr) {
         </div>
       </div>`;
 
-    overlay.querySelector("#pq-cancel").addEventListener("click", close);
+    overlay.querySelector("#pq-cancel").addEventListener("click", () => {
+      cancelled = true;      // stop sending the rest; they'd still cost API quota
+      close();
+    });
     overlay.querySelector("#pq-continue")?.addEventListener("click", finish);
     overlay.querySelector("#pq-retry-all")?.addEventListener("click", () => {
       failed.forEach((sh) => { sh.status = "queued"; sh.error = ""; sh.attempt = 0; });
@@ -3961,12 +3758,16 @@ function showPhotoQueueSheet(files, targetDateStr) {
   };
 
   let running = false;
+  let cancelled = false;
   const runQueue = async () => {
     if (running) return;
     running = true;
     try {
-      for (const sh of shots) {
-        if (sh.status !== "queued") continue;
+      // Re-scan for the next queued photo each time round. Iterating a fixed
+      // snapshot stranded a photo whose Retry was tapped while the loop was
+      // already past it: it stayed "Queued", Review stayed disabled, and the
+      // only way out was Cancel — which threw away the photos that had worked.
+      for (let sh; !cancelled && (sh = shots.find((x) => x.status === "queued")); ) {
         sh.status = "working";
         sh.attempt = 1;
         render();
@@ -3987,12 +3788,12 @@ function showPhotoQueueSheet(files, targetDateStr) {
           sh.status = "failed";
           sh.error = err.message || "Failed";
         }
-        render();
+        if (!cancelled) render();
       }
     } finally {
       running = false;
     }
-    render();
+    if (!cancelled) render();
   };
 
   render();
@@ -4237,10 +4038,6 @@ async function showRecipeLibrarySheet(targetDateStr) {
  * the style, portions and ingredient names stay consistent with the plan.
  */
 async function suggestRecipes({ have, slot, maxMin }) {
-  const s = getSettings();
-  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
-  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
-
   const data = await loadRecipes();
   const tgt = data.slotTargets[slot] || data.slotTargets.snack;
   const examples = data.recipes.filter((r) => r.slot === slot).slice(0, 3).map((r) =>
@@ -4264,55 +4061,48 @@ Return ONLY valid JSON (no markdown, no code fences):
 {"recipes":[{"name":"string","timeMin":number,"method":"string","kcal":number,"p":number,"c":number,"f":number,"ingredients":[{"name":"string","amount":"string"}],"steps":["string"]}]}
 p=protein(g), c=carbohydrates(g), f=fat(g). Return ONLY the JSON object.`;
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
-  let res;
-  try {
-    res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: ctrl.signal,
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4 }
-        })
-      }
-    );
-  } catch (err) {
-    if (err.name === "AbortError") throw new Error(`Timed out after ${Math.round(PHOTO_TIMEOUT_MS / 1000)}s`);
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!res.ok) {
-    let msg = `Gemini error ${res.status}`;
-    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
-    throw new Error(msg);
-  }
-
-  const json = await res.json();
-  const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
-  const parsed = JSON.parse(clean);
-  return (parsed.recipes || []).map((r) => ({
-    ...r,
+  const parsed = await callGemini({
+    model: "gemini-3.1-flash-lite",
+    parts: [{ text: prompt }],
+    temperature: 0.4
+  });
+  const list = Array.isArray(parsed) ? parsed : (parsed && parsed.recipes) || [];
+  return list.slice(0, 6).map((r) => ({
+    name: String((r && r.name) || "Recipe").slice(0, 120),
+    method: String((r && r.method) || "").slice(0, 60),
     slot,
     group: "Suggested",
     code: null,
-    timeMin: Number(r.timeMin) || maxMin,
-    kcal: Math.round(Number(r.kcal) || 0),
-    p: Math.round(Number(r.p) || 0),
-    c: Math.round(Number(r.c) || 0),
-    f: Math.round(Number(r.f) || 0)
+    timeMin: Number(r && r.timeMin) || maxMin,
+    kcal: Math.round(num0(r && r.kcal)),
+    p: Math.round(num0(r && r.p)),
+    c: Math.round(num0(r && r.c)),
+    f: Math.round(num0(r && r.f)),
+    ingredients: (Array.isArray(r && r.ingredients) ? r.ingredients : [])
+      .map((i) => ({ name: String((i && i.name) || "").slice(0, 80), amount: String((i && i.amount) || "").slice(0, 40) })),
+    steps: (Array.isArray(r && r.steps) ? r.steps : []).map((x) => String(x).slice(0, 300))
   }));
+}
+
+// Stored as a JSON string: the sync layer keeps every key as a JSON document.
+function loadPantry() {
+  const raw = store.get(PANTRY_KEY);
+  if (!raw) return "";
+  try {
+    const v = JSON.parse(raw);
+    return typeof v === "string" ? v : "";   // "{}" etc. from an earlier bad sync → empty
+  } catch {
+    return raw === "{}" ? "" : raw;          // a bare string saved before this fix
+  }
+}
+
+function savePantry(text) {
+  store.set(PANTRY_KEY, JSON.stringify(String(text || "")));
 }
 
 /** "I have this — what can I make in 10 minutes?" */
 function showRecipeSuggestSheet(targetDateStr) {
-  let have = store.get(PANTRY_KEY) || "";
+  let have = loadPantry();
   let slot = currentMealSlot();
   let maxMin = 15;
   let busy = false, error = "", results = null;
@@ -4368,7 +4158,7 @@ function showRecipeSuggestSheet(targetDateStr) {
     haveEl.addEventListener("input", () => {
       have = haveEl.value;
       // Remembered so the next "what can I make" doesn't start from nothing.
-      store.set(PANTRY_KEY, have);
+      savePantry(have);
       const go = overlay.querySelector("#rs-go");
       if (go) go.disabled = busy || !have.trim();
     });
@@ -4389,7 +4179,7 @@ function showRecipeSuggestSheet(targetDateStr) {
 
     overlay.querySelector("#rs-go")?.addEventListener("click", async () => {
       have = haveEl.value;
-      store.set(PANTRY_KEY, have);
+      savePantry(have);
       busy = true; error = ""; results = null;
       render();
       try {
@@ -4586,6 +4376,154 @@ function showSavedMealsSheet(targetDateStr, preferLabel) {
   render();
 }
 
+/* ---------- Voice meal capture ---------- */
+
+// Pick a container both MediaRecorder and Gemini accept. Safari/iOS gives
+// audio/mp4, Chrome/Android gives audio/webm — Gemini understands both.
+function pickAudioMime() {
+  if (typeof MediaRecorder === "undefined") return null;
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+  return candidates.find((m) => MediaRecorder.isTypeSupported(m)) || null;
+}
+
+function showVoiceMealSheet(targetDateStr) {
+  if (!navigator.mediaDevices?.getUserMedia || !pickAudioMime()) {
+    alert("Voice recording isn't supported by this browser. Use a photo or add the meal manually.");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "action-sheet-backdrop";
+  overlay.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">Say what you ate
+        <div class="action-sheet-title-sub">e.g. "two eggs, 5 g of olive oil, and 200 g of bagel at 105 calories per 100 grams"</div>
+      </div>
+      <div class="voice-body">
+        <button class="voice-orb" id="voice-orb" aria-label="Start recording">🎤</button>
+        <div class="voice-status" id="voice-status">Tap to start recording</div>
+        <div class="voice-timer" id="voice-timer" hidden>0:00</div>
+      </div>
+      <button class="action-sheet-btn action-sheet-cancel" id="voice-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  let recorder = null, stream = null, chunks = [], tick = null, startedAt = 0, finished = false;
+  let closed = false;      // the sheet was dismissed — nothing may start or upload after this
+  let starting = false;    // a getUserMedia request is in flight (permission prompt open)
+  const cancelAnalysis = new AbortController();   // for the "Listening back…" spinner
+
+  const close = () => {
+    closed = true;
+    // Stop the recorder too, not just the tracks. Its onstop used to fire
+    // anyway, uploading a recording the user had cancelled.
+    try { if (recorder && recorder.state !== "inactive") recorder.stop(); } catch { /* already stopped */ }
+    stopTracks();
+    overlay.classList.remove("open");
+    setTimeout(() => overlay.remove(), 260);
+  };
+  const stopTracks = () => {
+    clearInterval(tick);
+    try { stream?.getTracks().forEach((t) => t.stop()); } catch {}
+  };
+
+  const orb    = overlay.querySelector("#voice-orb");
+  const status = overlay.querySelector("#voice-status");
+  const timer  = overlay.querySelector("#voice-timer");
+
+  const start = async () => {
+    // Two quick taps before the permission prompt resolves started two streams;
+    // the first was overwritten, never stopped, and the mic stayed live.
+    if (starting || closed) return;
+    starting = true;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      starting = false;
+      status.textContent = "Microphone permission denied. Allow mic access and try again.";
+      return;
+    }
+    starting = false;
+    // Dismissed while the permission prompt was open: release the mic at once.
+    if (closed) { stopTracks(); return; }
+    const mime = pickAudioMime();
+    recorder = new MediaRecorder(stream, { mimeType: mime });
+    chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => { if (!finished && !closed) handleStop(mime); };
+    recorder.start();
+    startedAt = Date.now();
+
+    orb.classList.add("voice-orb-live");
+    orb.textContent = "⏹";
+    orb.setAttribute("aria-label", "Stop recording");
+    status.textContent = "Listening… tap to finish";
+    timer.hidden = false;
+    tick = setInterval(() => {
+      const s = Math.floor((Date.now() - startedAt) / 1000);
+      timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      if (s >= 60) stop(); // keep clips short — plenty for a meal description
+    }, 250);
+  };
+
+  const stop = () => {
+    if (!recorder || recorder.state === "inactive") return;
+    clearInterval(tick);
+    recorder.stop();
+  };
+
+  const handleStop = async (mime) => {
+    finished = true;
+    stopTracks();
+    if ((Date.now() - startedAt) < 900) {
+      status.textContent = "That was too short — hold on a moment longer.";
+      orb.classList.remove("voice-orb-live");
+      orb.textContent = "🎤";
+      timer.hidden = true;
+      finished = false;
+      return;
+    }
+    close();
+
+    const loader = document.createElement("div");
+    loader.className = "fuel-loader";
+    loader.innerHTML = `<div class="fuel-loader-inner"><div class="fuel-spinner"></div><div class="fuel-loader-text">Listening back…</div><div class="fuel-loader-sub">Transcribing and costing your meal</div><button class="fuel-loader-cancel" id="fl-cancel">Cancel</button></div>`;
+    document.body.appendChild(loader);
+    // A full-screen spinner with no way out meant a stalled request needed a force-quit.
+    loader.querySelector("#fl-cancel").addEventListener("click", () => cancelAnalysis.abort());
+
+    try {
+      const blob = new Blob(chunks, { type: mime });
+      const b64  = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload  = () => res(String(fr.result).split(",")[1]);
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+      // Gemini wants the bare container type, without the codecs parameter.
+      const geminiMime = mime.split(";")[0];
+      const result = await analyzeFoodAudio(b64, geminiMime, cancelAnalysis.signal);
+      loader.remove();
+      const note = [result.transcript ? `“${result.transcript}”` : "", result.notes || ""]
+        .filter(Boolean).join(" · ");
+      showMealEditSheet(result.items || [], note, "voice", targetDateStr);
+    } catch (err) {
+      loader.remove();
+      if (err.name === "Cancelled") return;          // they backed out on purpose
+      showGeminiError(err.message || "Couldn't process that recording.");
+    }
+  };
+
+  orb.addEventListener("click", () => {
+    if (!recorder || recorder.state === "inactive") start(); else stop();
+  });
+  overlay.querySelector("#voice-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+}
+
+/* ---------- Meal edit / confirm sheet ---------- */
+
 /**
  * @param opts.preset  When set, the sheet edits a MENU PRESET rather than a
  *   logged meal: {id} updates an existing one, {id:null, label} creates one.
@@ -4602,7 +4540,7 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       name:   it.name   || "",
       qtyNum: it.qtyNum != null ? it.qtyNum : parsed.qtyNum,
       unit:   it.unit   != null ? it.unit   : parsed.unit,
-      kcal: it.kcal || 0, p: it.p || 0, c: it.c || 0, f: it.f || 0,
+      kcal: num0(it.kcal), p: num0(it.p), c: num0(it.c), f: num0(it.f),
       auto: false
     };
   });
@@ -5208,8 +5146,12 @@ async function renderSession(app, params) {
   attachSessionHandlers(weekNum);
 
   // Show readiness check once per day if session not already done
-  if (!getTodayReadiness() && !isSessionDone(weekNum, sessionId)) {
-    setTimeout(() => showReadinessCheck(() => {}), 500);
+  if (!getTodayReadiness() && !readinessSkippedToday() && !isSessionDone(weekNum, sessionId)) {
+    setTimeout(() => {
+      // They may have navigated away in the half-second since — don't pop a
+      // check-in over an unrelated screen.
+      if (location.hash.startsWith("#/session/")) showReadinessCheck(() => {});
+    }, 500);
   }
 }
 
@@ -5224,7 +5166,7 @@ async function renderPlan(app) {
 
     <div class="countdown-big">
       <div class="num">${days}</div>
-      <div class="label">days to race · ${escapeHtml(PLAN.metadata.raceDate)}</div>
+      <div class="label">days to race · ${escapeHtml(settings.raceDate || "")}</div>
     </div>
 
     ${renderRaceProjectorHtml(settings)}
@@ -5484,7 +5426,7 @@ async function renderSettings(app, params) {
     const val = s[section] && s[section][key] != null ? formatSecToPace(s[section][key]) : "";
     return `<div class="form-row">
       <label class="form-label" for="setting-${escapeHtml(key)}">${REF_LABELS[key] || key}</label>
-      <input id="setting-${escapeHtml(key)}" class="form-input" type="text" data-section="${section}" data-key="${key}" data-pace="1" value="${val}" placeholder="${placeholder}" inputmode="numeric" />
+      <input id="setting-${escapeHtml(key)}" class="form-input" type="text" data-section="${section}" data-key="${key}" data-pace="1" value="${val}" placeholder="${placeholder}" inputmode="decimal" />
     </div>`;
   };
 
@@ -5687,22 +5629,47 @@ async function renderSettings(app, params) {
 
   function saveAll() {
     const next = getSettings();
+    const rejected = [];
     document.querySelectorAll("[data-section]").forEach((el) => {
       const section = el.dataset.section;
       const key = el.dataset.key;
       const raw = (el.value || "").trim();
+      const prev = (next[section] || {})[key];
       let val;
-      if (el.dataset.pace) val = paceToSec(raw);
-      else if (el.dataset.string) val = raw;
-      else val = raw === "" ? null : Number(raw);
+      if (el.dataset.pace) {
+        val = paceToSec(raw);
+        if (val == null) { val = prev; if (raw !== "") rejected.push(REF_LABELS[key] || key); }
+      } else if (el.dataset.string) {
+        val = raw;
+      } else if (raw === "") {
+        // Barbell 1RMs may legitimately be unset. A cleared nutrition target,
+        // load or body weight can't be — it showed "null target" and treated
+        // the whole day as over target — so those keep their last value.
+        val = section === "lifts" ? null : prev;
+      } else {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n >= 0) val = n;
+        else { val = prev; rejected.push(REF_LABELS[key] || key); }
+      }
       if (!next[section]) next[section] = {};
       next[section][key] = val;
     });
     document.querySelectorAll("[data-meta]").forEach((el) => {
       const key = el.dataset.meta;
-      next[key] = el.type === "number" ? Number(el.value) : el.value;
+      if (el.type === "date") {
+        // A cleared date saved "" → Invalid Date → "Wk NaN" across the app.
+        if (/^\d{4}-\d{2}-\d{2}$/.test(el.value)) next[key] = el.value;
+        else rejected.push(key === "raceDate" ? "Race date" : "Plan start");
+      } else if (el.type === "number") {
+        const n = Number(el.value);
+        if (Number.isFinite(n) && n > 0) next[key] = n;
+        else rejected.push("Rounding");
+      } else {
+        next[key] = el.value;
+      }
     });
     saveJSON(SETTINGS_KEY, next);
+    if (rejected.length) showToast(`Kept the previous value for: ${rejected.join(", ")}`);
   }
 
   document.getElementById("save-settings").addEventListener("click", () => {
@@ -5742,13 +5709,23 @@ async function renderSettings(app, params) {
     const btn = e.currentTarget;
     btn.disabled = true;
     btn.textContent = "Syncing…";
-    await pushDirty();
-    btn.textContent = "Synced ✓";
-    setTimeout(() => { btn.disabled = false; btn.textContent = "Sync now"; }, 1400);
+    const r = await syncNow();
+    // This used to say "Synced ✓" whatever happened — offline, held, or failed.
+    btn.textContent = r.ok ? "Synced ✓"
+      : r.reason === "offline" ? "Offline — will sync when you're back"
+      : `Couldn't sync${r.pending ? ` (${r.pending} pending)` : ""}`;
+    setTimeout(() => { btn.disabled = false; btn.textContent = "Sync now"; }, r.ok ? 1400 : 3200);
   });
 
-  document.getElementById("sign-out")?.addEventListener("click", () => {
-    if (!confirm("Sign out? Your data is saved to your account and will be here when you sign back in.")) return;
+  document.getElementById("sign-out")?.addEventListener("click", async () => {
+    await pushDirty();
+    const left = pendingCount();
+    const msg = left
+      ? (left === 1
+          ? "1 recent change hasn't reached your account yet. It stays on this device and uploads the next time you sign in here. Sign out anyway?"
+          : `${left} recent changes haven't reached your account yet. They stay on this device and upload the next time you sign in here. Sign out anyway?`)
+      : "Sign out? Your data is saved to your account and will be here when you sign back in.";
+    if (!confirm(msg)) return;
     signOut();
   });
 
@@ -5803,11 +5780,21 @@ async function renderSettings(app, params) {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      let count = 0;
-      for (const [k, v] of Object.entries(data)) {
-        if (k.startsWith("hyrox.")) { store.set(k, v); count++; }
-      }
-      alert(`Restored ${count} data entries. Reloading…`);
+      // Only keys this app syncs, and only values that are valid JSON text —
+      // anything else would be stored as "[object Object]" or never sync.
+      const valid = store.allKeys().filter((k) => {
+        if (typeof data[k] !== "string") return false;
+        try { JSON.parse(data[k]); return true; } catch { return false; }
+      });
+      if (!valid.length) { alert("That file doesn't contain any restorable data."); return; }
+      if (!confirm(`Restore ${valid.length} data set${valid.length === 1 ? "" : "s"} from this backup? It replaces what's on this device and in your account for those items.`)) return;
+      valid.forEach((k) => store.set(k, data[k]));
+      // The restore only counts once it has left this device. Reloading first
+      // let the next load's pull replace it with the old cloud copy.
+      const r = await syncNow();
+      alert(r.ok
+        ? `Restored ${valid.length} data sets.`
+        : `Restored ${valid.length} data sets on this device. They'll upload to your account when you're back online.`);
       location.reload();
     } catch (err) {
       alert("Import failed: " + err.message);
@@ -5817,7 +5804,7 @@ async function renderSettings(app, params) {
   // Reset all training data
   document.getElementById("reset-all-data")?.addEventListener("click", () => {
     if (!confirm("Clear all progress, notes, and set logs? Settings and tests are kept.")) return;
-    [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY, ACTUALS_KEY].forEach((k) => store.remove(k));
+    [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY, ACTUALS_KEY, SET_ENTRIES_KEY].forEach((k) => store.remove(k));
     route();
   });
 }
@@ -5830,14 +5817,22 @@ function flashSaved() {
   setTimeout(() => (btn.textContent = original), 1200);
 }
 
+/**
+ * Pace per km → seconds. Accepts what can actually be typed on a phone:
+ *   "4:30"  "4.30"  "4,30"  → 4:30        "430" "1030" → 4:30 / 10:30
+ *   "4.5"                   → 4.5 minutes   "270"        → 270 s
+ * Returns null when it isn't a plausible pace, so a typo can't save "3 s/km".
+ */
 function paceToSec(str) {
-  if (!str) return null;
-  const m = str.match(/^(\d+):(\d{1,2})$/);
-  if (!m) {
-    const n = Number(str);
-    return isFinite(n) ? n : null;
-  }
-  return Number(m[1]) * 60 + Number(m[2]);
+  const t = String(str || "").trim();
+  if (!t) return null;
+  let sec = null, m;
+  if ((m = /^(\d{1,2}):(\d{1,2})$/.exec(t))) sec = +m[1] * 60 + +m[2];
+  else if ((m = /^(\d{1,2})[.,](\d{2})$/.exec(t))) sec = +m[1] * 60 + +m[2];
+  else if ((m = /^(\d{1,2})[.,](\d)$/.exec(t))) sec = Math.round((+m[1] + +m[2] / 10) * 60);
+  else if ((m = /^(\d{1,2})(\d{2})$/.exec(t)) && +m[2] <= 59) sec = +m[1] * 60 + +m[2];
+  else if (/^\d+$/.test(t)) sec = +t < 30 ? +t * 60 : +t;
+  return sec != null && sec >= 60 && sec <= 1200 ? sec : null;
 }
 
 /* ---------- Session actuals sheet — per-round (v36) ---------- */
@@ -6091,7 +6086,7 @@ function showRpePrompt(weekNum, sessionId) {
     if (rpeBtn) {
       const rpe = Number(rpeBtn.dataset.rpe);
       const p = getProgress();
-      const key = `W${weekNum}.${sessionId}`;
+      const key = sessionKey(weekNum, sessionId);
       if (!p.sessions[key]) p.sessions[key] = { completedAt: new Date().toISOString() };
       p.sessions[key].rpe = rpe;
       saveJSON(PROGRESS_KEY, p);
@@ -6124,50 +6119,84 @@ function parseIntervalScheme(scheme) {
   return { reps, workSec, restSec };
 }
 
+// One AudioContext for the whole page. A fresh one per beep, created from a
+// timer callback rather than a tap, is left suspended by iOS (silent) and
+// quickly hits the per-page cap.
+let _audioCtx = null;
+
 function beep(type) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    if (type === "start") { osc.frequency.value = 880; gain.gain.value = 0.35; }
-    else if (type === "end") { osc.frequency.value = 440; gain.gain.value = 0.45; }
-    else { osc.frequency.value = 660; gain.gain.value = 0.25; }
-    osc.start();
-    osc.stop(ctx.currentTime + (type === "end" ? 0.5 : 0.15));
-  } catch {}
-  try { if (navigator.vibrate) navigator.vibrate(type === "end" ? [80, 40, 80] : [40]); } catch {}
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) {
+      if (!_audioCtx) _audioCtx = new Ctx();
+      const ctx = _audioCtx;
+      if (ctx.state === "suspended") ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (type === "start") { osc.frequency.value = 880; gain.gain.value = 0.35; }
+      else if (type === "end") { osc.frequency.value = 440; gain.gain.value = 0.45; }
+      else { osc.frequency.value = 660; gain.gain.value = 0.25; }
+      osc.start();
+      osc.stop(ctx.currentTime + (type === "end" ? 0.5 : 0.15));
+    }
+  } catch { /* audio is best-effort */ }
+  try { if (navigator.vibrate) navigator.vibrate(type === "end" ? [80, 40, 80] : [40]); } catch { /* not supported */ }
 }
 
+let _stopActiveTimer = null;   // only one interval timer may run at a time
+
+/**
+ * Interval timer. Time is derived from the wall clock, not by counting ticks:
+ * iOS freezes timers while the screen is locked, so a counter falls further
+ * behind every time the phone sleeps mid-set. Here a tick just asks "where
+ * should we be now?", which is right however late it fires.
+ */
 function showIntervalTimer(block, parsed) {
-  let currentRep = 0;
-  let isWork = true;
-  let remaining = parsed.workSec;
-  let paused = false;
-  let mainTid = null;
-  let countdownVal = 3;
-  let inCountdown = true;
-  let minimized = false;
+  // Starting a second timer while one was minimised orphaned the first: its
+  // pill handler was overwritten and it could never be reopened or stopped.
+  if (_stopActiveTimer) _stopActiveTimer();
+
+  const { reps, workSec, restSec } = parsed;
+  const cycle = workSec + restSec;
+  const total = reps * workSec + (reps - 1) * restSec;
+
+  let inCountdown = true, countdownVal = 3;
+  let startedAt = 0, pausedAt = 0, pausedTotal = 0;
+  let minimized = false, stopped = false;
+  let currentRep = 0, isWork = true, remaining = workSec;
+  let tickTid = null, cdTid = null, wakeLock = null;
 
   const overlay = document.createElement("div");
   overlay.className = "timer-overlay";
   document.body.appendChild(overlay);
-
   const pill = document.getElementById("timer-pill");
+
+  const elapsed = () => ((pausedAt || Date.now()) - startedAt - pausedTotal) / 1000;
+
+  function stateAt(e) {
+    const rep = Math.floor(e / cycle);
+    const into = e - rep * cycle;
+    return into < workSec
+      ? { rep, isWork: true,  remaining: workSec - into }
+      : { rep, isWork: false, remaining: cycle - into };
+  }
+
+  const mmss = (sec) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 
   function updatePill() {
     if (!pill) return;
     if (inCountdown || !minimized) { pill.hidden = true; return; }
-    const mins = Math.floor(remaining / 60);
-    const secs = Math.round(remaining % 60);
-    const phase = isWork ? "WORK" : "REST";
-    pill.innerHTML = `<span class="pill-phase">${phase}</span><span class="pill-time">${String(mins).padStart(2,"0")}:${String(secs).padStart(2,"0")}</span><span class="pill-rep">${currentRep+1}/${parsed.reps}</span>`;
+    pill.innerHTML = `<span class="pill-phase">${isWork ? "WORK" : "REST"}</span><span class="pill-time">${mmss(remaining)}</span><span class="pill-rep">${currentRep + 1}/${reps}</span>`;
     pill.className = isWork ? "pill-work" : "pill-rest";
     pill.hidden = false;
   }
 
+  // Full rebuild only when the SHAPE changes (phase, pause, countdown). Rebuilding
+  // every second replaced the Pause button under a finger mid-tap.
   function renderOverlay() {
+    if (stopped) return;
     if (inCountdown) {
       overlay.innerHTML = `
         <div class="timer-content">
@@ -6175,39 +6204,40 @@ function showIntervalTimer(block, parsed) {
           <div class="timer-phase timer-phase-rest" style="font-size:14px;letter-spacing:0.1em">GET READY</div>
           <div class="timer-countdown" style="color:var(--warn);font-size:110px">${countdownVal}</div>
           <div class="timer-name">${escapeHtml(block.name || "")}</div>
-          <div class="timer-rep-info" style="color:var(--text-4)">${parsed.reps} × ${Math.round(parsed.workSec)}s / ${Math.round(parsed.restSec)}s rest</div>
+          <div class="timer-rep-info" style="color:var(--text-4)">${reps} × ${Math.round(workSec)}s / ${Math.round(restSec)}s rest</div>
         </div>`;
-      document.getElementById("timer-stop").addEventListener("click", stop);
+      overlay.querySelector("#timer-stop").addEventListener("click", stop);
       return;
     }
-
-    const mins = Math.floor(remaining / 60);
-    const secs = Math.round(remaining % 60);
-    const phase = isWork ? "WORK" : "REST";
-    const phaseClass = isWork ? "timer-phase-work" : "timer-phase-rest";
     overlay.innerHTML = `
       <div class="timer-content">
         <button class="timer-minimize" id="timer-min">—</button>
         <button class="timer-close" id="timer-stop">✕</button>
-        <div class="timer-phase ${phaseClass}">${phase}</div>
-        <div class="timer-countdown">${String(mins).padStart(2,"0")}:${String(secs).padStart(2,"0")}</div>
-        <div class="timer-rep-info">Set ${currentRep + 1} of ${parsed.reps}</div>
+        <div class="timer-phase ${isWork ? "timer-phase-work" : "timer-phase-rest"}">${isWork ? "WORK" : "REST"}</div>
+        <div class="timer-countdown" id="timer-clock">${mmss(remaining)}</div>
+        <div class="timer-rep-info">Set ${currentRep + 1} of ${reps}</div>
         <div class="timer-name">${escapeHtml(block.name || "")}</div>
         <div class="timer-row">
-          <button class="timer-btn" id="timer-pause">${paused ? "▶ Resume" : "⏸ Pause"}</button>
+          <button class="timer-btn" id="timer-pause">${pausedAt ? "▶ Resume" : "⏸ Pause"}</button>
         </div>
         <div class="timer-progress">
-          ${Array.from({ length: parsed.reps }, (_, i) => `<div class="timer-pip ${i < currentRep ? "done" : i === currentRep ? "active" : ""}"></div>`).join("")}
+          ${Array.from({ length: reps }, (_, i) => `<div class="timer-pip ${i < currentRep ? "done" : i === currentRep ? "active" : ""}"></div>`).join("")}
         </div>
       </div>`;
-    document.getElementById("timer-stop").addEventListener("click", stop);
-    document.getElementById("timer-min").addEventListener("click", minimize);
-    document.getElementById("timer-pause").addEventListener("click", () => { paused = !paused; renderOverlay(); });
+    overlay.querySelector("#timer-stop").addEventListener("click", stop);
+    overlay.querySelector("#timer-min").addEventListener("click", minimize);
+    overlay.querySelector("#timer-pause").addEventListener("click", togglePause);
+  }
+
+  function togglePause() {
+    if (pausedAt) { pausedTotal += Date.now() - pausedAt; pausedAt = 0; }
+    else pausedAt = Date.now();
+    renderOverlay();
   }
 
   function minimize() {
     minimized = true;
-    overlay.classList.remove("open");
+    overlay.classList.remove("open");   // CSS makes a closed overlay non-interactive
     updatePill();
   }
 
@@ -6218,53 +6248,82 @@ function showIntervalTimer(block, parsed) {
     if (pill) pill.hidden = true;
   }
 
-  if (pill) pill.onclick = () => { if (minimized) maximize(); };
-
   function tick() {
-    if (paused) return;
-    remaining = Math.max(0, remaining - 1);
-    if (remaining <= 3 && remaining > 0) beep("warn");
-    if (remaining <= 0) {
-      if (isWork) {
-        if (currentRep >= parsed.reps - 1) {
-          stop();
-          setTimeout(() => alert(`All ${parsed.reps} reps done! 🔥`), 100);
-          return;
-        }
-        isWork = false;
-        remaining = parsed.restSec;
-        beep("end");
-      } else {
-        currentRep++;
-        isWork = true;
-        remaining = parsed.workSec;
-        beep("start");
-      }
+    if (stopped || pausedAt) return;
+    const e = elapsed();
+    if (e >= total) {
+      beep("end");
+      stop();
+      showToast(`All ${reps} reps done! 🔥`);
+      return;
     }
-    renderOverlay();
-    updatePill();
+    const st = stateAt(e);
+    const rem = Math.ceil(st.remaining);
+    const phaseChanged = st.rep !== currentRep || st.isWork !== isWork;
+    if (phaseChanged) {
+      currentRep = st.rep;
+      isWork = st.isWork;
+      remaining = rem;
+      beep(isWork ? "start" : "end");
+      renderOverlay();
+      updatePill();
+    } else if (rem !== remaining) {
+      remaining = rem;
+      if (remaining <= 3 && remaining > 0) beep("warn");
+      const clock = overlay.querySelector("#timer-clock");
+      if (clock) clock.textContent = mmss(remaining);
+      updatePill();
+    }
   }
 
+  async function holdScreenAwake() {
+    try { if (navigator.wakeLock && !wakeLock) wakeLock = await navigator.wakeLock.request("screen"); }
+    catch { /* denied or unsupported — the timer still works */ }
+  }
+  // The browser drops the lock whenever the page is hidden; take it back.
+  const onVisible = () => {
+    if (stopped || document.visibilityState !== "visible") return;
+    wakeLock = null;
+    holdScreenAwake();
+    tick();   // catch up immediately rather than waiting for the next interval
+  };
+
   function stop() {
-    clearInterval(mainTid);
+    if (stopped) return;
+    stopped = true;
+    // Both intervals: stopping during the 3-2-1 only cleared the main one, so
+    // the countdown kept running, beeped, and threw on a missing button.
+    clearInterval(tickTid);
+    clearInterval(cdTid);
+    document.removeEventListener("visibilitychange", onVisible);
+    try { if (wakeLock) wakeLock.release(); } catch { /* already released */ }
     overlay.classList.remove("open");
     if (pill) { pill.hidden = true; pill.onclick = null; }
     setTimeout(() => overlay.remove(), 300);
+    if (_stopActiveTimer === stop) _stopActiveTimer = null;
   }
+
+  _stopActiveTimer = stop;
+  if (pill) pill.onclick = () => { if (minimized) maximize(); };
+  document.addEventListener("visibilitychange", onVisible);
+  holdScreenAwake();
 
   // 3-2-1 countdown
   requestAnimationFrame(() => overlay.classList.add("open"));
   renderOverlay();
-  beep("warn");
-  const cdTid = setInterval(() => {
+  beep("warn");   // from the tap that started us — this primes the audio context
+  cdTid = setInterval(() => {
+    if (stopped) return;
     countdownVal--;
     if (countdownVal <= 0) {
       clearInterval(cdTid);
       inCountdown = false;
-      remaining = parsed.workSec;
+      startedAt = Date.now();
+      pausedTotal = 0;
+      remaining = workSec;
       beep("start");
       renderOverlay();
-      mainTid = setInterval(tick, 1000);
+      tickTid = setInterval(tick, 250);
     } else {
       renderOverlay();
     }
@@ -6295,6 +6354,7 @@ function showAutoCompletePrompt(weekNum, sessionId) {
     const wasDone = isSessionDone(weekNum, sessionId);
     if (!wasDone) toggleSessionDone(weekNum, sessionId);
     close();
+    route();   // the card's button must now say "Mark not done"
     setTimeout(() => showRpePrompt(weekNum, sessionId), 300);
   });
 }
@@ -6487,7 +6547,13 @@ function attachSessionHandlers(weekNum) {
       const w = PLAN.weeks.find((w) => w.number === weekNum);
       const sess = w && w.sessions.find((s) => s.id === sessionId);
       if (sess && sess.blocks && !isSessionDone(weekNum, sessionId)) {
-        const allDone = sess.blocks.every((_, i) => isBlockDone(weekNum, sessionId, i));
+        // Exercise-row blocks are logged set by set and have no check circle,
+        // so only the blocks that can be ticked count towards "all done".
+        const tickable = sess.blocks
+          .map((b, i) => ({ b, i }))
+          .filter(({ b }) => !(b.groups && b.groups.length));
+        const allDone = tickable.length > 0 &&
+          tickable.every(({ i }) => isBlockDone(weekNum, sessionId, i));
         if (allDone) setTimeout(() => showAutoCompletePrompt(weekNum, sessionId), 350);
       }
     });
@@ -6856,6 +6922,8 @@ function showLoadFailed() {
   if (!user) return;
 
   setSyncStatusHandler(renderSyncStatus);
+  setRemoteChangeHandler(onRemoteDataChanged);
+  reportSyncStatus();
   seedConfig(); // safe now that a user exists
 
   if (!location.hash || location.hash === "#" || !location.hash.startsWith("#/")) {
@@ -6868,7 +6936,9 @@ function showLoadFailed() {
   // Only ever treat someone as new when we KNOW their account is empty. If the
   // initial load failed we have local defaults in hand, which look identical to
   // a fresh account — onboarding there would overwrite a real plan.
-  if (!hasLoadedRemote()) {
+  // ...but a previous successful sync on this device proves the account isn't
+  // new, so a failed load is just "offline" and the app runs from that cache.
+  if (!canRunFromCache()) {
     showLoadFailed();
     return;
   }
@@ -6883,6 +6953,18 @@ function showLoadFailed() {
     }
   }
 })();
+
+// A pull brought in changes another device made while this one sat open.
+function onRemoteDataChanged() {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "");
+  if (typing) {
+    // Redrawing under someone's cursor would eat what they're typing.
+    showToast("Updated from your other device — reopen this screen to see it");
+    return;
+  }
+  showToast("Updated from your other device");
+  route();
+}
 
 function renderSyncStatus(status) {
   const el = document.getElementById("sync-chip");

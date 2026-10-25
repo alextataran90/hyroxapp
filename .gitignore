@@ -3,3 +3,7 @@
 node_modules/
 .claude/
 config.js
+
+# local smoke-test output (see tests/README.md)
+_smoke*.html
+_old/

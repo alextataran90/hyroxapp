@@ -3,6 +3,7 @@
    ============================================================ */
 
 :root {
+  color-scheme: dark;   /* keyboard, date picker and native dialogs match the app */
   /* Surfaces (iOS dark mode) */
   --bg: #000000;
   --surface-1: #1c1c1e;
@@ -13,6 +14,10 @@
 
   /* Text */
   --text: #ffffff;
+  /* Seven rules read var(--text-1), which was never defined. On <button>s that
+     silently fell back to the browser's black button text — unreadable on the
+     dark cards (1.2:1), including the session title on Today. */
+  --text-1: var(--text);
   --text-2: rgba(235, 235, 245, 0.78);
   --text-3: rgba(235, 235, 245, 0.52);
   --text-4: rgba(235, 235, 245, 0.30);
@@ -28,9 +33,9 @@
   /* Layout */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --tabbar-h: 64px;
+  --tabbar-h: 0px;   /* the bottom tab bar was removed; toasts and the timer pill were still lifted 64px for it */
   --nav-h: 50px;
-  --strip-h: 66px;
+  --strip-h: 0px;    /* ditto the week strip — #pr-toast landed on the day pills */
 
   /* Type ramp (iOS) */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
@@ -96,6 +101,13 @@ button, input, select, textarea {
   align-items: center;
   gap: 8px;
 }
+
+/* At 375px a long phase name plus countdown, sync chip and gear didn't fit and
+   wrapped inside the fixed 50px bar. Let the left side give way. */
+#topbar-left  { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+#topbar-right { flex: none; }
+#phase-chip, #week-chip, #countdown { white-space: nowrap; }
+#phase-chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 #phase-chip, #week-chip, #countdown {
   font-size: 13px;
@@ -1396,7 +1408,7 @@ textarea.form-input {
   border-radius: 12px;
   color: var(--text);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   padding: 14px 16px;
   outline: none;
@@ -1581,11 +1593,19 @@ textarea.form-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.3s ease;
+  /* Closed means GONE for hit-testing. It used to stay a full-screen layer with
+     only a transparent background, so after "minimise" a tap on the pill — or
+     on anything else — landed on the overlay and the app was unusable. */
+  visibility: hidden;
+  pointer-events: none;
+  transition: background-color 0.3s ease, visibility 0s linear 0.3s;
 }
 
 .timer-overlay.open {
   background: rgba(0,0,0,0.96);
+  visibility: visible;
+  pointer-events: auto;
+  transition: background-color 0.3s ease, visibility 0s;
 }
 
 .timer-content {
@@ -2562,7 +2582,7 @@ textarea.form-input {
   border-radius: 8px;
   color: var(--text);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   padding: 8px 10px;
   outline: none;
   letter-spacing: -0.01em;
@@ -2755,7 +2775,7 @@ textarea.form-input {
    ============================================================ */
 
 .train-week-nav {
-  position: sticky;
+  position: relative;   /* was sticky: it sat on the (also sticky) tab strip and ate ~15% of the screen */
   top: 0;
   z-index: 50;
   background: rgba(0,0,0,0.88);
@@ -4025,7 +4045,7 @@ textarea.form-input {
   border-radius: 8px;
   color: var(--text-2);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   padding: 8px 6px;
   outline: none;
   text-align: center;
@@ -4042,7 +4062,7 @@ textarea.form-input {
   border-radius: 8px;
   color: var(--text-3);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 16px;
   padding: 8px 4px;
   outline: none;
   text-align: center;
@@ -4330,7 +4350,7 @@ textarea.form-input {
   border-radius: 8px;
   color: var(--text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   padding: 8px 10px;
   outline: none;
   min-width: 0;
@@ -5415,7 +5435,7 @@ textarea.form-input {
   border-radius: 8px;
   color: var(--text);
   font-family: inherit;
-  font-size: 15px;            /* >=16 avoids iOS zoom; 15 is fine in a grid */
+  font-size: 16px;            /* <16 makes iOS zoom the page on focus, and user-scalable=no stops you zooming back */
   font-variant-numeric: tabular-nums;
   padding: 8px 6px;
   text-align: center;
@@ -5975,4 +5995,35 @@ textarea.form-input {
   font-size: 14px;
   color: var(--accent);
   margin-top: 18px;
+}
+
+
+/* ============================================================
+   Review fixes (v61)
+   ============================================================ */
+
+.fuel-loader-cancel {
+  margin-top: 18px;
+  background: var(--surface-2);
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Small controls used one-handed mid-workout: widen the tap area without
+   changing how they look. Apple's guideline is 44pt; these were 20-32. */
+.block-check, .setrow-tick, .block-action-btn, .menu-row-btn, .set-log-pill-del {
+  position: relative;
+}
+.block-check::after, .setrow-tick::after, .block-action-btn::after,
+.menu-row-btn::after, .set-log-pill-del::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
 }

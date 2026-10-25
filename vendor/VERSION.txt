@@ -1,0 +1,4 @@
+supabase-js UMD build, vendored so the app can start offline and so a CDN change can never alter what runs.
+Version: 2.118.0
+Source:  https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js
+To upgrade: re-download that URL with the new version, replace supabase.js, bump APP_VERSION in service-worker.js.

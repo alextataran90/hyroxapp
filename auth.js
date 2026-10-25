@@ -68,6 +68,20 @@ function initClient() {
 
 export function hasLoadedRemote() { return pullOk; }
 
+/**
+ * Can the app run now? Either we loaded this account, or a previous visit left
+ * its data here (so a failed pull means "offline", not "brand-new account").
+ * The second case is what lets the app open at a gym with no signal.
+ */
+export function canRunFromCache() { return pullOk || cacheKnown; }
+
+function localCacheLooksReal() {
+  try {
+    const st = JSON.parse(store.get("hyrox.settings") || "null");
+    return !!(st && st.onboarded);
+  } catch { return false; }
+}
+
 export function getCurrentUser() {
   return currentUser;
 }
@@ -110,11 +124,32 @@ export const store = {
 /* ---------- Sync engine ---------- */
 
 let dirty = new Set();
+// Per-key write counter. A push may only clear a key if it hasn't been written
+// again since the push read it — otherwise an edit made while its own key was
+// mid-flight is silently dropped from the queue.
+let dirtyVer = new Map();
 let pushTimer = null;
+let retryTimer = null;
 let syncing = false;
+let pushAgain = false;     // a push was requested while one was already running
+let lastPullAt = 0;
+let cacheKnown = false;    // this account's data was synced here on a previous visit
+let signingOut = false;
 let onStatus = () => {};
+let onRemoteChange = () => {};
 
 export function setSyncStatusHandler(fn) { onStatus = fn || (() => {}); }
+// Called when a pull brought in changes made elsewhere, so the UI can redraw.
+export function setRemoteChangeHandler(fn) { onRemoteChange = fn || (() => {}); }
+export function pendingCount() { return dirty.size; }
+
+// Re-announce the current state. The app registers its status handler only after
+// sign-in finishes, so anything emitted during startup (like "the first pull
+// failed, running from the local copy") was lost and nothing told you that you
+// were offline.
+export function reportSyncStatus() {
+  onStatus(pullOk ? (dirty.size ? "pending" : "synced") : (cacheKnown ? "offline" : "error"));
+}
 
 function pendingStoreKey() {
   return currentUser ? `hyrox.sync.pending.${currentUser.id}` : null;
@@ -138,6 +173,7 @@ function loadPending() {
 function markDirty(key) {
   if (!currentUser) return;
   dirty.add(key);
+  dirtyVer.set(key, (dirtyVer.get(key) || 0) + 1);
   savePending();
   schedulePush();
 }
@@ -148,41 +184,89 @@ function schedulePush() {
 }
 
 export async function pushDirty() {
-  if (!sb || !currentUser || syncing || dirty.size === 0) return;
+  if (!sb || !currentUser) return { ok: false, pending: dirty.size, reason: "signed-out" };
+  if (dirty.size === 0) return { ok: true, pending: 0 };
+  if (syncing) {
+    // One is already in flight. Remember to go again instead of silently
+    // dropping this request — the keys it was for may not be in that batch.
+    pushAgain = true;
+    return { ok: false, pending: dirty.size, reason: "busy" };
+  }
   if (!pullOk) {
     // We never loaded this account — pushing now would overwrite good cloud
     // data with local defaults. Hold the queue until a pull succeeds.
     console.warn("[sync] push held: remote state was never loaded");
-    onStatus("error");
-    return;
+    onStatus(cacheKnown ? "offline" : "error");
+    return { ok: false, pending: dirty.size, reason: "not-loaded" };
   }
-  if (!navigator.onLine) { onStatus("offline"); return; }
+  if (!navigator.onLine) { onStatus("offline"); return { ok: false, pending: dirty.size, reason: "offline" }; }
 
   syncing = true;
   onStatus("syncing");
-  const batch = [...dirty];
+  const sent = new Map([...dirty].map((k) => [k, dirtyVer.get(k) || 0]));
+  let result;
   try {
-    const rows = batch.map((key) => {
-      let parsed = {};
-      try { parsed = JSON.parse(store.get(key) || "{}"); } catch { parsed = {}; }
-      return { user_id: currentUser.id, key, value: parsed };
+    const rows = [];
+    for (const key of [...sent.keys()]) {
+      const raw = store.get(key);
+      let value = {};                       // a removed key uploads as an empty document
+      if (raw != null && raw !== "") {
+        try { value = JSON.parse(raw); }
+        catch {
+          // Never turn an unreadable value into an empty document: that would
+          // overwrite whatever good copy the cloud holds.
+          console.warn("[sync] not uploading unreadable value for", key);
+          sent.delete(key);
+          dirty.delete(key);
+          dirtyVer.delete(key);
+          continue;
+        }
+      }
+      rows.push({ user_id: currentUser.id, key, value });
+    }
+    if (rows.length) {
+      const { error } = await sb.from("user_data").upsert(rows, { onConflict: "user_id,key" });
+      if (error) throw error;
+    }
+    // Clear only what was sent AND hasn't been written again since.
+    sent.forEach((ver, k) => {
+      if ((dirtyVer.get(k) || 0) === ver) { dirty.delete(k); dirtyVer.delete(k); }
     });
-    const { error } = await sb.from("user_data").upsert(rows, { onConflict: "user_id,key" });
-    if (error) throw error;
-    // Only clear the keys we actually pushed — writes during the request stay queued.
-    batch.forEach((k) => dirty.delete(k));
     savePending();
     onStatus(dirty.size === 0 ? "synced" : "pending");
+    result = { ok: dirty.size === 0, pending: dirty.size };
   } catch (e) {
     console.warn("[sync] push failed:", e.message || e);
     onStatus("error");
+    result = { ok: false, pending: dirty.size, reason: "error", error: e };
   } finally {
     syncing = false;
   }
+
+  clearTimeout(retryTimer);
+  if (result.reason === "error") {
+    // Back off rather than hammering a failing server; online/visibility/the
+    // next edit will also kick it.
+    retryTimer = setTimeout(() => { pushDirty(); }, 20000);
+  } else if (pushAgain || dirty.size > 0) {
+    pushAgain = false;
+    schedulePush();                          // edits landed mid-flight
+  }
+  return result;
+}
+
+// Key-order-independent form, so a Postgres jsonb round-trip (which reorders
+// object keys) doesn't look like a change.
+function canon(v) {
+  if (Array.isArray(v)) return v.map(canon);
+  if (v && typeof v === "object") {
+    return Object.keys(v).sort().reduce((o, k) => { o[k] = canon(v[k]); return o; }, {});
+  }
+  return v;
 }
 
 export async function pullAll() {
-  if (!sb || !currentUser) return { pulled: 0 };
+  if (!sb || !currentUser) return { ok: false, pulled: 0, changed: 0 };
   onStatus("syncing");
   try {
     const { data, error } = await sb
@@ -190,28 +274,71 @@ export async function pullAll() {
       .select("key,value")
       .eq("user_id", currentUser.id);
     if (error) throw error;
-    let pulled = 0;
+    let pulled = 0, changed = 0, kept = 0;
     (data || []).forEach((row) => {
       if (!SYNCED_KEYS.includes(row.key)) return;
-      store.setLocalOnly(row.key, JSON.stringify(row.value ?? {}));
+      // A key with edits still waiting to upload is newer than anything in the
+      // cloud. Overwriting it here would throw those edits away and then
+      // re-upload the old copy over them.
+      if (dirty.has(row.key)) { kept++; return; }
+      const next = JSON.stringify(row.value ?? {});
+      let local = null;
+      try { local = JSON.stringify(canon(JSON.parse(store.get(row.key)))); } catch { /* absent */ }
+      if (local !== JSON.stringify(canon(row.value ?? {}))) changed++;
+      store.setLocalOnly(row.key, next);
       pulled++;
     });
     pullOk = true;
+    lastPullAt = Date.now();
     onStatus(dirty.size === 0 ? "synced" : "pending");
-    return { ok: true, pulled };
+    return { ok: true, pulled, changed, kept };
   } catch (e) {
     console.warn("[sync] pull failed:", e.message || e);
-    onStatus("error");
-    return { ok: false, pulled: 0, error: e };
+    onStatus(navigator.onLine ? "error" : "offline");
+    return { ok: false, pulled: 0, changed: 0, error: e };
   }
 }
 
+/** Push anything pending, then fetch what other devices wrote. Reports honestly. */
+export async function syncNow() {
+  if (!sb || !currentUser) return { ok: false, reason: "signed-out", pending: 0 };
+  if (!navigator.onLine) return { ok: false, reason: "offline", pending: dirty.size };
+  if (!pullOk) {
+    const p = await pullAll();
+    if (!p.ok) return { ok: false, reason: "error", pending: dirty.size };
+    if (p.changed) onRemoteChange(p.changed);
+  }
+  const r = await pushDirty();
+  if (!r.ok) return r;
+  const p = await pullAll();
+  if (p.ok && p.changed) onRemoteChange(p.changed);
+  return { ok: p.ok, reason: p.ok ? undefined : "error", pending: dirty.size };
+}
+
 // Flush queued writes when the tab is backgrounded / closed / comes online.
+const RESUME_PULL_AFTER_MS = 2 * 60 * 1000;
+
+async function resumePull() {
+  if (!sb || !currentUser || syncing) return;
+  if (!navigator.onLine) return;
+  if (pullOk && Date.now() - lastPullAt < RESUME_PULL_AFTER_MS) return;
+  // Send our own edits first, so the pull can't be what overwrites them.
+  if (pullOk && dirty.size > 0) await pushDirty();
+  const p = await pullAll();
+  if (p.ok) {
+    if (p.changed) onRemoteChange(p.changed);
+    if (dirty.size > 0) pushDirty();
+  }
+}
+
 function wireFlushHandlers() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") pushDirty();
+    // The PWA can sit in memory for days. Without this, a second device's
+    // changes never arrive, and this one later uploads its stale copy over them.
+    else resumePull();
   });
-  window.addEventListener("online", () => { onStatus("pending"); pushDirty(); });
+  window.addEventListener("online", () => { onStatus("pending"); resumePull().then(() => pushDirty()); });
   window.addEventListener("offline", () => onStatus("offline"));
 }
 
@@ -275,7 +402,11 @@ export function archiveLegacyData() {
 
 export async function signOut() {
   await pushDirty();
-  try { await sb.auth.signOut(); } catch { /* no-op */ }
+  signingOut = true;
+  // scope "local": the default is "global", which also revokes the refresh
+  // token on every OTHER device — signing out on a laptop would silently log
+  // the phone out mid-workout.
+  try { await sb.auth.signOut({ scope: "local" }); } catch { /* no-op */ }
   currentUser = null;
   location.reload();
 }
@@ -293,12 +424,18 @@ function authShell(inner) {
     </div>`;
 }
 
+// A failed sign-in re-renders the form; without this it wipes what was typed.
+let lastEmail = "";
+const escAttr = (v) => String(v).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
 function fieldRow(id, label, type, placeholder, extra = "") {
   return `
     <label class="auth-label" for="${id}">${label}</label>
     <input class="auth-input" id="${id}" type="${type}" placeholder="${placeholder}"
       autocomplete="${type === "password" ? "current-password" : "email"}"
-      autocapitalize="none" autocorrect="off" spellcheck="false" ${extra} />`;
+      autocapitalize="none" autocorrect="off" spellcheck="false"
+      ${id === "auth-email" && lastEmail ? `value="${escAttr(lastEmail)}"` : ""} ${extra} />`;
 }
 
 /**
@@ -321,7 +458,7 @@ function renderAuthGate(mode = "signin", message = "") {
   root.hidden = false;
 
   const msgHtml = message
-    ? `<div class="auth-msg ${message.startsWith("✓") ? "auth-msg-ok" : "auth-msg-err"}">${message}</div>`
+    ? `<div class="auth-msg ${message.startsWith("✓") ? "auth-msg-ok" : "auth-msg-err"}">${escAttr(message)}</div>`
     : "";
 
   let body = "";
@@ -363,7 +500,11 @@ function renderAuthGate(mode = "signin", message = "") {
 
   root.innerHTML = authShell(body);
 
-  const email = () => (document.getElementById("auth-email")?.value || "").trim();
+  const email = () => {
+    const v = (document.getElementById("auth-email")?.value || "").trim();
+    if (v) lastEmail = v;
+    return v;
+  };
   const pass  = () => document.getElementById("auth-pass")?.value || "";
   const busy  = (on, label) => {
     const b = document.getElementById("auth-submit");
@@ -474,6 +615,12 @@ export async function initAuth() {
     if (event === "PASSWORD_RECOVERY") {
       recovering = true;
       renderAuthGate("recover");
+    } else if (event === "SIGNED_OUT" && currentUser && !signingOut) {
+      // The session was revoked or its refresh token stopped working. Without
+      // this the app carried on looking signed in, every push failing with
+      // "Sync error" while hours of logs piled up in the queue. Local data and
+      // the pending queue are kept; reloading lands on the sign-in screen.
+      location.reload();
     }
   });
 
@@ -486,7 +633,21 @@ export async function initAuth() {
   }
 
   if (!session) {
-    renderAuthGate("signin");
+    // A confirm/reset link that expired or was already used lands here with the
+    // reason in the hash. Say so, instead of showing a bare sign-in form.
+    const hashErr = /error_description=([^&]+)/.exec(location.hash);
+    let note = "";
+    if (hashErr) {
+      let why = "";
+      // A stray "%" makes decodeURIComponent throw, which used to kill boot and
+      // leave a blank page — so a bad link must never be able to do that.
+      try { why = decodeURIComponent(hashErr[1].replace(/\+/g, " ")); } catch { why = ""; }
+      note = !why || /expired|invalid|used/i.test(why)
+        ? "That link has expired or was already used. Request a new one with Forgot password."
+        : why.slice(0, 200);
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+    renderAuthGate("signin", note);
     return null;
   }
 
@@ -501,8 +662,16 @@ export async function initAuth() {
     pull = await pullAll();
   }
 
+  // The pull failed. If a previous visit already synced this account here we
+  // know it isn't new, so the app can run from that cache (and queue edits)
+  // rather than locking you out of your own training at a gym with no signal.
+  if (!pull.ok) {
+    cacheKnown = localCacheLooksReal();
+    onStatus(cacheKnown ? "offline" : "error");
+  }
+
   // Offer to bring across anything saved before accounts existed.
-  if (hasLegacyData()) {
+  if (pull.ok && hasLegacyData()) {
     await askImportLegacy();
   }
 
