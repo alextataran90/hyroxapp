@@ -443,12 +443,66 @@ function touchSavedMeal(id) {
   } catch { /* no-op */ }
 }
 
+/**
+ * Edit a menu preset in place. Keeps the id so the preset's place in the menu
+ * — and anything already pointing at it — survives a rename or a re-costing.
+ */
+function updateSavedMeal(id, patch) {
+  try {
+    const all = JSON.parse(store.get(SAVED_MEALS_KEY) || "{}");
+    if (!all[id]) return false;
+    const m = all[id];
+    if (patch.name != null)  m.name  = String(patch.name).trim() || m.name;
+    if (patch.label != null) m.label = patch.label;
+    if (patch.items) {
+      m.items = patch.items.map((it) => ({
+        name: it.name || "",
+        qtyNum: Number(it.qtyNum) || 0,
+        unit: it.unit || "g",
+        kcal: Number(it.kcal) || 0,
+        p: Number(it.p) || 0,
+        c: Number(it.c) || 0,
+        f: Number(it.f) || 0
+      }));
+    }
+    m.updatedAt = new Date().toISOString();
+    store.set(SAVED_MEALS_KEY, JSON.stringify(all));
+    return true;
+  } catch { return false; }
+}
+
 function deleteSavedMeal(id) {
   try {
     const all = JSON.parse(store.get(SAVED_MEALS_KEY) || "{}");
     delete all[id];
     store.set(SAVED_MEALS_KEY, JSON.stringify(all));
   } catch { /* no-op */ }
+}
+
+// The meal slots a menu preset can belong to. Order is the order of the day,
+// which is also the order the menu and the picker list them in.
+const MEAL_SLOTS = [
+  { key: "breakfast", name: "Breakfast", icon: "\u{1F305}" },
+  { key: "lunch",     name: "Lunch",     icon: "\u2600\uFE0F" },
+  { key: "dinner",    name: "Dinner",    icon: "\u{1F319}" },
+  { key: "snack",     name: "Snack",     icon: "\u{1F34E}" }
+];
+
+// Which slot we're most likely filling right now.
+function currentMealSlot() {
+  const h = new Date().getHours();
+  return h < 10 ? "breakfast" : h < 14 ? "lunch" : h < 19 ? "dinner" : "snack";
+}
+
+// Presets grouped by slot, in day order, each group most-recently-used first.
+function menuBySlot() {
+  const all = getSavedMeals();
+  return MEAL_SLOTS.map((sl) => ({
+    ...sl,
+    meals: all.filter((m) => (m.label || "") === sl.key)
+  })).concat([{ key: "", name: "Unsorted", icon: "\u{1F4CB}",
+                meals: all.filter((m) => !MEAL_SLOTS.some((sl) => sl.key === (m.label || ""))) }])
+     .filter((g) => g.meals.length > 0 || g.key !== "");
 }
 
 function savedMealTotals(meal) {
@@ -2317,6 +2371,8 @@ async function renderMain(app) {
         and paste it into <a href="#/settings" style="color:var(--warn)">Settings → Nutrition</a>.
       </div>` : ""}
       <button class="btn" id="log-meal-btn">+ Log meal</button>
+      <button class="btn btn-secondary" id="day-menu-btn" style="margin-top:10px">📒 My menu${
+        getSavedMeals().length ? ` · ${getSavedMeals().length}` : ""}</button>
       <div class="section-header">Meals</div>
       ${mealsHtml}
       <div class="section-header" style="margin-top:24px">Weekly Summary</div>
@@ -2453,6 +2509,7 @@ async function renderMain(app) {
 
   if (dayTab === "nutrition") {
     document.getElementById("log-meal-btn")?.addEventListener("click", () => showLogMealSheet(selDateStr));
+    document.getElementById("day-menu-btn")?.addEventListener("click", showMenuSheet);
     app.querySelectorAll("[data-action='edit-meal']").forEach((btn) => {
       btn.addEventListener("click", () => {
         const meal = dayMeals.find((m) => m.id === btn.dataset.mid);
@@ -3656,6 +3713,8 @@ async function renderFuel(app) {
     </div>` : ""}
 
     <button class="btn" id="log-meal-btn">+ Log meal</button>
+    <button class="btn btn-secondary" id="my-menu-btn" style="margin-top:10px">📒 My menu${
+      getSavedMeals().length ? ` · ${getSavedMeals().length}` : ""}</button>
 
     <div class="section-header">Meals</div>
     ${mealsHtml}
@@ -3707,6 +3766,7 @@ async function renderFuel(app) {
   });
 
   document.getElementById("log-meal-btn").addEventListener("click", () => showLogMealSheet(viewDs));
+  document.getElementById("my-menu-btn")?.addEventListener("click", showMenuSheet);
 
   app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -3827,7 +3887,7 @@ function showLogMealSheet(targetDateStr) {
           <input type="file" accept="image/*" id="meal-lib" style="display:none" />
         </label>
         <button class="action-sheet-btn" id="meal-voice-btn">🎤 Say what you ate</button>
-        <button class="action-sheet-btn" id="meal-saved-btn">💾 Saved meals${savedCount ? ` <span class="sheet-badge">${savedCount}</span>` : ""}</button>
+        <button class="action-sheet-btn" id="meal-saved-btn">📒 Pick from my menu${savedCount ? ` <span class="sheet-badge">${savedCount}</span>` : ""}</button>
         <button class="action-sheet-btn" id="meal-manual-btn">✏️ Add manually</button>
       </div>
       <button class="action-sheet-btn action-sheet-cancel" id="meal-sheet-cancel">Cancel</button>
@@ -3881,9 +3941,37 @@ function showLogMealSheet(targetDateStr) {
   sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
 }
 
-/* ---------- Saved meals picker ---------- */
+/* ---------- My menu: preset meals per slot ---------- */
 
-function showSavedMealsSheet(targetDateStr) {
+function menuRowHtml(m, action) {
+  const t = savedMealTotals(m);
+  const preview = (m.items || [])
+    .map((it) => `${escapeHtml(it.name)}${it.qtyNum ? ` ${it.qtyNum}${escapeHtml(it.unit || "")}` : ""}`)
+    .join(" · ");
+  return `
+    <div class="menu-row">
+      <button class="menu-row-main" data-${action}="${escapeHtml(m.id)}">
+        <div class="menu-row-top">
+          <span class="menu-row-name">${escapeHtml(m.name)}</span>
+          <span class="menu-row-kcal">${Math.round(t.kcal)} kcal</span>
+        </div>
+        <div class="menu-row-items">${preview || "No items yet"}</div>
+        <div class="menu-row-macros">${Math.round(t.p)}g P · ${Math.round(t.c)}g C · ${Math.round(t.f)}g F</div>
+      </button>
+      <div class="menu-row-actions">
+        <button class="menu-row-btn" data-edit="${escapeHtml(m.id)}" aria-label="Edit ${escapeHtml(m.name)}">✏️</button>
+        <button class="menu-row-btn" data-dup="${escapeHtml(m.id)}" aria-label="Duplicate ${escapeHtml(m.name)}">⧉</button>
+        <button class="menu-row-btn menu-row-del" data-del="${escapeHtml(m.id)}" aria-label="Delete ${escapeHtml(m.name)}">×</button>
+      </div>
+    </div>`;
+}
+
+/**
+ * The menu itself: build and keep the meals you eat often, grouped by slot.
+ * Presets live in the same store as before (and still sync), so anything
+ * saved from a logged meal already appears here.
+ */
+function showMenuSheet() {
   const overlay = document.createElement("div");
   overlay.className = "fuel-edit-overlay";
   document.body.appendChild(overlay);
@@ -3892,46 +3980,127 @@ function showSavedMealsSheet(targetDateStr) {
   const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
 
   const render = () => {
-    const meals = getSavedMeals();
-    const rows = meals.length === 0
-      ? `<div class="saved-empty">
-           <div class="saved-empty-icon">💾</div>
-           <div class="saved-empty-title">No saved meals yet</div>
-           <div class="saved-empty-sub">Build a meal, then tap <strong>Save as a meal</strong> in the edit screen to reuse it here.</div>
-         </div>`
-      : meals.map((m) => {
-          const t = savedMealTotals(m);
-          const preview = (m.items || [])
-            .map((it) => `${escapeHtml(it.name)}${it.qtyNum ? ` ${it.qtyNum}${escapeHtml(it.unit || "")}` : ""}`)
-            .join(" · ");
-          return `
-            <div class="saved-row">
-              <button class="saved-row-main" data-load="${escapeHtml(m.id)}">
-                <div class="saved-row-top">
-                  <span class="saved-row-name">${escapeHtml(m.name)}</span>
-                  <span class="saved-row-kcal">${Math.round(t.kcal)} kcal</span>
-                </div>
-                <div class="saved-row-items">${preview || "—"}</div>
-                <div class="saved-row-macros">${Math.round(t.p)}g P · ${Math.round(t.c)}g C · ${Math.round(t.f)}g F</div>
-              </button>
-              <button class="saved-row-del" data-del="${escapeHtml(m.id)}" aria-label="Delete saved meal">×</button>
-            </div>`;
-        }).join("");
+    const groups = menuBySlot();
+    const total = groups.reduce((n, g) => n + g.meals.length, 0);
+
+    const groupsHtml = groups.map((g) => `
+      <div class="menu-group">
+        <div class="menu-group-head">
+          <span class="menu-group-name"><span class="menu-group-icon">${g.icon}</span>${escapeHtml(g.name)}</span>
+          <span class="menu-group-count">${g.meals.length}</span>
+        </div>
+        ${g.meals.map((m) => menuRowHtml(m, "edit-main")).join("")}
+        ${g.key ? `<button class="menu-add-btn" data-add="${g.key}">+ Add a ${g.name.toLowerCase()} option</button>` : ""}
+      </div>`).join("");
+
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="menu-close">Done</button>
+          <span class="fuel-edit-title">My menu</span>
+          <span style="width:54px"></span>
+        </div>
+        <div class="fuel-edit-scroll" style="padding:16px 16px 28px">
+          <p class="menu-intro">${total
+            ? "Your usual meals, ready to log in one tap. Add as many options per slot as you like."
+            : "Build the meals you eat often once. When you log a meal you can pick one and it fills in every item and quantity."}</p>
+          ${groupsHtml}
+        </div>
+      </div>`;
+
+    overlay.querySelector("#menu-close").addEventListener("click", close);
+
+    const openEditor = (id, label) => {
+      const m = id ? getSavedMeals().find((x) => x.id === id) : null;
+      close();
+      setTimeout(() => showMealEditSheet(
+        m ? (m.items || []).map((it) => ({ ...it })) : [],
+        "", "menu", null, null, null,
+        { preset: { id: m ? m.id : null, label: m ? m.label : label,
+                    name: m ? m.name : "", onSaved: showMenuSheet } }
+      ), 300);
+    };
+
+    overlay.querySelectorAll("[data-add]").forEach((b) =>
+      b.addEventListener("click", () => openEditor(null, b.dataset.add)));
+    overlay.querySelectorAll("[data-edit-main]").forEach((b) =>
+      b.addEventListener("click", () => openEditor(b.dataset.editMain)));
+    overlay.querySelectorAll("[data-edit]").forEach((b) =>
+      b.addEventListener("click", () => openEditor(b.dataset.edit)));
+
+    overlay.querySelectorAll("[data-dup]").forEach((b) => b.addEventListener("click", () => {
+      const m = getSavedMeals().find((x) => x.id === b.dataset.dup);
+      if (!m) return;
+      saveSavedMeal(`${m.name} (copy)`, m.items || [], m.label);
+      render();
+    }));
+
+    overlay.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
+      const m = getSavedMeals().find((x) => x.id === b.dataset.del);
+      if (!m) return;
+      if (!confirm(`Remove “${m.name}” from your menu?`)) return;
+      deleteSavedMeal(m.id);
+      render();
+    }));
+  };
+
+  render();
+}
+
+/* ---------- Menu picker (used when logging a meal) ---------- */
+
+/**
+ * @param preferLabel  Slot to show first — the one you're most likely filling.
+ */
+function showSavedMealsSheet(targetDateStr, preferLabel) {
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+
+  const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
+
+  const render = () => {
+    const prefer = preferLabel || currentMealSlot();
+    // The slot you're filling comes first; the rest stay in day order so the
+    // list doesn't reshuffle under you.
+    const groups = menuBySlot()
+      .filter((g) => g.meals.length > 0)
+      .sort((a, b) => (b.key === prefer) - (a.key === prefer));
+    const total = groups.reduce((n, g) => n + g.meals.length, 0);
 
     overlay.innerHTML = `
       <div class="fuel-edit-sheet">
         <div class="fuel-edit-topbar">
           <button class="fuel-edit-cancel" id="sm-cancel">Cancel</button>
-          <span class="fuel-edit-title">Saved meals</span>
-          <span style="width:54px"></span>
+          <span class="fuel-edit-title">My menu</span>
+          <button class="fuel-edit-save" id="sm-manage">Edit</button>
         </div>
         <div class="fuel-edit-scroll" style="padding:16px 16px 24px">
-          ${meals.length ? `<p class="saved-intro">Tap a meal to load it — you can still adjust quantities before saving.</p>` : ""}
-          ${rows}
+          ${total === 0 ? `
+            <div class="saved-empty">
+              <div class="saved-empty-icon">📒</div>
+              <div class="saved-empty-title">Your menu is empty</div>
+              <div class="saved-empty-sub">Add the meals you eat often and they'll be one tap away here.</div>
+              <button class="btn" id="sm-build" style="margin-top:16px">Build my menu</button>
+            </div>` : `
+            <p class="menu-intro">Tap a meal to load it — you can still adjust quantities before saving.</p>
+            ${groups.map((g) => `
+              <div class="menu-group">
+                <div class="menu-group-head">
+                  <span class="menu-group-name"><span class="menu-group-icon">${g.icon}</span>${escapeHtml(g.name)}</span>
+                  <span class="menu-group-count">${g.meals.length}</span>
+                </div>
+                ${g.meals.map((m) => menuRowHtml(m, "load")).join("")}
+              </div>`).join("")}
+          `}
         </div>
       </div>`;
 
     overlay.querySelector("#sm-cancel").addEventListener("click", close);
+    const openManager = () => { close(); setTimeout(showMenuSheet, 300); };
+    overlay.querySelector("#sm-manage").addEventListener("click", openManager);
+    overlay.querySelector("#sm-build")?.addEventListener("click", openManager);
 
     overlay.querySelectorAll("[data-load]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -3941,156 +4110,27 @@ function showSavedMealsSheet(targetDateStr) {
         close();
         // Deep-copy so edits here never mutate the stored preset.
         const copy = (m.items || []).map((it) => ({ ...it }));
-        setTimeout(() => showMealEditSheet(copy, "", "saved", targetDateStr), 300);
+        setTimeout(() => showMealEditSheet(copy, "", "menu", targetDateStr,
+          null, null, { label: m.label || prefer }), 300);
       });
     });
 
-    overlay.querySelectorAll("[data-del]").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const m = getSavedMeals().find((x) => x.id === btn.dataset.del);
-        if (!m) return;
-        if (!confirm(`Delete saved meal “${m.name}”?`)) return;
-        deleteSavedMeal(m.id);
-        render();
-      });
-    });
+    // The row's own edit/duplicate/delete belong to the manager, not the picker.
+    overlay.querySelectorAll("[data-edit],[data-dup],[data-del]").forEach((b) => b.remove());
   };
 
   render();
 }
 
-/* ---------- Voice meal capture ---------- */
-
-// Pick a container both MediaRecorder and Gemini accept. Safari/iOS gives
-// audio/mp4, Chrome/Android gives audio/webm — Gemini understands both.
-function pickAudioMime() {
-  if (typeof MediaRecorder === "undefined") return null;
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
-  return candidates.find((m) => MediaRecorder.isTypeSupported(m)) || null;
-}
-
-function showVoiceMealSheet(targetDateStr) {
-  if (!navigator.mediaDevices?.getUserMedia || !pickAudioMime()) {
-    alert("Voice recording isn't supported by this browser. Use a photo or add the meal manually.");
-    return;
-  }
-
-  const overlay = document.createElement("div");
-  overlay.className = "action-sheet-backdrop";
-  overlay.innerHTML = `
-    <div class="action-sheet" role="dialog">
-      <div class="action-sheet-title">Say what you ate
-        <div class="action-sheet-title-sub">e.g. "two eggs, 5 g of olive oil, and 200 g of bagel at 105 calories per 100 grams"</div>
-      </div>
-      <div class="voice-body">
-        <button class="voice-orb" id="voice-orb" aria-label="Start recording">🎤</button>
-        <div class="voice-status" id="voice-status">Tap to start recording</div>
-        <div class="voice-timer" id="voice-timer" hidden>0:00</div>
-      </div>
-      <button class="action-sheet-btn action-sheet-cancel" id="voice-cancel">Cancel</button>
-    </div>`;
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => overlay.classList.add("open"));
-
-  let recorder = null, stream = null, chunks = [], tick = null, startedAt = 0, finished = false;
-
-  const close = () => {
-    stopTracks();
-    overlay.classList.remove("open");
-    setTimeout(() => overlay.remove(), 260);
-  };
-  const stopTracks = () => {
-    clearInterval(tick);
-    try { stream?.getTracks().forEach((t) => t.stop()); } catch {}
-  };
-
-  const orb    = overlay.querySelector("#voice-orb");
-  const status = overlay.querySelector("#voice-status");
-  const timer  = overlay.querySelector("#voice-timer");
-
-  const start = async () => {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      status.textContent = "Microphone permission denied. Allow mic access and try again.";
-      return;
-    }
-    const mime = pickAudioMime();
-    recorder = new MediaRecorder(stream, { mimeType: mime });
-    chunks = [];
-    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    recorder.onstop = () => { if (!finished) handleStop(mime); };
-    recorder.start();
-    startedAt = Date.now();
-
-    orb.classList.add("voice-orb-live");
-    orb.textContent = "⏹";
-    orb.setAttribute("aria-label", "Stop recording");
-    status.textContent = "Listening… tap to finish";
-    timer.hidden = false;
-    tick = setInterval(() => {
-      const s = Math.floor((Date.now() - startedAt) / 1000);
-      timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-      if (s >= 60) stop(); // keep clips short — plenty for a meal description
-    }, 250);
-  };
-
-  const stop = () => {
-    if (!recorder || recorder.state === "inactive") return;
-    clearInterval(tick);
-    recorder.stop();
-  };
-
-  const handleStop = async (mime) => {
-    finished = true;
-    stopTracks();
-    if ((Date.now() - startedAt) < 900) {
-      status.textContent = "That was too short — hold on a moment longer.";
-      orb.classList.remove("voice-orb-live");
-      orb.textContent = "🎤";
-      timer.hidden = true;
-      finished = false;
-      return;
-    }
-    close();
-
-    const loader = document.createElement("div");
-    loader.className = "fuel-loader";
-    loader.innerHTML = `<div class="fuel-loader-inner"><div class="fuel-spinner"></div><div class="fuel-loader-text">Listening back…</div><div class="fuel-loader-sub">Transcribing and costing your meal</div></div>`;
-    document.body.appendChild(loader);
-
-    try {
-      const blob = new Blob(chunks, { type: mime });
-      const b64  = await new Promise((res, rej) => {
-        const fr = new FileReader();
-        fr.onload  = () => res(String(fr.result).split(",")[1]);
-        fr.onerror = rej;
-        fr.readAsDataURL(blob);
-      });
-      // Gemini wants the bare container type, without the codecs parameter.
-      const geminiMime = mime.split(";")[0];
-      const result = await analyzeFoodAudio(b64, geminiMime);
-      loader.remove();
-      const note = [result.transcript ? `“${result.transcript}”` : "", result.notes || ""]
-        .filter(Boolean).join(" · ");
-      showMealEditSheet(result.items || [], note, "voice", targetDateStr);
-    } catch (err) {
-      loader.remove();
-      alert(err.message || "Couldn't process that recording.");
-    }
-  };
-
-  orb.addEventListener("click", () => {
-    if (!recorder || recorder.state === "inactive") start(); else stop();
-  });
-  overlay.querySelector("#voice-cancel").addEventListener("click", close);
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-}
-
-/* ---------- Meal edit / confirm sheet ---------- */
-
-function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal = null, photoThumb = null) {
+/**
+ * @param opts.preset  When set, the sheet edits a MENU PRESET rather than a
+ *   logged meal: {id} updates an existing one, {id:null, label} creates one.
+ *   Nothing is written to any day — presets have no date.
+ * @param opts.label   Slot to pre-select when logging normally, so loading a
+ *   breakfast preset lands on Breakfast rather than on the time of day.
+ */
+function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal = null, photoThumb = null, opts = {}) {
+  const presetCtx = opts.preset || null;
   // auto:true means "estimate this item via Gemini" — not yet calculated
   let items = initItems.map((it) => {
     const parsed = parseQtyString(it.qty || "");
@@ -4102,9 +4142,11 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       auto: false
     };
   });
-  const LABELS = ["breakfast", "lunch", "dinner", "snack"];
-  const h = new Date().getHours();
-  let selLabel = editMeal ? editMeal.label : (h < 10 ? "breakfast" : h < 14 ? "lunch" : h < 19 ? "dinner" : "snack");
+  const LABELS = MEAL_SLOTS.map((sl) => sl.key);
+  let selLabel = presetCtx ? (presetCtx.label || currentMealSlot())
+               : editMeal  ? editMeal.label
+               : (opts.label || currentMealSlot());
+  let presetName = presetCtx ? (presetCtx.name || "") : "";
 
   const overlay = document.createElement("div");
   overlay.className = "fuel-edit-overlay";
@@ -4131,10 +4173,15 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       <div class="fuel-edit-sheet">
         <div class="fuel-edit-topbar">
           <button class="fuel-edit-cancel" id="fed-cancel">Cancel</button>
-          <span class="fuel-edit-title">Review meal</span>
+          <span class="fuel-edit-title">${presetCtx ? (presetCtx.id ? "Edit menu item" : "New menu item") : "Review meal"}</span>
           <button class="fuel-edit-save" id="fed-save">Save</button>
         </div>
         <div class="fuel-edit-scroll">
+          ${presetCtx ? `<div class="fed-preset-name-row">
+            <label class="fed-preset-name-label" for="fed-preset-name">Name</label>
+            <input id="fed-preset-name" class="fed-preset-name" type="text" placeholder="e.g. Oats &amp; whey"
+              value="${escapeHtml(presetName)}" autocomplete="off" />
+          </div>` : ""}
           <div class="fuel-label-row">
             ${LABELS.map((l) => `<button class="fuel-label-pill${l === selLabel ? " selected" : ""}" data-lbl="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}
           </div>
@@ -4150,7 +4197,7 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
           </div>
           ${autoCount > 0 ? `<button class="fed-estimate-btn" id="fed-estimate">✨ Estimate nutrition for ${autoCount} item${autoCount > 1 ? "s" : ""}</button>` : ""}
           <button class="fuel-add-item" id="fed-add">+ Add item</button>
-          ${items.length > 0 ? `<button class="fed-save-preset" id="fed-save-preset">💾 Save as a meal</button>` : ""}
+          ${items.length > 0 && !presetCtx ? `<button class="fed-save-preset" id="fed-save-preset">💾 Save to my menu</button>` : ""}
           <div class="fuel-edit-total">
             <div class="fuel-edit-total-row">
               <span>Total${autoCount > 0 ? `<span class="fed-total-note"> (${autoCount} pending)</span>` : ""}</span>
@@ -4161,6 +4208,11 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
         </div>
       </div>`;
     bindSheet(freqItems);
+  };
+
+  const syncPresetName = () => {
+    const el = overlay.querySelector("#fed-preset-name");
+    if (el) presetName = el.value;
   };
 
   const syncDomToItems = () => {
@@ -4188,7 +4240,11 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
   };
 
   const bindSheet = (freqItems = []) => {
-    overlay.querySelectorAll(".fuel-label-pill").forEach((b) => b.addEventListener("click", () => { selLabel = b.dataset.lbl; renderSheet(); }));
+    overlay.querySelectorAll(".fuel-label-pill").forEach((b) => b.addEventListener("click", () => {
+      syncPresetName();
+      selLabel = b.dataset.lbl;
+      renderSheet();
+    }));
 
     overlay.querySelectorAll(".fed-field").forEach((inp) => {
       inp.addEventListener("input", () => {
@@ -4368,6 +4424,21 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       syncDomToItems();
       // Drop items still pending estimation (auto=true) — they have no meaningful values
       const valid = items.filter((it) => !it.auto && (it.name || it.kcal > 0));
+
+      if (presetCtx) {
+        syncPresetName();
+        if (!valid.length) { showToast("Add at least one item first"); return; }
+        const name = (presetName || "").trim()
+          || (valid.length === 1 ? valid[0].name.trim()
+                                 : `${valid[0].name.trim()} + ${valid.length - 1} more`);
+        if (presetCtx.id) updateSavedMeal(presetCtx.id, { name, label: selLabel, items: valid });
+        else saveSavedMeal(name, valid, selLabel);
+        close();
+        showToast(`\u{1F4D2} Saved \u201C${name}\u201D to your menu`);
+        if (typeof presetCtx.onSaved === "function") setTimeout(presetCtx.onSaved, 300);
+        return;
+      }
+
       if (!valid.length) { close(); return; }
       const tot = valid.reduce((a, it) => ({ kcal: a.kcal + it.kcal, p: a.p + it.p, c: a.c + it.c, f: a.f + it.f }), { kcal: 0, p: 0, c: 0, f: 0 });
       const now2 = new Date();

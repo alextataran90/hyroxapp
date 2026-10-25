@@ -5572,3 +5572,169 @@ textarea.form-input {
   letter-spacing: -0.01em;
   margin-top: 1px;
 }
+
+/* ============================================================
+   My menu — preset meals grouped by slot (v58)
+   ============================================================ */
+
+.menu-intro {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-3);
+  margin: 0 0 16px;
+}
+
+.menu-group { margin-bottom: 22px; }
+
+.menu-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.menu-group-name {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.menu-group-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-4);
+}
+
+.menu-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  background: var(--surface-1);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.menu-row-main {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.menu-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.menu-row-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.menu-row-kcal {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.menu-row-items {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+
+.menu-row-macros {
+  font-size: 12px;
+  color: var(--text-4);
+  margin-top: 4px;
+}
+
+/* Edit / duplicate / delete stack beside the row so the whole card stays
+   tappable for the thing you do most — loading it. */
+.menu-row-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+}
+
+.menu-row-btn {
+  background: var(--surface-2);
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 26px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.menu-row-del { color: var(--danger); font-size: 17px; }
+
+.menu-add-btn {
+  width: 100%;
+  background: none;
+  border: 1.5px dashed var(--surface-2);
+  border-radius: 12px;
+  padding: 11px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Name field when building a menu item */
+.fed-preset-name-row { padding: 14px 16px 0; }
+
+.fed-preset-name-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  margin-bottom: 6px;
+}
+
+.fed-preset-name {
+  width: 100%;
+  background: var(--surface-1);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.fed-preset-name:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Uppercase + letter-spacing swallows the gap after the emoji. */
+.menu-group-icon {
+  display: inline-block;
+  margin-right: 7px;
+  letter-spacing: normal;
+}
