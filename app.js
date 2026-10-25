@@ -21,6 +21,7 @@ const FITNESS_KEY = "hyrox.fitness";
 const DAILY_BURN_KEY = "hyrox.dailyBurn";
 const FOOD_KEY = "hyrox.foods";
 const SAVED_MEALS_KEY = "hyrox.savedMeals";
+const PANTRY_KEY      = "hyrox.pantry";   // what you said you had, for next time
 const SET_ENTRIES_KEY = "hyrox.setEntries";
 const ACTUALS_KEY = "hyrox.actuals";
 const PLAN_URL = "plan.json";
@@ -2408,6 +2409,7 @@ async function renderMain(app) {
       <button class="btn" id="log-meal-btn">+ Log meal</button>
       <button class="btn btn-secondary" id="day-menu-btn" style="margin-top:10px">📒 My menu${
         getSavedMeals().length ? ` · ${getSavedMeals().length}` : ""}</button>
+      <button class="btn btn-secondary" id="day-recipes-btn" style="margin-top:10px">🍳 Recipes &amp; ideas</button>
       <div class="section-header">Meals</div>
       ${mealsHtml}
       <div class="section-header" style="margin-top:24px">Weekly Summary</div>
@@ -2545,6 +2547,7 @@ async function renderMain(app) {
   if (dayTab === "nutrition") {
     document.getElementById("log-meal-btn")?.addEventListener("click", () => showLogMealSheet(selDateStr));
     document.getElementById("day-menu-btn")?.addEventListener("click", showMenuSheet);
+    document.getElementById("day-recipes-btn")?.addEventListener("click", () => showRecipeLibrarySheet(selDateStr));
     app.querySelectorAll("[data-action='edit-meal']").forEach((btn) => {
       btn.addEventListener("click", () => {
         const meal = dayMeals.find((m) => m.id === btn.dataset.mid);
@@ -3750,6 +3753,7 @@ async function renderFuel(app) {
     <button class="btn" id="log-meal-btn">+ Log meal</button>
     <button class="btn btn-secondary" id="my-menu-btn" style="margin-top:10px">📒 My menu${
       getSavedMeals().length ? ` · ${getSavedMeals().length}` : ""}</button>
+    <button class="btn btn-secondary" id="recipes-btn" style="margin-top:10px">🍳 Recipes &amp; ideas</button>
 
     <div class="section-header">Meals</div>
     ${mealsHtml}
@@ -3802,6 +3806,7 @@ async function renderFuel(app) {
 
   document.getElementById("log-meal-btn").addEventListener("click", () => showLogMealSheet(viewDs));
   document.getElementById("my-menu-btn")?.addEventListener("click", showMenuSheet);
+  document.getElementById("recipes-btn")?.addEventListener("click", () => showRecipeLibrarySheet(viewDs));
 
   app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -4014,6 +4019,7 @@ function showLogMealSheet(targetDateStr) {
         </label>
         <button class="action-sheet-btn" id="meal-voice-btn">🎤 Say what you ate</button>
         <button class="action-sheet-btn" id="meal-saved-btn">📒 Pick from my menu${savedCount ? ` <span class="sheet-badge">${savedCount}</span>` : ""}</button>
+        <button class="action-sheet-btn" id="meal-recipes-btn">🍳 Recipes &amp; ideas</button>
         <button class="action-sheet-btn" id="meal-manual-btn">✏️ Add manually</button>
       </div>
       <button class="action-sheet-btn action-sheet-cancel" id="meal-sheet-cancel">Cancel</button>
@@ -4034,9 +4040,369 @@ function showLogMealSheet(targetDateStr) {
   sheet.querySelector("#meal-lib").addEventListener("change", (e) => queueFiles(e.target.files));
   sheet.querySelector("#meal-voice-btn").addEventListener("click", () => { close(); showVoiceMealSheet(targetDateStr); });
   sheet.querySelector("#meal-saved-btn").addEventListener("click", () => { close(); setTimeout(() => showSavedMealsSheet(targetDateStr), 280); });
+  sheet.querySelector("#meal-recipes-btn").addEventListener("click", () => { close(); setTimeout(() => showRecipeLibrarySheet(targetDateStr), 280); });
   sheet.querySelector("#meal-manual-btn").addEventListener("click", () => { close(); showMealEditSheet([], "", "manual", targetDateStr); });
   sheet.querySelector("#meal-sheet-cancel").addEventListener("click", close);
   sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
+}
+
+/* ---------- Recipe library + AI suggestions ---------- */
+
+let RECIPES = null;   // lazily fetched; the file is static so one load per session
+
+async function loadRecipes() {
+  if (RECIPES) return RECIPES;
+  const res = await fetch("plans/recipes.json", { cache: "no-cache" });
+  if (!res.ok) throw new Error("Couldn't load the recipe library");
+  RECIPES = await res.json();
+  return RECIPES;
+}
+
+/**
+ * A recipe logs as ONE item carrying the recipe's own macros. The library
+ * states totals per recipe, not per ingredient, and splitting those totals
+ * across ingredients would look more precise while being less accurate — the
+ * ingredient list is right there on the card for when you want it.
+ */
+function recipeAsItems(r) {
+  return [{
+    name: r.name,
+    qtyNum: 1, unit: "serving",
+    kcal: r.kcal, p: r.p, c: r.c, f: r.f
+  }];
+}
+
+function recipeMacrosHtml(r) {
+  return `<span class="rc-kcal">${r.kcal} kcal</span>
+          <span class="rc-macros">${r.p}g P · ${r.c}g C · ${r.f}g F</span>`;
+}
+
+function recipeRowHtml(r, i) {
+  return `
+    <button class="rc-row" data-recipe="${escapeHtml(r.code || String(i))}">
+      <div class="rc-row-top">
+        <span class="rc-name">${escapeHtml(r.name)}</span>
+        <span class="rc-time">${r.timeMin} min</span>
+      </div>
+      <div class="rc-row-bottom">${recipeMacrosHtml(r)}</div>
+    </button>`;
+}
+
+/** Full recipe: ingredients, steps, and the two things you'd do with it. */
+function showRecipeDetail(r, targetDateStr, onBack) {
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+  const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
+
+  overlay.innerHTML = `
+    <div class="fuel-edit-sheet">
+      <div class="fuel-edit-topbar">
+        <button class="fuel-edit-cancel" id="rd-back">${onBack ? "Back" : "Close"}</button>
+        <span class="fuel-edit-title">${escapeHtml(r.group || "Recipe")}</span>
+        <button class="fuel-edit-save" id="rd-log">Log it</button>
+      </div>
+      <div class="fuel-edit-scroll" style="padding:16px 16px 28px">
+        <div class="rc-detail-head">
+          <div class="rc-detail-name">${escapeHtml(r.name)}</div>
+          <div class="rc-detail-meta">${r.timeMin} min${r.method ? ` · ${escapeHtml(r.method)}` : ""}${r.code ? ` · ${escapeHtml(r.code)}` : ""}</div>
+          <div class="rc-detail-macros">${recipeMacrosHtml(r)}</div>
+        </div>
+
+        <div class="section-header">Ingredients</div>
+        <div class="list">
+          ${(r.ingredients || []).map((ing) => `
+            <div class="rc-ing">
+              <span class="rc-ing-name">${escapeHtml(ing.name)}</span>
+              <span class="rc-ing-amt">${escapeHtml(ing.amount)}</span>
+            </div>`).join("") || `<div class="rc-ing"><span class="rc-ing-name">—</span></div>`}
+        </div>
+
+        ${(r.steps && r.steps.length) ? `
+          <div class="section-header">Method</div>
+          <ol class="rc-steps">${r.steps.map((st) => `<li>${escapeHtml(st)}</li>`).join("")}</ol>` : ""}
+        ${r.note ? `<div class="rc-note">${escapeHtml(r.note)}</div>` : ""}
+
+        <button class="menu-add-btn" id="rd-save" style="margin-top:18px">📒 Save to my menu</button>
+      </div>
+    </div>`;
+
+  overlay.querySelector("#rd-back").addEventListener("click", () => {
+    close();
+    if (onBack) setTimeout(onBack, 300);
+  });
+
+  overlay.querySelector("#rd-log").addEventListener("click", () => {
+    close();
+    setTimeout(() => showMealEditSheet(recipeAsItems(r), r.note || "", "recipe",
+      targetDateStr, null, null, { label: r.slot }), 300);
+  });
+
+  overlay.querySelector("#rd-save").addEventListener("click", () => {
+    saveSavedMeal(r.name, recipeAsItems(r), r.slot);
+    showToast(`📒 Saved “${r.name}” to your menu`);
+  });
+}
+
+/** Browse the library: filter by slot, by how long you've got, or by name. */
+async function showRecipeLibrarySheet(targetDateStr) {
+  let data;
+  try { data = await loadRecipes(); }
+  catch (err) { showToast(err.message); return; }
+
+  let group = "", maxMin = 0, query = "";
+
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+  const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
+  const reopen = () => showRecipeLibrarySheet(targetDateStr);
+
+  const GROUPS = ["Breakfast", "Lunch", "Dinner", "Pre-gym", "Post-gym", "Treat"];
+  const TIMES = [[0, "Any time"], [5, "≤ 5 min"], [10, "≤ 10 min"], [15, "≤ 15 min"]];
+
+  const render = () => {
+    const q = query.trim().toLowerCase();
+    const list = data.recipes.filter((r) =>
+      (!group || r.group === group) &&
+      (!maxMin || r.timeMin <= maxMin) &&
+      (!q || r.name.toLowerCase().includes(q) ||
+             (r.ingredients || []).some((i) => i.name.toLowerCase().includes(q))));
+
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="rl-close">Close</button>
+          <span class="fuel-edit-title">Recipes</span>
+          <span style="width:54px"></span>
+        </div>
+        <div class="fuel-edit-scroll" style="padding:14px 16px 24px">
+          <input class="rc-search" id="rl-q" type="search" placeholder="Search a recipe or ingredient…"
+            value="${escapeHtml(query)}" autocomplete="off" />
+          <div class="rc-filter-row">
+            <button class="rc-pill${group === "" ? " selected" : ""}" data-g="">All</button>
+            ${GROUPS.map((g) => `<button class="rc-pill${group === g ? " selected" : ""}" data-g="${g}">${g}</button>`).join("")}
+          </div>
+          <div class="rc-filter-row">
+            ${TIMES.map(([m, lbl]) => `<button class="rc-pill${maxMin === m ? " selected" : ""}" data-t="${m}">${lbl}</button>`).join("")}
+          </div>
+          <button class="menu-add-btn" id="rl-ai" style="margin:4px 0 14px">✨ What can I make with what I have?</button>
+          <div class="rc-count">${list.length} recipe${list.length === 1 ? "" : "s"}</div>
+          ${list.length
+            ? list.map((r, i) => recipeRowHtml(r, i)).join("")
+            : `<div class="saved-empty"><div class="saved-empty-icon">🍳</div>
+                 <div class="saved-empty-title">Nothing matches</div>
+                 <div class="saved-empty-sub">Try a longer time or a different slot.</div></div>`}
+        </div>
+      </div>`;
+
+    overlay.querySelector("#rl-close").addEventListener("click", close);
+    overlay.querySelectorAll("[data-g]").forEach((b) =>
+      b.addEventListener("click", () => { group = b.dataset.g; render(); }));
+    overlay.querySelectorAll("[data-t]").forEach((b) =>
+      b.addEventListener("click", () => { maxMin = Number(b.dataset.t); render(); }));
+
+    const qEl = overlay.querySelector("#rl-q");
+    qEl.addEventListener("input", () => {
+      query = qEl.value;
+      const at = qEl.selectionStart;
+      render();
+      const el = overlay.querySelector("#rl-q");
+      el.focus();
+      try { el.setSelectionRange(at, at); } catch { /* search inputs can refuse */ }
+    });
+
+    overlay.querySelector("#rl-ai").addEventListener("click", () => {
+      close();
+      setTimeout(() => showRecipeSuggestSheet(targetDateStr), 300);
+    });
+
+    overlay.querySelectorAll("[data-recipe]").forEach((b) => b.addEventListener("click", () => {
+      const r = data.recipes.find((x) => x.code === b.dataset.recipe);
+      if (!r) return;
+      close();
+      setTimeout(() => showRecipeDetail(r, targetDateStr, reopen), 300);
+    }));
+  };
+
+  render();
+}
+
+/**
+ * Ask Gemini for recipes built from what's actually in the kitchen, aimed at
+ * the slot's macro target so a suggestion slots into the day's numbers rather
+ * than blowing them. Grounded with a few library recipes as worked examples so
+ * the style, portions and ingredient names stay consistent with the plan.
+ */
+async function suggestRecipes({ have, slot, maxMin }) {
+  const s = getSettings();
+  const apiKey = (s.nutrition && s.nutrition.geminiKey) ? s.nutrition.geminiKey.trim() : "";
+  if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
+
+  const data = await loadRecipes();
+  const tgt = data.slotTargets[slot] || data.slotTargets.snack;
+  const examples = data.recipes.filter((r) => r.slot === slot).slice(0, 3).map((r) =>
+    `${r.name} (${r.timeMin} min): ${r.ingredients.map((i) => `${i.name} ${i.amount}`).join(", ")} → ${r.kcal} kcal, ${r.p}g protein, ${r.c}g carbs, ${r.f}g fat`
+  ).join("\n");
+
+  const prompt = `You are a sports nutritionist writing for a Hyrox athlete who shops at Mercadona in Spain.
+Suggest 3 DIFFERENT simple recipes for the ${slot} slot.
+
+Hard requirements:
+- Use ONLY these ingredients the athlete already has: ${have}
+- Basic staples are allowed without being listed: salt, pepper, spices, water, oil.
+- Each recipe must take ${maxMin} minutes or less, total.
+- Each recipe must land close to ${tgt.kcal} kcal and at least ${tgt.p} g of protein.
+- Give realistic gram amounts for every ingredient.
+
+Here are existing recipes from the athlete's plan, as a style and portion reference:
+${examples}
+
+Return ONLY valid JSON (no markdown, no code fences):
+{"recipes":[{"name":"string","timeMin":number,"method":"string","kcal":number,"p":number,"c":number,"f":number,"ingredients":[{"name":"string","amount":"string"}],"steps":["string"]}]}
+p=protein(g), c=carbohydrates(g), f=fat(g). Return ONLY the JSON object.`;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PHOTO_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4 }
+        })
+      }
+    );
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error(`Timed out after ${Math.round(PHOTO_TIMEOUT_MS / 1000)}s`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) {
+    let msg = `Gemini error ${res.status}`;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
+
+  const json = await res.json();
+  const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+  const clean = raw.replace(/^```json?\n?/i, "").replace(/```$/m, "").trim();
+  const parsed = JSON.parse(clean);
+  return (parsed.recipes || []).map((r) => ({
+    ...r,
+    slot,
+    group: "Suggested",
+    code: null,
+    timeMin: Number(r.timeMin) || maxMin,
+    kcal: Math.round(Number(r.kcal) || 0),
+    p: Math.round(Number(r.p) || 0),
+    c: Math.round(Number(r.c) || 0),
+    f: Math.round(Number(r.f) || 0)
+  }));
+}
+
+/** "I have this — what can I make in 10 minutes?" */
+function showRecipeSuggestSheet(targetDateStr) {
+  let have = store.get(PANTRY_KEY) || "";
+  let slot = currentMealSlot();
+  let maxMin = 15;
+  let busy = false, error = "", results = null;
+
+  const overlay = document.createElement("div");
+  overlay.className = "fuel-edit-overlay";
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+  const close = () => { overlay.classList.remove("open"); setTimeout(() => overlay.remove(), 280); };
+  const reopen = () => showRecipeSuggestSheet(targetDateStr);
+
+  const TIMES = [5, 10, 15, 20, 30];
+
+  const render = () => {
+    overlay.innerHTML = `
+      <div class="fuel-edit-sheet">
+        <div class="fuel-edit-topbar">
+          <button class="fuel-edit-cancel" id="rs-close">Close</button>
+          <span class="fuel-edit-title">What can I make?</span>
+          <button class="fuel-edit-save" id="rs-go"${busy || !have.trim() ? " disabled" : ""}>${busy ? "…" : "Suggest"}</button>
+        </div>
+        <div class="fuel-edit-scroll" style="padding:16px 16px 28px">
+          <div class="fed-preset-name-label">What have you got?</div>
+          <textarea class="rc-have" id="rs-have" rows="3"
+            placeholder="chicken breast, basmati rice, frozen broccoli, eggs, greek yoghurt…">${escapeHtml(have)}</textarea>
+
+          <div class="fed-preset-name-label" style="margin-top:16px">For which meal</div>
+          <div class="rc-filter-row">
+            ${MEAL_SLOTS.map((sl) => `<button class="rc-pill${slot === sl.key ? " selected" : ""}" data-slot="${sl.key}">${sl.name}</button>`).join("")}
+          </div>
+
+          <div class="fed-preset-name-label" style="margin-top:14px">How long have you got</div>
+          <div class="rc-filter-row">
+            ${TIMES.map((m) => `<button class="rc-pill${maxMin === m ? " selected" : ""}" data-min="${m}">${m} min</button>`).join("")}
+          </div>
+
+          ${error ? `<div class="alert alert-warn" style="margin-top:16px"><strong>Couldn't suggest</strong>${escapeHtml(error)}</div>` : ""}
+
+          ${busy ? `<div class="rc-busy"><span class="pq-spin"></span>Thinking up ${maxMin}-minute ideas…</div>` : ""}
+
+          ${results ? (results.length ? `
+            <div class="section-header">${results.length} idea${results.length === 1 ? "" : "s"}</div>
+            ${results.map((r, i) => recipeRowHtml(r, i)).join("")}
+          ` : `<div class="saved-empty" style="margin-top:20px">
+                 <div class="saved-empty-icon">🤔</div>
+                 <div class="saved-empty-title">Nothing came back</div>
+                 <div class="saved-empty-sub">Try listing a few more ingredients, or allow more time.</div>
+               </div>`) : ""}
+        </div>
+      </div>`;
+
+    const haveEl = overlay.querySelector("#rs-have");
+    haveEl.addEventListener("input", () => {
+      have = haveEl.value;
+      // Remembered so the next "what can I make" doesn't start from nothing.
+      store.set(PANTRY_KEY, have);
+      const go = overlay.querySelector("#rs-go");
+      if (go) go.disabled = busy || !have.trim();
+    });
+
+    overlay.querySelector("#rs-close").addEventListener("click", close);
+    overlay.querySelectorAll("[data-slot]").forEach((b) =>
+      b.addEventListener("click", () => { have = haveEl.value; slot = b.dataset.slot; render(); }));
+    overlay.querySelectorAll("[data-min]").forEach((b) =>
+      b.addEventListener("click", () => { have = haveEl.value; maxMin = Number(b.dataset.min); render(); }));
+
+    overlay.querySelectorAll("[data-recipe]").forEach((b, i) =>
+      b.addEventListener("click", () => {
+        const r = results[i];
+        if (!r) return;
+        close();
+        setTimeout(() => showRecipeDetail(r, targetDateStr, reopen), 300);
+      }));
+
+    overlay.querySelector("#rs-go")?.addEventListener("click", async () => {
+      have = haveEl.value;
+      store.set(PANTRY_KEY, have);
+      busy = true; error = ""; results = null;
+      render();
+      try {
+        results = await suggestRecipes({ have: have.trim(), slot, maxMin });
+      } catch (err) {
+        error = err.message || "Something went wrong.";
+      }
+      busy = false;
+      render();
+    });
+  };
+
+  render();
 }
 
 /* ---------- My menu: preset meals per slot ---------- */

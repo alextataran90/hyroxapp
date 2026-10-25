@@ -1,0 +1,2096 @@
+{
+ "version": "hyrox-recipes-v2",
+ "source": "hyrox-recipes-v2.md",
+ "slotTargets": {
+  "breakfast": {
+   "kcal": 525,
+   "p": 40,
+   "label": "~500-550 kcal · ~40 g protein"
+  },
+  "lunch": {
+   "kcal": 625,
+   "p": 55,
+   "label": "~600-650 kcal · ~55 g protein"
+  },
+  "dinner": {
+   "kcal": 625,
+   "p": 55,
+   "label": "~600-650 kcal · ~55 g protein"
+  },
+  "snack": {
+   "kcal": 290,
+   "p": 25,
+   "label": "~250-320 kcal"
+  }
+ },
+ "recipes": [
+  {
+   "code": "BRK-01",
+   "name": "Bagel with Turkey, Eggs & Cheese",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 10,
+   "method": "Pan",
+   "kcal": 547,
+   "p": 40,
+   "c": 59,
+   "f": 16,
+   "ingredients": [
+    {
+     "name": "Bagel Hacendado",
+     "amount": "1 (approx. 85 g)"
+    },
+    {
+     "name": "Fiambre de pavo 98%",
+     "amount": "50 g"
+    },
+    {
+     "name": "Huevos L",
+     "amount": "2"
+    },
+    {
+     "name": "Claras de huevo líquidas",
+     "amount": "50 g"
+    },
+    {
+     "name": "Queso de untar light",
+     "amount": "30 g"
+    },
+    {
+     "name": "Plátano",
+     "amount": "60 g (half)"
+    }
+   ],
+   "steps": [
+    "Toast the bagel and spread the cheese.",
+    "Scramble the eggs and egg whites with salt and pepper (3 min).",
+    "Layer the turkey and eggs in the bagel. Half banana on the side."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-02",
+   "name": "Quick Turkey Bagel (no cooking)",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 3,
+   "method": "Toaster",
+   "kcal": 552,
+   "p": 44,
+   "c": 75,
+   "f": 7,
+   "ingredients": [
+    {
+     "name": "Bagel Hacendado",
+     "amount": "1 (approx. 85 g)"
+    },
+    {
+     "name": "Fiambre de pavo 98%",
+     "amount": "100 g"
+    },
+    {
+     "name": "Queso de untar light",
+     "amount": "30 g"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    },
+    {
+     "name": "Plátano",
+     "amount": "120 g"
+    }
+   ],
+   "steps": [
+    "Toast the bagel, spread the cheese, fill with the turkey.",
+    "Yogurt and banana on the side."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-03",
+   "name": "Protein Oat Bowl",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 5,
+   "method": "No cook / microwave",
+   "kcal": 535,
+   "p": 44,
+   "c": 61,
+   "f": 10,
+   "ingredients": [
+    {
+     "name": "Bebida de almendras sin azúcar",
+     "amount": "300 ml"
+    },
+    {
+     "name": "Copos de avena",
+     "amount": "70 g"
+    },
+    {
+     "name": "Whey protein",
+     "amount": "40 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "100 g"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g"
+    }
+   ],
+   "steps": [
+    "Mix the oats with the almond milk. Eat cold or microwave 2 min.",
+    "Stir in the whey once slightly cooled.",
+    "Top with the berries and honey."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-04",
+   "name": "Protein Cereal Bowl",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 2,
+   "method": "No cook",
+   "kcal": 532,
+   "p": 41,
+   "c": 62,
+   "f": 11,
+   "ingredients": [
+    {
+     "name": "Bebida de almendras sin azúcar",
+     "amount": "300 ml"
+    },
+    {
+     "name": "Whey protein",
+     "amount": "40 g"
+    },
+    {
+     "name": "Corn flakes",
+     "amount": "60 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "100 g"
+    },
+    {
+     "name": "Crema de cacahuete",
+     "amount": "10 g"
+    }
+   ],
+   "steps": [
+    "Shake the whey into the almond milk.",
+    "Pour over the cereal, top with berries and a teaspoon of peanut butter."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-05",
+   "name": "Spanish Toast with Tomato, Turkey & Omelette",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 8,
+   "method": "Pan",
+   "kcal": 526,
+   "p": 43,
+   "c": 58,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Pan de barra",
+     "amount": "80 g"
+    },
+    {
+     "name": "Tomate rallado",
+     "amount": "60 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Fiambre de pavo 98%",
+     "amount": "50 g"
+    },
+    {
+     "name": "Huevo L",
+     "amount": "1"
+    },
+    {
+     "name": "Claras de huevo líquidas",
+     "amount": "150 g"
+    },
+    {
+     "name": "Kiwi",
+     "amount": "1 (100 g)"
+    }
+   ],
+   "steps": [
+    "Toast the bread, top with tomato, oil, salt and the turkey.",
+    "Make a French omelette with the egg and egg whites (3 min).",
+    "Kiwi on the side."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-06",
+   "name": "Banana Protein Pancakes",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 12,
+   "method": "Pan",
+   "kcal": 531,
+   "p": 42,
+   "c": 63,
+   "f": 10,
+   "ingredients": [
+    {
+     "name": "Copos de avena",
+     "amount": "60 g"
+    },
+    {
+     "name": "Huevo L",
+     "amount": "1"
+    },
+    {
+     "name": "Claras de huevo líquidas",
+     "amount": "100 g"
+    },
+    {
+     "name": "Whey protein",
+     "amount": "20 g"
+    },
+    {
+     "name": "Plátano",
+     "amount": "60 g"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "50 g"
+    }
+   ],
+   "steps": [
+    "Blend oats, egg, egg whites, whey and banana into a batter.",
+    "Cook small pancakes in a non-stick pan, 1-2 min per side.",
+    "Top with berries and honey."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-07",
+   "name": "Overnight Oats",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 3,
+   "method": "No cook",
+   "kcal": 550,
+   "p": 44,
+   "c": 62,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Copos de avena",
+     "amount": "60 g"
+    },
+    {
+     "name": "Queso fresco batido 0%",
+     "amount": "200 g"
+    },
+    {
+     "name": "Bebida de almendras sin azúcar",
+     "amount": "150 ml"
+    },
+    {
+     "name": "Whey protein",
+     "amount": "20 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "100 g"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g"
+    },
+    {
+     "name": "Crema de cacahuete",
+     "amount": "10 g"
+    }
+   ],
+   "steps": [
+    "Mix everything except the berries, honey and peanut butter in a jar.",
+    "Fridge overnight. Top in the morning."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-08",
+   "name": "Breakfast Wraps",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 8,
+   "method": "Pan",
+   "kcal": 544,
+   "p": 42,
+   "c": 67,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Tortillas de trigo",
+     "amount": "2 (approx. 40 g each)"
+    },
+    {
+     "name": "Huevo L",
+     "amount": "1"
+    },
+    {
+     "name": "Claras de huevo líquidas",
+     "amount": "150 g"
+    },
+    {
+     "name": "Fiambre de pavo 98%",
+     "amount": "50 g"
+    },
+    {
+     "name": "Plátano",
+     "amount": "120 g"
+    }
+   ],
+   "steps": [
+    "Scramble the egg and egg whites with salt and pepper.",
+    "Warm the tortillas, fill with turkey and eggs, roll up.",
+    "Banana on the side."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-09",
+   "name": "Smoked Salmon Bagel",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 8,
+   "method": "Pan",
+   "kcal": 526,
+   "p": 40,
+   "c": 53,
+   "f": 15,
+   "ingredients": [
+    {
+     "name": "Bagel Hacendado",
+     "amount": "1 (approx. 85 g)"
+    },
+    {
+     "name": "Salmón ahumado",
+     "amount": "50 g"
+    },
+    {
+     "name": "Queso de untar light",
+     "amount": "30 g"
+    },
+    {
+     "name": "Huevo L",
+     "amount": "1"
+    },
+    {
+     "name": "Claras de huevo líquidas",
+     "amount": "100 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "100 g"
+    }
+   ],
+   "steps": [
+    "Toast the bagel, spread the cheese, add the salmon.",
+    "Scramble the egg and egg whites and add to the bagel or on the side.",
+    "Berries on the side."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-10",
+   "name": "Protein Yogurt Granola Bowl",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 2,
+   "method": "No cook",
+   "kcal": 513,
+   "p": 41,
+   "c": 70,
+   "f": 8,
+   "ingredients": [
+    {
+     "name": "Queso fresco batido 0%",
+     "amount": "300 g"
+    },
+    {
+     "name": "Whey protein (vanilla)",
+     "amount": "15 g"
+    },
+    {
+     "name": "Granola",
+     "amount": "40 g"
+    },
+    {
+     "name": "Plátano",
+     "amount": "120 g"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g"
+    }
+   ],
+   "steps": [
+    "Mix the queso fresco batido with the whey.",
+    "Top with granola, sliced banana and honey."
+   ],
+   "note": ""
+  },
+  {
+   "code": "BRK-11",
+   "name": "Turkey & Avocado Bagel",
+   "slot": "breakfast",
+   "group": "Breakfast",
+   "timeMin": 8,
+   "method": "Pan",
+   "kcal": 495,
+   "p": 38,
+   "c": 53,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Bagel Hacendado",
+     "amount": "1 (approx. 85 g)"
+    },
+    {
+     "name": "Fiambre de pavo 98%",
+     "amount": "50 g"
+    },
+    {
+     "name": "Huevo L",
+     "amount": "1"
+    },
+    {
+     "name": "Claras de huevo líquidas",
+     "amount": "100 g"
+    },
+    {
+     "name": "Aguacate",
+     "amount": "30 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "100 g"
+    }
+   ],
+   "steps": [
+    "Toast the bagel, mash the avocado on it with salt.",
+    "Add turkey and the scrambled egg and egg whites.",
+    "Berries on the side."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-01",
+   "name": "Classic Garlic Chicken, Rice & Broccoli",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 15,
+   "method": "Air fryer",
+   "kcal": 620,
+   "p": 58,
+   "c": 67,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Pechuga de pollo (filetes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Brócoli congelado",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Classic spice mix",
+     "amount": "sal, pimienta, ajo en polvo"
+    }
+   ],
+   "steps": [
+    "Rub the chicken with oil and spices. Air fry 200°C, 12-14 min, flip halfway.",
+    "Microwave the broccoli and rice. Slice the chicken and serve."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-02",
+   "name": "Spanish Pork, Rice & Stir-Fry Veg",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 12,
+   "method": "Pan",
+   "kcal": 650,
+   "p": 53,
+   "c": 69,
+   "f": 18,
+   "ingredients": [
+    {
+     "name": "Cinta de lomo fileteada",
+     "amount": "200 g"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Verduras para wok congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Spanish spice mix",
+     "amount": "sal, pimentón de la Vera, ajo en polvo, orégano"
+    }
+   ],
+   "steps": [
+    "Season the pork, cook in the oil 3-4 min per side. Remove.",
+    "Cook the frozen veg in the same pan 5-6 min. Serve with microwaved rice."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-03",
+   "name": "Mexican Chicken, Rice & Green Beans",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 15,
+   "method": "Air fryer",
+   "kcal": 610,
+   "p": 56,
+   "c": 67,
+   "f": 11,
+   "ingredients": [
+    {
+     "name": "Pechuga de pollo (filetes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Judías verdes congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Mexican spice mix",
+     "amount": "sal, comino, pimentón, ajo en polvo, guindilla"
+    }
+   ],
+   "steps": [
+    "Rub the chicken with oil and spices. Air fry 200°C, 12-14 min, flip halfway.",
+    "Microwave the beans and rice. Slice the chicken over the rice."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-04",
+   "name": "Curry Turkey, Rice & Stir-Fry Veg",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 12,
+   "method": "Pan",
+   "kcal": 600,
+   "p": 57,
+   "c": 69,
+   "f": 11,
+   "ingredients": [
+    {
+     "name": "Pechuga de pavo (in cubes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Verduras para wok congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Curry spice mix",
+     "amount": "sal, curry en polvo, ajo en polvo"
+    }
+   ],
+   "steps": [
+    "Toss turkey cubes with spices, cook in oil 6-7 min.",
+    "Add frozen veg, cook 5 more min. Serve over the rice."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-05",
+   "name": "Classic Beef, Rice & Broccoli",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 10,
+   "method": "Pan",
+   "kcal": 640,
+   "p": 54,
+   "c": 67,
+   "f": 17,
+   "ingredients": [
+    {
+     "name": "Filetes de ternera",
+     "amount": "200 g"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Brócoli congelado",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Classic spice mix",
+     "amount": "sal, pimienta, ajo en polvo"
+    }
+   ],
+   "steps": [
+    "Season the beef, sear in very hot oil 1-2 min per side.",
+    "Microwave the broccoli and rice. Slice the beef and serve."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-06",
+   "name": "Lemon Herb Turkey, Rice & Cauliflower",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 15,
+   "method": "Air fryer",
+   "kcal": 590,
+   "p": 58,
+   "c": 66,
+   "f": 11,
+   "ingredients": [
+    {
+     "name": "Solomillo / pechuga de pavo",
+     "amount": "200 g"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Coliflor congelada",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Lemon herb spice mix",
+     "amount": "sal, pimienta, finas hierbas, limón"
+    }
+   ],
+   "steps": [
+    "Rub turkey with oil and spices. Air fry 200°C, 12-14 min, flip halfway.",
+    "Microwave the cauliflower and rice. Lemon over the turkey."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-07",
+   "name": "No-Cook Tuna Rice Bowl",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 3,
+   "method": "Microwave",
+   "kcal": 653,
+   "p": 58,
+   "c": 78,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Atún claro al natural (drained)",
+     "amount": "200 g (about 4 small cans)"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Maíz dulce",
+     "amount": "80 g"
+    },
+    {
+     "name": "Tomates cherry",
+     "amount": "150 g"
+    },
+    {
+     "name": "Mayonesa light",
+     "amount": "20 g"
+    }
+   ],
+   "steps": [
+    "Microwave the rice, let it cool a little.",
+    "Top with tuna, corn, halved tomatoes and mayo."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-08",
+   "name": "Chicken Teriyaki Rice Bowl",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 12,
+   "method": "Pan",
+   "kcal": 640,
+   "p": 56,
+   "c": 75,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Pechuga de pollo en tacos",
+     "amount": "200 g"
+    },
+    {
+     "name": "Arroz basmati vasito",
+     "amount": "1½ (188 g)"
+    },
+    {
+     "name": "Verduras para wok congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "Salsa teriyaki",
+     "amount": "20 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    }
+   ],
+   "steps": [
+    "Cook chicken in the oil 6-7 min. Add the veg, cook 5 min.",
+    "Stir in the teriyaki. Serve over the rice."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-09",
+   "name": "Lemon Herb Chicken Pasta & Broccoli",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 15,
+   "method": "Pan",
+   "kcal": 620,
+   "p": 62,
+   "c": 64,
+   "f": 11,
+   "ingredients": [
+    {
+     "name": "Pechuga de pollo (filetes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Pasta seca",
+     "amount": "80 g"
+    },
+    {
+     "name": "Brócoli congelado",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Lemon herb spice mix",
+     "amount": "sal, pimienta, finas hierbas, limón"
+    }
+   ],
+   "steps": [
+    "Boil the pasta 10 min, adding the broccoli for the last 4 min. Drain.",
+    "Season and pan-fry the chicken 4-5 min per side. Slice, mix, add lemon."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-10",
+   "name": "Turkey Tomato Pasta",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 15,
+   "method": "Pan",
+   "kcal": 620,
+   "p": 64,
+   "c": 68,
+   "f": 10,
+   "ingredients": [
+    {
+     "name": "Pechuga de pavo (in cubes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Pasta seca",
+     "amount": "80 g"
+    },
+    {
+     "name": "Tomate frito",
+     "amount": "80 g"
+    },
+    {
+     "name": "Calabacín",
+     "amount": "150 g"
+    },
+    {
+     "name": "Queso rallado",
+     "amount": "10 g"
+    }
+   ],
+   "steps": [
+    "Boil the pasta 10 min.",
+    "Cook turkey and diced courgette in a non-stick pan 7-8 min. Add tomate frito.",
+    "Mix with pasta, top with cheese."
+   ],
+   "note": ""
+  },
+  {
+   "code": "LUN-11",
+   "name": "Chicken Wraps (no cooking)",
+   "slot": "lunch",
+   "group": "Lunch",
+   "timeMin": 5,
+   "method": "No cook",
+   "kcal": 623,
+   "p": 55,
+   "c": 68,
+   "f": 14,
+   "ingredients": [
+    {
+     "name": "Tortillas de trigo",
+     "amount": "3 (approx. 40 g each)"
+    },
+    {
+     "name": "Tiras de pollo asado",
+     "amount": "175 g"
+    },
+    {
+     "name": "Lechuga + tomate",
+     "amount": "150 g total"
+    },
+    {
+     "name": "Queso fresco batido 0%",
+     "amount": "60 g"
+    }
+   ],
+   "steps": [
+    "Season the queso fresco batido with salt and pepper (sauce).",
+    "Fill the tortillas with chicken, salad and sauce. Roll up."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-01",
+   "name": "Spanish Paprika Turkey, Potatoes & Green Beans",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 20,
+   "method": "Oven (one tray)",
+   "kcal": 615,
+   "p": 60,
+   "c": 71,
+   "f": 7,
+   "ingredients": [
+    {
+     "name": "Solomillo / pechuga de pavo",
+     "amount": "200 g"
+    },
+    {
+     "name": "Patatas",
+     "amount": "400 g"
+    },
+    {
+     "name": "Judías verdes congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Spanish spice mix",
+     "amount": "sal, pimentón de la Vera, ajo en polvo, orégano"
+    }
+   ],
+   "steps": [
+    "Oven 200°C. Cube the potatoes. Everything on one tray.",
+    "Drizzle oil, sprinkle spices. Roast 20 min."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-02",
+   "name": "Classic Beef, Potatoes & Cauliflower",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 12,
+   "method": "Pan + microwave",
+   "kcal": 635,
+   "p": 54,
+   "c": 70,
+   "f": 14,
+   "ingredients": [
+    {
+     "name": "Filetes de ternera",
+     "amount": "200 g"
+    },
+    {
+     "name": "Patatas para microondas",
+     "amount": "400 g"
+    },
+    {
+     "name": "Coliflor congelada",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Classic spice mix",
+     "amount": "sal, pimienta, ajo en polvo"
+    }
+   ],
+   "steps": [
+    "Microwave potatoes (8 min) and cauliflower.",
+    "Sear the seasoned beef in very hot oil 1-2 min per side. Rest 2 min."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-03",
+   "name": "Spanish Chicken, Potatoes & Broccoli",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 15,
+   "method": "Air fryer (one basket)",
+   "kcal": 635,
+   "p": 60,
+   "c": 71,
+   "f": 9,
+   "ingredients": [
+    {
+     "name": "Pechuga de pollo (filetes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Patatas",
+     "amount": "400 g"
+    },
+    {
+     "name": "Brócoli congelado",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Spanish spice mix",
+     "amount": "sal, pimentón de la Vera, ajo en polvo, orégano"
+    }
+   ],
+   "steps": [
+    "Cube potatoes. Toss potatoes and chicken with oil and spices.",
+    "Air fry 200°C, 15 min, shaking halfway. Microwave the broccoli."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-04",
+   "name": "Lemon Herb Pork Pasta & Stir-Fry Veg",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 15,
+   "method": "Pan",
+   "kcal": 650,
+   "p": 57,
+   "c": 66,
+   "f": 17,
+   "ingredients": [
+    {
+     "name": "Cinta de lomo fileteada",
+     "amount": "200 g"
+    },
+    {
+     "name": "Pasta seca",
+     "amount": "80 g"
+    },
+    {
+     "name": "Verduras para wok congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Lemon herb spice mix",
+     "amount": "sal, pimienta, finas hierbas, limón"
+    }
+   ],
+   "steps": [
+    "Boil the pasta 10 min.",
+    "Pan-fry the seasoned pork 3-4 min per side, slice. Cook veg in the same pan 5 min.",
+    "Mix everything, squeeze lemon on top."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-05",
+   "name": "Curry Chicken, Potatoes & Green Beans",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 20,
+   "method": "Oven (one tray)",
+   "kcal": 625,
+   "p": 58,
+   "c": 71,
+   "f": 8,
+   "ingredients": [
+    {
+     "name": "Pechuga de pollo (filetes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Patatas",
+     "amount": "400 g"
+    },
+    {
+     "name": "Judías verdes congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Curry spice mix",
+     "amount": "sal, curry en polvo, ajo en polvo"
+    }
+   ],
+   "steps": [
+    "Oven 200°C. Cube potatoes, everything on one tray.",
+    "Drizzle oil, sprinkle spices. Roast 20 min."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-06",
+   "name": "Paprika Pork Loin with Potatoes",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 18,
+   "method": "Oven or air fryer",
+   "kcal": 665,
+   "p": 56,
+   "c": 71,
+   "f": 14,
+   "ingredients": [
+    {
+     "name": "Cinta de lomo fileteada",
+     "amount": "200 g"
+    },
+    {
+     "name": "Patatas",
+     "amount": "400 g"
+    },
+    {
+     "name": "Judías verdes congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "5 g"
+    },
+    {
+     "name": "Pimentón de la Vera, sal, ajo",
+     "amount": "to taste"
+    }
+   ],
+   "steps": [
+    "Cube potatoes, toss with oil and spices. Air fry 200°C 8 min.",
+    "Add the seasoned pork, cook 10-12 more min, flipping halfway.",
+    "Microwave the green beans."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-07",
+   "name": "Burger Night",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 12,
+   "method": "Pan or air fryer",
+   "kcal": 635,
+   "p": 42,
+   "c": 73,
+   "f": 19,
+   "ingredients": [
+    {
+     "name": "Burger meat pollo y pavo",
+     "amount": "160 g (2 burgers)"
+    },
+    {
+     "name": "Pan de hamburguesa",
+     "amount": "1 (approx. 60 g)"
+    },
+    {
+     "name": "Queso en lonchas light",
+     "amount": "1 slice (20 g)"
+    },
+    {
+     "name": "Patatas para microondas",
+     "amount": "200 g"
+    },
+    {
+     "name": "Ketchup",
+     "amount": "20 g"
+    },
+    {
+     "name": "Ensalada de bolsa",
+     "amount": "80 g"
+    }
+   ],
+   "steps": [
+    "Cook burgers 4 min per side (or air fry 200°C, 10 min). Cheese on top at the end.",
+    "Microwave the potatoes. Build the burger with salad and ketchup."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-08",
+   "name": "Chicken Pesto Pasta",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 15,
+   "method": "Pan",
+   "kcal": 635,
+   "p": 58,
+   "c": 63,
+   "f": 15,
+   "ingredients": [
+    {
+     "name": "Pechuga de pollo (filetes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Pasta seca",
+     "amount": "80 g"
+    },
+    {
+     "name": "Tomates cherry",
+     "amount": "150 g"
+    },
+    {
+     "name": "Pesto",
+     "amount": "20 g"
+    }
+   ],
+   "steps": [
+    "Boil the pasta 10 min.",
+    "Pan-fry the chicken (salt, pepper) 4-5 min per side, slice.",
+    "Mix pasta, chicken, halved tomatoes and pesto."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-09",
+   "name": "Lemon Hake & Potatoes",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 15,
+   "method": "Air fryer or oven",
+   "kcal": 630,
+   "p": 52,
+   "c": 71,
+   "f": 12,
+   "ingredients": [
+    {
+     "name": "Lomos de merluza (congelados)",
+     "amount": "250 g"
+    },
+    {
+     "name": "Patatas para microondas",
+     "amount": "400 g"
+    },
+    {
+     "name": "Judías verdes congeladas",
+     "amount": "200 g"
+    },
+    {
+     "name": "AOVE",
+     "amount": "10 g"
+    },
+    {
+     "name": "Lemon herb spice mix",
+     "amount": "sal, pimienta, finas hierbas, limón"
+    }
+   ],
+   "steps": [
+    "Season the hake, drizzle with half the oil. Air fry 200°C, 10-12 min.",
+    "Microwave potatoes and beans, finish with the rest of the oil and lemon."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-10",
+   "name": "BBQ Chicken Thighs & Sweet Potato",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 20,
+   "method": "Air fryer",
+   "kcal": 640,
+   "p": 50,
+   "c": 84,
+   "f": 11,
+   "ingredients": [
+    {
+     "name": "Contramuslos de pollo deshuesados sin piel",
+     "amount": "200 g"
+    },
+    {
+     "name": "Boniato",
+     "amount": "350 g"
+    },
+    {
+     "name": "Brócoli congelado",
+     "amount": "200 g"
+    },
+    {
+     "name": "Salsa barbacoa",
+     "amount": "20 g"
+    },
+    {
+     "name": "Classic spice mix",
+     "amount": "sal, pimienta, ajo en polvo"
+    }
+   ],
+   "steps": [
+    "Cube the sweet potato, air fry 200°C 6 min.",
+    "Add the seasoned thighs, cook 14-16 min, flipping halfway. Brush with BBQ sauce for the last 2 min.",
+    "Microwave the broccoli."
+   ],
+   "note": ""
+  },
+  {
+   "code": "DIN-11",
+   "name": "Turkey Gnocchi with Tomato",
+   "slot": "dinner",
+   "group": "Dinner",
+   "timeMin": 12,
+   "method": "Pan",
+   "kcal": 610,
+   "p": 60,
+   "c": 72,
+   "f": 9,
+   "ingredients": [
+    {
+     "name": "Pechuga de pavo (in cubes)",
+     "amount": "200 g"
+    },
+    {
+     "name": "Gnocchi",
+     "amount": "200 g"
+    },
+    {
+     "name": "Tomate frito",
+     "amount": "80 g"
+    },
+    {
+     "name": "Queso rallado",
+     "amount": "10 g"
+    },
+    {
+     "name": "Orégano, sal",
+     "amount": "to taste"
+    }
+   ],
+   "steps": [
+    "Boil the gnocchi 2-3 min until they float. Drain.",
+    "Cook the turkey in a non-stick pan 6-7 min. Add tomate frito and gnocchi, stir 1 min.",
+    "Top with cheese and oregano."
+   ],
+   "note": ""
+  },
+  {
+   "code": "PRE-01",
+   "name": "Banana & Chocolate Rice Cakes",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 300,
+   "p": 13,
+   "c": 46,
+   "f": 5,
+   "ingredients": [
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    },
+    {
+     "name": "Plátano",
+     "amount": "120 g"
+    },
+    {
+     "name": "Tortitas de maíz con chocolate negro",
+     "amount": "2"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-02",
+   "name": "Protein Yogurt Crunch Bowl",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 278,
+   "p": 13,
+   "c": 51,
+   "f": 0,
+   "ingredients": [
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    },
+    {
+     "name": "Corn flakes",
+     "amount": "40 g"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "50 g"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-03",
+   "name": "PB & Jam Toast + Yogurt",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 320,
+   "p": 18,
+   "c": 44,
+   "f": 7,
+   "ingredients": [
+    {
+     "name": "Pan de molde",
+     "amount": "2 slices (60 g)"
+    },
+    {
+     "name": "Mermelada",
+     "amount": "15 g"
+    },
+    {
+     "name": "Crema de cacahuete",
+     "amount": "10 g"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-04",
+   "name": "Rice Cakes with Banana & Honey",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 300,
+   "p": 13,
+   "c": 58,
+   "f": 1,
+   "ingredients": [
+    {
+     "name": "Tortitas de arroz o maíz (plain)",
+     "amount": "3"
+    },
+    {
+     "name": "Plátano",
+     "amount": "120 g (sliced on top)"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-05",
+   "name": "Jam Bagel + Yogurt",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 335,
+   "p": 18,
+   "c": 57,
+   "f": 2,
+   "ingredients": [
+    {
+     "name": "Bagel Hacendado",
+     "amount": "1"
+    },
+    {
+     "name": "Mermelada",
+     "amount": "15 g"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-06",
+   "name": "Dates, Yogurt & Cereal",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 278,
+   "p": 13,
+   "c": 52,
+   "f": 0,
+   "ingredients": [
+    {
+     "name": "Dátiles",
+     "amount": "4 (approx. 32 g)"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    },
+    {
+     "name": "Corn flakes",
+     "amount": "30 g"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-07",
+   "name": "Fruit & Protein Yogurt",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 258,
+   "p": 12,
+   "c": 48,
+   "f": 1,
+   "ingredients": [
+    {
+     "name": "Manzana",
+     "amount": "150 g"
+    },
+    {
+     "name": "Plátano",
+     "amount": "120 g"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    },
+    {
+     "name": "Canela",
+     "amount": "to taste"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-08",
+   "name": "Mini Chocolate Overnight Oats",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 288,
+   "p": 19,
+   "c": 42,
+   "f": 3,
+   "ingredients": [
+    {
+     "name": "Copos de avena",
+     "amount": "40 g"
+    },
+    {
+     "name": "Queso fresco batido 0%",
+     "amount": "150 g"
+    },
+    {
+     "name": "Cacao puro desgrasado",
+     "amount": "5 g"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "50 g"
+    }
+   ],
+   "steps": [],
+   "note": "Mix the night before or in the morning, keep in the fridge."
+  },
+  {
+   "code": "PRE-09",
+   "name": "Banana PB Roll-Up + Yogurt",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 343,
+   "p": 17,
+   "c": 55,
+   "f": 8,
+   "ingredients": [
+    {
+     "name": "Tortilla de trigo",
+     "amount": "1 (approx. 40 g)"
+    },
+    {
+     "name": "Crema de cacahuete",
+     "amount": "10 g"
+    },
+    {
+     "name": "Plátano",
+     "amount": "100 g"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    }
+   ],
+   "steps": [],
+   "note": "Spread the peanut butter on the tortilla, roll the banana inside, slice."
+  },
+  {
+   "code": "PRE-10",
+   "name": "Protein Bar + Banana",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 295,
+   "p": 21,
+   "c": 43,
+   "f": 6,
+   "ingredients": [
+    {
+     "name": "Barrita +Proteínas Hacendado",
+     "amount": "1"
+    },
+    {
+     "name": "Plátano",
+     "amount": "120 g"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "PRE-11",
+   "name": "Mini Cereal Bowl",
+   "slot": "snack",
+   "group": "Pre-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 283,
+   "p": 18,
+   "c": 48,
+   "f": 1,
+   "ingredients": [
+    {
+     "name": "Corn flakes",
+     "amount": "40 g"
+    },
+    {
+     "name": "Leche desnatada",
+     "amount": "200 ml"
+    },
+    {
+     "name": "Whey protein",
+     "amount": "10 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "50 g"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "POST-01",
+   "name": "Chocolate Protein Shake",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 248,
+   "p": 41,
+   "c": 15,
+   "f": 3,
+   "ingredients": [
+    {
+     "name": "Whey protein chocolate",
+     "amount": "40 g"
+    },
+    {
+     "name": "Leche desnatada",
+     "amount": "250 ml"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "POST-02",
+   "name": "Chocolate Protein Mousse",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 255,
+   "p": 39,
+   "c": 17,
+   "f": 2,
+   "ingredients": [
+    {
+     "name": "Queso fresco batido 0%",
+     "amount": "300 g"
+    },
+    {
+     "name": "Cacao puro desgrasado",
+     "amount": "10 g"
+    },
+    {
+     "name": "Whey protein chocolate",
+     "amount": "15 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "50 g"
+    },
+    {
+     "name": "Sweetener",
+     "amount": "to taste"
+    }
+   ],
+   "steps": [],
+   "note": "Whisk until smooth, top with berries."
+  },
+  {
+   "code": "POST-03",
+   "name": "Almond Banana Shake",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 273,
+   "p": 38,
+   "c": 16,
+   "f": 6,
+   "ingredients": [
+    {
+     "name": "Whey protein",
+     "amount": "45 g"
+    },
+    {
+     "name": "Bebida de almendras sin azúcar",
+     "amount": "300 ml"
+    },
+    {
+     "name": "Plátano",
+     "amount": "60 g"
+    }
+   ],
+   "steps": [],
+   "note": "Blend with ice."
+  },
+  {
+   "code": "POST-04",
+   "name": "Berry Cheesecake Bowl",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 258,
+   "p": 37,
+   "c": 24,
+   "f": 1,
+   "ingredients": [
+    {
+     "name": "Queso fresco batido 0%",
+     "amount": "300 g"
+    },
+    {
+     "name": "Whey protein (vanilla)",
+     "amount": "15 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "100 g"
+    },
+    {
+     "name": "Miel",
+     "amount": "5 g"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "POST-05",
+   "name": "Double Protein Yogurt",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 252,
+   "p": 37,
+   "c": 15,
+   "f": 1,
+   "ingredients": [
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "2 tubs"
+    },
+    {
+     "name": "Whey protein",
+     "amount": "20 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "50 g"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "POST-06",
+   "name": "Sweet & Salty Turkey Rice Cakes",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 269,
+   "p": 33,
+   "c": 27,
+   "f": 2,
+   "ingredients": [
+    {
+     "name": "Fiambre de pavo 98%",
+     "amount": "100 g"
+    },
+    {
+     "name": "Tortitas de arroz (plain)",
+     "amount": "2"
+    },
+    {
+     "name": "Miel",
+     "amount": "10 g (drizzled on the rice cakes)"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "POST-07",
+   "name": "Chocolate Banana Milkshake",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 279,
+   "p": 34,
+   "c": 27,
+   "f": 3,
+   "ingredients": [
+    {
+     "name": "Whey protein chocolate",
+     "amount": "30 g"
+    },
+    {
+     "name": "Leche desnatada",
+     "amount": "250 ml"
+    },
+    {
+     "name": "Cacao puro desgrasado",
+     "amount": "5 g"
+    },
+    {
+     "name": "Plátano",
+     "amount": "60 g"
+    }
+   ],
+   "steps": [],
+   "note": "Blend with ice."
+  },
+  {
+   "code": "POST-08",
+   "name": "Berry Protein \"Ice Cream\"",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 256,
+   "p": 34,
+   "c": 22,
+   "f": 2,
+   "ingredients": [
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "200 g"
+    },
+    {
+     "name": "Whey protein",
+     "amount": "30 g"
+    },
+    {
+     "name": "Queso fresco batido 0%",
+     "amount": "100 g"
+    }
+   ],
+   "steps": [],
+   "note": "Blend straight from frozen until thick. Eat with a spoon."
+  },
+  {
+   "code": "POST-09",
+   "name": "Chocolate Protein Mug Cake",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 244,
+   "p": 35,
+   "c": 16,
+   "f": 3,
+   "ingredients": [
+    {
+     "name": "Claras de huevo líquidas",
+     "amount": "100 g"
+    },
+    {
+     "name": "Whey protein chocolate",
+     "amount": "25 g"
+    },
+    {
+     "name": "Copos de avena",
+     "amount": "15 g"
+    },
+    {
+     "name": "Cacao puro desgrasado",
+     "amount": "5 g"
+    },
+    {
+     "name": "Frutos rojos congelados",
+     "amount": "50 g"
+    }
+   ],
+   "steps": [],
+   "note": "Mix in a mug, microwave 90 seconds, top with berries."
+  },
+  {
+   "code": "POST-10",
+   "name": "Protein Bar + Yogurt",
+   "slot": "snack",
+   "group": "Post-gym",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 265,
+   "p": 30,
+   "c": 23,
+   "f": 6,
+   "ingredients": [
+    {
+     "name": "Barrita +Proteínas Hacendado",
+     "amount": "1"
+    },
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "TRT-01",
+   "name": "Dark Chocolate",
+   "slot": "snack",
+   "group": "Treat",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 118,
+   "p": 2,
+   "c": 4,
+   "f": 10,
+   "ingredients": [
+    {
+     "name": "Chocolate negro 85%",
+     "amount": "20 g (2 squares)"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "TRT-02",
+   "name": "Chocolate Rice Cakes",
+   "slot": "snack",
+   "group": "Treat",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 120,
+   "p": 2,
+   "c": 16,
+   "f": 5,
+   "ingredients": [
+    {
+     "name": "Tortitas de maíz con chocolate negro",
+     "amount": "2"
+    }
+   ],
+   "steps": [],
+   "note": ""
+  },
+  {
+   "code": "TRT-03",
+   "name": "Cocoa Protein Yogurt",
+   "slot": "snack",
+   "group": "Treat",
+   "timeMin": 2,
+   "method": "",
+   "kcal": 93,
+   "p": 11,
+   "c": 6,
+   "f": 1,
+   "ingredients": [
+    {
+     "name": "Yogur +Proteínas",
+     "amount": "1 tub"
+    },
+    {
+     "name": "Cacao puro desgrasado",
+     "amount": "5 g"
+    },
+    {
+     "name": "Sweetener",
+     "amount": "to taste"
+    },
+    {
+     "name": "Day",
+     "amount": "Breakfast | Lunch | Pre-gym | Post-gym | Dinner | Treat"
+    },
+    {
+     "name": "Mon",
+     "amount": "BRK-01 | LUN-01 | PRE-02 | POST-01 | DIN-01 | TRT-01"
+    },
+    {
+     "name": "Tue",
+     "amount": "BRK-03 | LUN-02 | PRE-01 | POST-02 | DIN-08 | TRT-01"
+    },
+    {
+     "name": "Wed",
+     "amount": "BRK-02 | LUN-03 | PRE-04 | POST-08 | DIN-02 | TRT-03"
+    },
+    {
+     "name": "Thu",
+     "amount": "BRK-07 | LUN-04 | PRE-03 | POST-05 | DIN-03 | TRT-01"
+    },
+    {
+     "name": "Fri",
+     "amount": "BRK-01 | LUN-07 | PRE-06 | POST-07 | DIN-04 | TRT-02"
+    },
+    {
+     "name": "Sat",
+     "amount": "BRK-06 | LUN-05 | PRE-09 | POST-01 | DIN-07 | TRT-01"
+    },
+    {
+     "name": "Sun",
+     "amount": "BRK-05 | LUN-06 | PRE-01 | POST-04 | Free dinner (~700 kcal, aim for 40 g protein) | none"
+    }
+   ],
+   "steps": [],
+   "note": "- **Batch cook:** Sunday and Wednesday, air fry or roast 3 days of chicken and turkey. Keeps 3 days in the fridge. - **One tray:** potatoes + meat + frozen veg on one tray at 200°C, 20 min oven or 15 min air fryer. - **Swaps:** any frozen veg for another, any carb side for another (1½ vasitos rice = 400 g potatoes = 80 g dry pasta = 200 g gnocchi = 350 g boniato). Macros stay within about 30 kcal."
+  }
+ ]
+}

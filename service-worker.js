@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v59-multi-photo-queue";
+const APP_VERSION = "2026-05-27-v60-recipe-library";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
@@ -8,6 +8,7 @@ const CORE_ASSETS = [
   "./auth.js",
   "./supabase-config.js",
   "./plans/hyrox-11week.json",
+  "./plans/recipes.json",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./icons/icon-180.png",

@@ -5812,3 +5812,167 @@ textarea.form-input {
 }
 
 .fuel-edit-save[disabled] { opacity: 0.35; pointer-events: none; }
+
+/* ============================================================
+   Recipe library + AI suggestions (v60)
+   ============================================================ */
+
+.rc-search, .rc-have {
+  width: 100%;
+  background: var(--surface-1);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text);
+  -webkit-appearance: none;
+}
+
+.rc-search:focus, .rc-have:focus { outline: none; border-color: var(--accent); }
+.rc-have { resize: vertical; line-height: 1.45; }
+
+.rc-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.rc-pill {
+  background: var(--surface-1);
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rc-pill.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 149, 0, 0.1);
+}
+
+.rc-count {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  margin: 4px 0 8px;
+}
+
+.rc-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-1);
+  border: none;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 8px;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rc-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rc-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.rc-time {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-4);
+}
+
+.rc-row-bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.rc-kcal { font-size: 13px; font-weight: 700; color: var(--accent); }
+.rc-macros { font-size: 12px; color: var(--text-4); }
+
+.rc-detail-head { margin-bottom: 6px; }
+
+.rc-detail-name {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.rc-detail-meta {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+.rc-detail-macros {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.rc-ing {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.rc-ing:last-child { border-bottom: none; }
+.rc-ing-name { font-size: 14px; color: var(--text); }
+.rc-ing-amt { flex: none; font-size: 13px; font-weight: 600; color: var(--text-3); }
+
+.rc-steps {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2, var(--text));
+}
+
+.rc-steps li { margin-bottom: 7px; }
+
+.rc-note {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-3);
+  background: var(--surface-1);
+  border-radius: 10px;
+  padding: 11px 12px;
+  margin-top: 12px;
+}
+
+.rc-busy {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  color: var(--accent);
+  margin-top: 18px;
+}
