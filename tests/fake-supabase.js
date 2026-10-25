@@ -9,6 +9,9 @@
   }
   if (window.caches) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k)));
   // Capture everything from the very first tick so boot-time failures aren't missed.
+  // The page also tries to load the gitignored config.js (which holds a real API
+  // key on the owner's machine). Refuse it: tests must be hermetic.
+  try { Object.defineProperty(window, "HYROX_CONFIG", { value: undefined, writable: false, configurable: false }); } catch { /* already set */ }
   window.__errs = [];
   window.addEventListener("error", (e) => window.__errs.push("ERR " + e.message + " @" + (e.filename || "").split("/").pop() + ":" + e.lineno));
   window.addEventListener("unhandledrejection", (e) => window.__errs.push("REJ " + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason)));
@@ -61,44 +64,84 @@
 
   const user = { id: "00000000-0000-0000-0000-000000000001", email: "smoke@test.local" };
 
-  // A tiny controllable "server". Writes land in `rows` so a later pull sees
-  // them, and delay/failure can be flipped at runtime to stage race conditions.
+  // A tiny controllable "server" that models what the sync layer relies on:
+  // every row carries a revision (updated_at) that changes on each write,
+  // updates can be conditional on it, and inserting an existing key conflicts.
+  let tick = 0;
+  const stamp = () => `2026-01-01T00:00:00.${String(++tick).padStart(6, "0")}+00:00`;
+  const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+
   const fake = window.__fake = {
-    rows: rows.map(([key, value]) => ({ key, value })),
+    rows: rows.map(([key, value]) => ({ key, value, updated_at: stamp() })),
     pullFail: q.get("pullfail") === "1",
     pushFail: false,
     pushDelay: Number(q.get("pushdelay") || 0),
-    upserts: []          // every batch that reached the "server", in order
+    upserts: [],          // the key of every write that reached the "server", in order
+    authListeners: [],
+    emitAuth(event) { fake.authListeners.forEach((cb) => cb(event, { user })); },
+    // Simulate ANOTHER device writing: fn receives a copy of the value, returns the new one.
+    external(key, fn) {
+      const r = fake.rows.find((x) => x.key === key);
+      if (r) { r.value = fn(clone(r.value)); r.updated_at = stamp(); }
+      else fake.rows.push({ key, value: fn(undefined), updated_at: stamp() });
+    }
   };
   window.__fakeWrites = [];
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const builder = () => ({
-    select() { return this; },
-    async eq() {
-      if (fake.pullFail) return { data: null, error: { message: "Failed to fetch" } };
-      return { data: JSON.parse(JSON.stringify(fake.rows)), error: null };
-    },
-    async upsert(r) {
+
+  function builder() {
+    const qy = { op: "select", filters: [], payload: null, single: false };
+    const api = {
+      select() { return api; },                                  // columns are irrelevant here
+      update(v) { qy.op = "update"; qy.payload = v; return api; },
+      insert(v) { qy.op = "insert"; qy.payload = v; return api; },
+      eq(col, val) { qy.filters.push([col, val]); return api; },
+      maybeSingle() { qy.single = true; return api; },
+      then(resolve, reject) { return run().then(resolve, reject); }
+    };
+    const matches = (r) => qy.filters.every(([c, v]) => c === "user_id" || r[c] === v);
+
+    async function run() {
+      if (qy.op === "select") {
+        if (fake.pullFail) return { data: null, error: { message: "Failed to fetch" } };
+        const hit = fake.rows.filter(matches).map((r) => ({ key: r.key, value: clone(r.value), updated_at: r.updated_at }));
+        return qy.single ? { data: hit[0] || null, error: null } : { data: hit, error: null };
+      }
       if (fake.pushDelay) await sleep(fake.pushDelay);
-      if (fake.pushFail) return { error: { message: "simulated push failure" } };
-      fake.upserts.push(r.map((x) => x.key));
-      window.__fakeWrites.push(...r);
-      r.forEach((x) => {
-        const hit = fake.rows.find((y) => y.key === x.key);
-        const v = JSON.parse(JSON.stringify(x.value));
-        if (hit) hit.value = v; else fake.rows.push({ key: x.key, value: v });
-      });
-      return { error: null };
+      if (fake.pushFail) return { data: null, error: { message: "simulated push failure" } };
+      if (qy.op === "update") {
+        const hit = fake.rows.filter(matches);
+        hit.forEach((r) => { r.value = clone(qy.payload.value); r.updated_at = stamp(); fake.upserts.push([r.key]); window.__fakeWrites.push({ key: r.key, value: r.value }); });
+        return { data: hit.map((r) => ({ updated_at: r.updated_at })), error: null };
+      }
+      if (qy.op === "insert") {
+        const { key, value } = qy.payload;
+        if (fake.rows.some((r) => r.key === key)) return { data: null, error: { code: "23505", message: "duplicate key" } };
+        const row = { key, value: clone(value), updated_at: stamp() };
+        fake.rows.push(row);
+        fake.upserts.push([key]); window.__fakeWrites.push({ key, value: row.value });
+        return { data: [{ updated_at: row.updated_at }], error: null };
+      }
+      return { data: null, error: { message: "unsupported in fake" } };
     }
-  });
+    return api;
+  }
 
   window.supabase = {
     createClient() {
       return {
         auth: {
-          getSession: async () => ({ data: { session: q.get("anon") ? null : { user } } }),
-          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+          getSession: async () => {
+            if (q.get("expired")) {
+              // Access token expired and no network to refresh it: supabase-js gives
+              // null, but leaves its stored session (and our data) on the device.
+              try { localStorage.setItem("sb-fake-auth-token", JSON.stringify({ user })); } catch { /* ignore */ }
+              return { data: { session: null }, error: { message: "Failed to fetch" } };
+            }
+            return { data: { session: q.get("anon") ? null : { user } } };
+          },
+          onAuthStateChange: (cb) => { (fake.authListeners = fake.authListeners || []).push(cb); return { data: { subscription: { unsubscribe() {} } } }; },
           signOut: async () => ({}), signInWithPassword: async () => ({ error: null }),
           signUp: async () => ({ data: { session: null }, error: null }),
           resetPasswordForEmail: async () => ({ error: null }), updateUser: async () => ({ error: null })

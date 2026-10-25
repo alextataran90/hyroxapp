@@ -75,12 +75,36 @@ export function hasLoadedRemote() { return pullOk; }
  */
 export function canRunFromCache() { return pullOk || cacheKnown; }
 
-function localCacheLooksReal() {
+function localCacheLooksReal(userId) {
   try {
-    const st = JSON.parse(store.get("hyrox.settings") || "null");
+    const raw = userId
+      ? localStorage.getItem(`u.${userId}.hyrox.settings`)
+      : store.get("hyrox.settings");
+    const st = JSON.parse(raw || "null");
     return !!(st && st.onboarded);
   } catch { return false; }
 }
+
+/**
+ * The user supabase-js last stored on this device. When the access token has
+ * expired (an hour) and there's no signal to refresh it, getSession() returns
+ * null even though the refresh token — and all the data — are still here, which
+ * dropped an athlete at the sign-in screen in a gym with no reception.
+ */
+function cachedSessionUser() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!/^sb-.+-auth-token$/.test(k)) continue;
+      const j = JSON.parse(localStorage.getItem(k) || "null");
+      const u = j && (j.user || (j.currentSession && j.currentSession.user));
+      if (u && u.id) return { id: u.id, email: u.email || "" };
+    }
+  } catch { /* unreadable → treat as no cached user */ }
+  return null;
+}
+
+const looksOffline = (err) => !navigator.onLine || /failed to fetch|network|load failed|fetch failed/i.test((err && err.message) || "");
 
 export function getCurrentUser() {
   return currentUser;
@@ -104,10 +128,12 @@ export const store = {
       console.warn("[store] ignoring pre-sign-in write:", key);
       return;
     }
+    if (SYNCED_KEYS.includes(key)) captureBase(key);   // before the write: what we last synced
     try { localStorage.setItem(nsKey(key), value); } catch { /* quota */ }
     if (SYNCED_KEYS.includes(key)) markDirty(key);
   },
   remove(key) {
+    if (SYNCED_KEYS.includes(key)) captureBase(key);
     try { localStorage.removeItem(nsKey(key)); } catch { /* no-op */ }
     if (SYNCED_KEYS.includes(key)) markDirty(key);
   },
@@ -120,6 +146,26 @@ export const store = {
     try { localStorage.setItem(nsKey(key), value); } catch { /* quota */ }
   }
 };
+
+/* ---------- Device-only secrets ---------- */
+
+// The Gemini API key is a credential, so it never leaves the device: it is not
+// in SYNCED_KEYS, is stripped from anything uploaded, and is stripped from
+// anything pulled. Older versions kept it inside the synced settings document,
+// so it is rescued from there before that document gets overwritten.
+const LOCAL_GEMINI_KEY = "hyrox.local.geminiKey";
+
+function stripSecrets(key, value) {
+  if (key !== "hyrox.settings" || !value || typeof value !== "object") return value;
+  const nut = value.nutrition;
+  if (!nut || typeof nut !== "object" || !("geminiKey" in nut)) return value;
+  if (nut.geminiKey && !store.get(LOCAL_GEMINI_KEY)) {
+    store.setLocalOnly(LOCAL_GEMINI_KEY, String(nut.geminiKey).trim());
+  }
+  const rest = { ...nut };
+  delete rest.geminiKey;
+  return { ...value, nutrition: rest };
+}
 
 /* ---------- Sync engine ---------- */
 
@@ -183,6 +229,156 @@ function schedulePush() {
   pushTimer = setTimeout(() => { pushDirty(); }, 1200);
 }
 
+/* ---------- Revisions, merge bases and 3-way merge ---------- */
+
+/*
+ * Sync used to replace whole documents, last write wins: two devices logging
+ * different meals the same day meant one device's meal was thrown away. Now:
+ *   - `revs[key]`  is the server revision (updated_at) our copy is based on.
+ *   - a *base* is saved when a key first becomes dirty: the value we last synced.
+ *   - uploads are conditional on `revs[key]` still being current; if someone
+ *     else wrote since, we fetch theirs, merge it with ours against the base,
+ *     and try again.
+ * The merge works entry by entry (meals by id, sessions by key, days by date).
+ * A true conflict on the very same entry goes to this device's latest edit.
+ */
+
+let revs = {};   // key -> server updated_at this device's copy was last synced with
+
+const revStoreKey  = () => `hyrox.sync.rev.${currentUser.id}`;
+const baseStoreKey = (key) => `hyrox.sync.base.${currentUser.id}.${key}`;
+const NO_VALUE = "\u0000none";
+
+function loadRevs() {
+  try { revs = JSON.parse(localStorage.getItem(revStoreKey()) || "{}") || {}; } catch { revs = {}; }
+}
+function saveRevs() {
+  try { localStorage.setItem(revStoreKey(), JSON.stringify(revs)); } catch { /* quota */ }
+}
+
+// Called just before the write that makes a clean key dirty.
+function captureBase(key) {
+  if (!currentUser || dirty.has(key)) return;
+  try {
+    const raw = localStorage.getItem(nsKey(key));
+    localStorage.setItem(baseStoreKey(key), raw == null ? NO_VALUE : raw);
+  } catch { /* quota: merging degrades to "union, this device wins" */ }
+}
+function setBase(key, raw) { try { localStorage.setItem(baseStoreKey(key), raw); } catch { /* quota */ } }
+function clearBase(key) { try { localStorage.removeItem(baseStoreKey(key)); } catch { /* no-op */ } }
+function readBase(key) {
+  try {
+    const raw = localStorage.getItem(baseStoreKey(key));
+    return raw == null || raw === NO_VALUE ? undefined : JSON.parse(raw);
+  } catch { return undefined; }
+}
+
+const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+const hasId = (x) => isObj(x) && (typeof x.id === "string" || typeof x.id === "number");
+const isIdList = (a) => Array.isArray(a) && a.every(hasId);
+
+/**
+ * Merge two divergent copies of one document, given the common ancestor.
+ *   untouched on one side  -> take the other side
+ *   objects                -> merge key by key (recursively)
+ *   lists of {id,…}        -> merge item by item (meals, workouts, …)
+ *   anything else          -> true conflict: `local` (this device's latest) wins
+ * A deletion is honoured only if the other side didn't change that entry.
+ */
+export function merge3(base, local, remote) {
+  if (same(local, remote)) return local;
+  if (base !== undefined && same(local, base)) return remote;
+  if (base !== undefined && same(remote, base)) return local;
+
+  if (isObj(local) && isObj(remote)) {
+    const b = isObj(base) ? base : {};
+    const out = {};
+    for (const k of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+      const inL = k in local, inR = k in remote;
+      if (inL && inR) out[k] = merge3(k in b ? b[k] : undefined, local[k], remote[k]);
+      else if (inL) { if (k in b && same(local[k], b[k])) continue; out[k] = local[k]; }   // they deleted it, we hadn't touched it
+      else          { if (k in b && same(remote[k], b[k])) continue; out[k] = remote[k]; } // we deleted it, they hadn't touched it
+    }
+    return out;
+  }
+
+  if (isIdList(local) && isIdList(remote)) {
+    const byId = (arr) => new Map(arr.map((x) => [x.id, x]));
+    const L = byId(local), R = byId(remote), B = byId(isIdList(base) ? base : []);
+    const out = [];
+    for (const id of [...L.keys(), ...[...R.keys()].filter((i) => !L.has(i))]) {
+      const inL = L.has(id), inR = R.has(id), inB = B.has(id);
+      if (inL && inR) out.push(merge3(inB ? B.get(id) : undefined, L.get(id), R.get(id)));
+      else if (inL) { if (inB && same(L.get(id), B.get(id))) continue; out.push(L.get(id)); }
+      else          { if (inB && same(R.get(id), B.get(id))) continue; out.push(R.get(id)); }
+    }
+    return out;
+  }
+  return local;
+}
+
+/**
+ * Fold the server's copy of `key` into this device's. Synchronous from the read
+ * of the local value to the write of the merged one, so an edit can't slip in
+ * between and be overwritten.
+ */
+function mergeRemoteIntoLocal(key, remoteValue, remoteRev) {
+  const raw = store.get(key);
+  let local;
+  try { local = raw == null || raw === "" ? {} : JSON.parse(raw); }   // absent + dirty = "I deleted it"
+  catch { local = undefined; }
+  const merged = local === undefined ? remoteValue : merge3(readBase(key), local, remoteValue);
+  store.setLocalOnly(key, JSON.stringify(merged));
+  revs[key] = remoteRev;
+  setBase(key, JSON.stringify(remoteValue));     // our next edits are relative to what we've now absorbed
+  return { merged, changedLocal: local === undefined || !same(local, merged) };
+}
+
+/**
+ * Upload one key, conditional on the server still being at the revision we last
+ * saw. If it isn't, absorb the newer server copy (merge) and try again.
+ */
+async function pushKey(key) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const ver = dirtyVer.get(key) || 0;            // snapshot, in the same breath as the read
+    const raw = store.get(key);
+    let value = {};                                // a removed key uploads as an empty document
+    if (raw != null && raw !== "") {
+      try { value = stripSecrets(key, JSON.parse(raw)); }
+      catch {
+        // Never turn an unreadable value into an empty document: that would
+        // overwrite whatever good copy the cloud holds.
+        console.warn("[sync] not uploading unreadable value for", key);
+        return { key, skipped: true };
+      }
+    }
+    const sent = JSON.stringify(value);
+
+    let landed = false;
+    if (revs[key]) {
+      const res = await sb.from("user_data").update({ value })
+        .eq("user_id", currentUser.id).eq("key", key).eq("updated_at", revs[key]).select("updated_at");
+      if (res.error) throw res.error;
+      if (res.data && res.data.length) { revs[key] = res.data[0].updated_at; landed = true; }
+    } else {
+      const res = await sb.from("user_data").insert({ user_id: currentUser.id, key, value }).select("updated_at");
+      if (res.error && res.error.code !== "23505") throw res.error;   // 23505: someone created it first
+      if (!res.error && res.data && res.data.length) { revs[key] = res.data[0].updated_at; landed = true; }
+    }
+    if (landed) { saveRevs(); return { key, ver, sent }; }
+
+    // Another device wrote since we last synced. Take their copy and merge.
+    const cur = await sb.from("user_data").select("value,updated_at")
+      .eq("user_id", currentUser.id).eq("key", key).maybeSingle();
+    if (cur.error) throw cur.error;
+    if (cur.data) mergeRemoteIntoLocal(key, stripSecrets(key, cur.data.value ?? {}), cur.data.updated_at);
+    else delete revs[key];                          // the row is gone: the next pass inserts it
+    saveRevs();
+  }
+  throw new Error(`sync conflict on ${key} did not settle`);
+}
+
 export async function pushDirty() {
   if (!sb || !currentUser) return { ok: false, pending: dirty.size, reason: "signed-out" };
   if (dirty.size === 0) return { ok: true, pending: 0 };
@@ -203,36 +399,24 @@ export async function pushDirty() {
 
   syncing = true;
   onStatus("syncing");
-  const sent = new Map([...dirty].map((k) => [k, dirtyVer.get(k) || 0]));
   let result;
   try {
-    const rows = [];
-    for (const key of [...sent.keys()]) {
-      const raw = store.get(key);
-      let value = {};                       // a removed key uploads as an empty document
-      if (raw != null && raw !== "") {
-        try { value = JSON.parse(raw); }
-        catch {
-          // Never turn an unreadable value into an empty document: that would
-          // overwrite whatever good copy the cloud holds.
-          console.warn("[sync] not uploading unreadable value for", key);
-          sent.delete(key);
-          dirty.delete(key);
-          dirtyVer.delete(key);
-          continue;
-        }
+    const results = await Promise.all([...dirty].map((k) => pushKey(k).catch((error) => ({ key: k, error }))));
+    let firstError = null;
+    for (const r of results) {
+      if (r.error) { firstError = firstError || r.error; continue; }
+      if (r.skipped) { dirty.delete(r.key); dirtyVer.delete(r.key); clearBase(r.key); continue; }
+      if ((dirtyVer.get(r.key) || 0) === r.ver) {
+        // Sent and not written again since: this key is clean.
+        dirty.delete(r.key); dirtyVer.delete(r.key); clearBase(r.key);
+      } else {
+        // Edited again while it was in flight: stays dirty, and further edits
+        // are relative to the copy we just uploaded.
+        setBase(r.key, r.sent);
       }
-      rows.push({ user_id: currentUser.id, key, value });
     }
-    if (rows.length) {
-      const { error } = await sb.from("user_data").upsert(rows, { onConflict: "user_id,key" });
-      if (error) throw error;
-    }
-    // Clear only what was sent AND hasn't been written again since.
-    sent.forEach((ver, k) => {
-      if ((dirtyVer.get(k) || 0) === ver) { dirty.delete(k); dirtyVer.delete(k); }
-    });
     savePending();
+    if (firstError) throw firstError;
     onStatus(dirty.size === 0 ? "synced" : "pending");
     result = { ok: dirty.size === 0, pending: dirty.size };
   } catch (e) {
@@ -271,27 +455,46 @@ export async function pullAll() {
   try {
     const { data, error } = await sb
       .from("user_data")
-      .select("key,value")
+      .select("key,value,updated_at")
       .eq("user_id", currentUser.id);
     if (error) throw error;
-    let pulled = 0, changed = 0, kept = 0;
+    let pulled = 0, changed = 0, merged = 0;
     (data || []).forEach((row) => {
       if (!SYNCED_KEYS.includes(row.key)) return;
-      // A key with edits still waiting to upload is newer than anything in the
-      // cloud. Overwriting it here would throw those edits away and then
-      // re-upload the old copy over them.
-      if (dirty.has(row.key)) { kept++; return; }
-      const next = JSON.stringify(row.value ?? {});
+      // About to overwrite local settings: rescue a legacy key from them first.
+      if (row.key === "hyrox.settings") { try { stripSecrets(row.key, JSON.parse(store.get(row.key))); } catch { /* none */ } }
+      const remoteValue = stripSecrets(row.key, row.value ?? {});
+      // The cloud copy still contains the (now device-only) key: re-upload this
+      // document without it, so the secret doesn't linger on the server.
+      const hadSecret = row.key === "hyrox.settings" && !!row.value && !!row.value.nutrition && "geminiKey" in row.value.nutrition;
+
+      if (dirty.has(row.key)) {
+        // This device has edits the server hasn't seen. Overwriting would throw
+        // them away; skipping would let them overwrite someone else's. Merge.
+        const r = mergeRemoteIntoLocal(row.key, remoteValue, row.updated_at);
+        if (same(r.merged, remoteValue) && !hadSecret) {   // nothing of ours left to send
+          dirty.delete(row.key); dirtyVer.delete(row.key); clearBase(row.key);
+        }
+        if (r.changedLocal) changed++;
+        merged++;
+        return;
+      }
+
       let local = null;
-      try { local = JSON.stringify(canon(JSON.parse(store.get(row.key)))); } catch { /* absent */ }
-      if (local !== JSON.stringify(canon(row.value ?? {}))) changed++;
-      store.setLocalOnly(row.key, next);
+      try { local = JSON.parse(store.get(row.key)); } catch { /* absent */ }
+      if (local === null || !same(local, remoteValue)) changed++;
+      store.setLocalOnly(row.key, JSON.stringify(remoteValue));
+      revs[row.key] = row.updated_at;
+      clearBase(row.key);
+      if (hadSecret) markDirty(row.key);
       pulled++;
     });
+    saveRevs();
+    savePending();
     pullOk = true;
     lastPullAt = Date.now();
     onStatus(dirty.size === 0 ? "synced" : "pending");
-    return { ok: true, pulled, changed, kept };
+    return { ok: true, pulled, changed, merged };
   } catch (e) {
     console.warn("[sync] pull failed:", e.message || e);
     onStatus(navigator.onLine ? "error" : "offline");
@@ -615,6 +818,10 @@ export async function initAuth() {
     if (event === "PASSWORD_RECOVERY") {
       recovering = true;
       renderAuthGate("recover");
+    } else if ((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && currentUser && !pullOk) {
+      // We started offline from the cached copy; a session just came back, so
+      // load this account's data and send whatever was queued.
+      resumePull().then(() => { if (pullOk) pushDirty(); });
     } else if (event === "SIGNED_OUT" && currentUser && !signingOut) {
       // The session was revoked or its refresh token stopped working. Without
       // this the app carried on looking signed in, every push failing with
@@ -624,12 +831,19 @@ export async function initAuth() {
     }
   });
 
-  const { data: { session } } = await sb.auth.getSession();
+  let { data: { session }, error: sessionError } = await sb.auth.getSession();
 
   // A recovery link puts us in a temporary session — force the new-password step.
   if (recovering || /type=recovery/.test(location.hash)) {
     renderAuthGate("recover");
     return null;
+  }
+
+  // Offline with an expired token: run from the local copy instead of locking
+  // the person out of their own data. Only for an account that has synced here.
+  if (!session && looksOffline(sessionError)) {
+    const cached = cachedSessionUser();
+    if (cached && localCacheLooksReal(cached.id)) session = { user: cached };
   }
 
   if (!session) {
@@ -653,11 +867,12 @@ export async function initAuth() {
 
   currentUser = session.user;
   loadPending();
+  loadRevs();
 
   // Pull this account's data into the local cache before the app renders.
   // Retry briefly — a transient failure here used to look like a new account.
-  let pull = await pullAll();
-  for (let attempt = 0; !pull.ok && attempt < 2; attempt++) {
+  let pull = navigator.onLine ? await pullAll() : { ok: false };
+  for (let attempt = 0; !pull.ok && navigator.onLine && attempt < 2; attempt++) {
     await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
     pull = await pullAll();
   }

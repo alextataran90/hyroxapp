@@ -1,4 +1,4 @@
-const APP_VERSION = "2026-05-27-v61-review-fixes";
+const APP_VERSION = "2026-05-27-v62-tabs-merge-undo";
 const CACHE_NAME = `hyrox-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",

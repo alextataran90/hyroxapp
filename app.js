@@ -56,7 +56,10 @@ const PROGRAMS = [
     // Prose-based programme: sessions are written out in full rather than
     // derived from your Settings numbers, so no auto-calculated weights.
     tailored: false,
-    originalWeek1Monday: "2026-08-03"
+    originalWeek1Monday: "2026-08-03",
+    // Week 1 of this plan has no sessions Mon–Wed (it began on a Thursday), so
+    // starting on a Monday shows three rest days. Said up front, not discovered.
+    week1FirstDay: "Thu"
   }
 ];
 
@@ -168,6 +171,33 @@ function saveJSON(key, value) {
   store.set(key, JSON.stringify(value));
 }
 
+// The Gemini key is device-only (see auth.js): never synced, never in a backup.
+const LOCAL_GEMINI_KEY = "hyrox.local.geminiKey";
+function getGeminiKey() { return (store.get(LOCAL_GEMINI_KEY) || "").trim(); }
+function setGeminiKey(v) { store.setLocalOnly(LOCAL_GEMINI_KEY, String(v || "").trim()); }
+
+/** The one way to write settings: the key goes to its device-only slot. */
+function saveSettings(obj) {
+  const { geminiKey, ...nutrition } = obj.nutrition || {};
+  if (geminiKey !== undefined) setGeminiKey(geminiKey);
+  saveJSON(SETTINGS_KEY, { ...obj, nutrition });
+}
+
+// One-off for accounts that saved the key in the synced settings document:
+// copy it to this device, then rewrite the document without it (which also
+// scrubs the copy held in the cloud).
+function migrateGeminiKey() {
+  try {
+    const raw = store.get(SETTINGS_KEY);
+    if (!raw) return;
+    const st = JSON.parse(raw);
+    if (!st.nutrition || !("geminiKey" in st.nutrition)) return;
+    if (st.nutrition.geminiKey && !getGeminiKey()) setGeminiKey(st.nutrition.geminiKey);
+    delete st.nutrition.geminiKey;
+    saveJSON(SETTINGS_KEY, st);
+  } catch { /* unreadable settings are handled elsewhere */ }
+}
+
 function getSettings() {
   const stored = loadJSON(SETTINGS_KEY, DEFAULT_SETTINGS);
   // Deep-merge nested sections so adding new fields works on upgrade.
@@ -179,7 +209,11 @@ function getSettings() {
     stations: { ...DEFAULT_SETTINGS.stations, ...(stored.stations || {}) },
     running: { ...DEFAULT_SETTINGS.running, ...(stored.running || {}) },
     ergs: { ...DEFAULT_SETTINGS.ergs, ...(stored.ergs || {}) },
-    nutrition: { ...DEFAULT_SETTINGS.nutrition, ...(stored.nutrition || {}) }
+    nutrition: {
+      ...DEFAULT_SETTINGS.nutrition, ...(stored.nutrition || {}),
+      // local slot wins; the stored value is only a not-yet-migrated legacy copy
+      geminiKey: getGeminiKey() || ((stored.nutrition && stored.nutrition.geminiKey) || "")
+    }
   };
 }
 
@@ -233,6 +267,16 @@ function addUserBlock(weekNum, sessionId, block) {
     all[key].push({ ...block, id: "ub" + Date.now() });
     store.set(USER_BLOCKS_KEY, JSON.stringify(all));
   } catch {}
+}
+
+function restoreUserBlock(weekNum, sessionId, block) {
+  try {
+    const all = JSON.parse(store.get(USER_BLOCKS_KEY) || "{}");
+    const key = sessionKey(weekNum, sessionId);
+    if (!all[key]) all[key] = [];
+    if (!all[key].some((b) => b.id === block.id)) all[key].push(block);
+    store.set(USER_BLOCKS_KEY, JSON.stringify(all));
+  } catch { /* no-op */ }
 }
 
 function deleteUserBlock(weekNum, sessionId, blockId) {
@@ -466,6 +510,15 @@ function updateSavedMeal(id, patch) {
     store.set(SAVED_MEALS_KEY, JSON.stringify(all));
     return true;
   } catch { return false; }
+}
+
+// Put a removed preset back exactly as it was (same id, same place in the menu).
+function restoreSavedMeal(m) {
+  try {
+    const all = JSON.parse(store.get(SAVED_MEALS_KEY) || "{}");
+    all[m.id] = m;
+    store.set(SAVED_MEALS_KEY, JSON.stringify(all));
+  } catch { /* no-op */ }
 }
 
 function deleteSavedMeal(id) {
@@ -986,7 +1039,7 @@ function parseGeminiJSON(text) {
  */
 async function callGemini({ model, parts, temperature = 0.1, timeoutMs = PHOTO_TIMEOUT_MS, signal }) {
   const st = getSettings();
-  const apiKey = (st.nutrition && st.nutrition.geminiKey) ? st.nutrition.geminiKey.trim() : "";
+  const apiKey = getGeminiKey() || ((st.nutrition && st.nutrition.geminiKey) || "").trim();
   if (!apiKey) throw new Error("Gemini API key not set. Add it in Settings → Nutrition.");
 
   const ctrl = new AbortController();
@@ -1435,7 +1488,7 @@ async function startNewBlock({ programId, startMonday, raceDate, restart = true 
   settings.startDate = ymd(startMonday);
   settings.raceDate  = raceDate;
   settings.onboarded = true;
-  saveJSON(SETTINGS_KEY, settings);
+  saveSettings(settings);
 
   // The plan file may have changed — force a reload on the next route().
   _programJustSwitched = true;
@@ -1520,6 +1573,19 @@ function showNewBlockSheet(opts = {}) {
           : `<div class="prog-card-tag">Sessions written out in full · fixed loads</div>`}
       </button>`).join("");
 
+    // Warn when "Start from Week 1" will open on rest days / mid-week.
+    let week1Hint = "";
+    if (startMode === "fresh" && program.week1FirstDay) {
+      const ORD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const todayIdx = (new Date().getDay() + 6) % 7;
+      const firstIdx = ORD.indexOf(program.week1FirstDay);
+      if (todayIdx < firstIdx) {
+        week1Hint = `Heads up: Week 1 of this programme has no sessions until ${program.week1FirstDay}, so the days before it show as rest.`;
+      } else if (todayIdx > firstIdx) {
+        week1Hint = `Heads up: Week 1's sessions start on ${program.week1FirstDay}, which has already passed this week — you'd begin partway through Week 1. Starting on a Monday lines it up better.`;
+      }
+    }
+
     const startOptions = canAlign ? `
       <div class="section-header">Start</div>
       <div class="list">
@@ -1549,6 +1615,7 @@ function showNewBlockSheet(opts = {}) {
           <div class="section-header">Where the program comes from</div>
           <div class="prog-list">${programCards}</div>
           ${startOptions}
+          ${week1Hint ? `<p class="nb-note nb-hint">${escapeHtml(week1Hint)}</p>` : ""}
           <p class="nb-note">${
             startMode === "aligned" && inRange
               ? `Lands you in <strong>Week ${wkNow} of ${program.weeks}</strong> · programme ends ${fmt(endDate)}.`
@@ -1760,21 +1827,197 @@ async function hardReload() {
   location.replace(location.pathname + "?v=" + Date.now() + location.hash);
 }
 
-// Lightweight transient toast (used by silent Shortcut imports).
-function showToast(message) {
+/**
+ * Transient toast. With `opts.action` it carries a button (used for Undo) and
+ * stays long enough to reach it. Only one toast shows at a time.
+ */
+function showToast(message, opts = {}) {
   const existing = document.getElementById("app-toast");
   if (existing) existing.remove();
   const t = document.createElement("div");
   t.id = "app-toast";
   t.className = "app-toast";
-  t.textContent = message;
-  document.body.appendChild(t);
-  requestAnimationFrame(() => t.classList.add("app-toast-show"));
-  setTimeout(() => {
+  const label = document.createElement("span");
+  label.textContent = message;
+  t.appendChild(label);
+
+  let gone = false;
+  const dismiss = () => {
+    if (gone) return;
+    gone = true;
     t.classList.remove("app-toast-show");
     setTimeout(() => t.remove(), 300);
-  }, 2200);
+  };
+
+  if (opts.action) {
+    t.classList.add("app-toast-has-action");
+    const b = document.createElement("button");
+    b.className = "app-toast-action";
+    b.textContent = opts.action.label;
+    b.addEventListener("click", () => { dismiss(); opts.action.fn(); });
+    t.appendChild(b);
+  }
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add("app-toast-show"));
+  setTimeout(dismiss, opts.action ? 6500 : 2200);
 }
+
+/**
+ * In-app replacements for confirm()/prompt()/alert(). The native ones are
+ * unstyled, block the page (and any running timer), and can be suppressed in an
+ * installed PWA. These stack above every sheet and resolve a Promise.
+ */
+function showDialog({ title = "", message = "", input = null, actions }) {
+  return new Promise((resolve) => {
+    const root = document.createElement("div");
+    root.className = "dlg-backdrop";
+    root.innerHTML = `
+      <div class="dlg" role="dialog" aria-modal="true">
+        ${title ? `<div class="dlg-title">${escapeHtml(title)}</div>` : ""}
+        ${message ? `<div class="dlg-msg">${escapeHtml(message)}</div>` : ""}
+        ${input ? `<input class="dlg-input" type="text" value="${escapeHtml(input.value || "")}"
+          placeholder="${escapeHtml(input.placeholder || "")}" autocomplete="off" />` : ""}
+        <div class="dlg-actions">
+          ${actions.map((a, i) => `<button class="dlg-btn${a.kind ? " dlg-btn-" + a.kind : ""}" data-ai="${i}">${escapeHtml(a.label)}</button>`).join("")}
+        </div>
+      </div>`;
+    document.body.appendChild(root);
+    requestAnimationFrame(() => root.classList.add("open"));
+
+    const cancel = actions.find((a) => a.cancel) || actions[0];
+    const inputEl = root.querySelector(".dlg-input");
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      root.classList.remove("open");
+      setTimeout(() => root.remove(), 200);
+      resolve(value);
+    };
+    const valueOf = (a) => (a.submit && inputEl) ? inputEl.value : a.value;
+
+    root.querySelectorAll("[data-ai]").forEach((b) =>
+      b.addEventListener("click", () => finish(valueOf(actions[Number(b.dataset.ai)]))));
+    root.addEventListener("click", (e) => { if (e.target === root) finish(cancel.value); });
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") finish(cancel.value);
+      if (e.key === "Enter" && inputEl && e.target === inputEl) {
+        const go = actions.find((a) => a.submit);
+        if (go) finish(valueOf(go));
+      }
+    });
+    const first = inputEl || root.querySelector(".dlg-btn-primary, .dlg-btn-danger");
+    if (first) setTimeout(() => { try { first.focus(); if (inputEl) inputEl.select(); } catch { /* no-op */ } }, 60);
+  });
+}
+
+const confirmSheet = ({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false }) =>
+  showDialog({ title, message, actions: [
+    { label: cancelLabel, value: false, cancel: true },
+    { label: confirmLabel, value: true, kind: danger ? "danger" : "primary" }
+  ] });
+
+// Resolves to the entered text, or null if cancelled.
+const promptSheet = ({ title, message, value = "", placeholder = "", confirmLabel = "Save" }) =>
+  showDialog({ title, message, input: { value, placeholder }, actions: [
+    { label: "Cancel", value: null, cancel: true },
+    { label: confirmLabel, submit: true, kind: "primary" }
+  ] });
+
+const alertSheet = (message, title = "") =>
+  showDialog({ title, message, actions: [{ label: "OK", value: true, kind: "primary", cancel: true }] });
+
+/* ---------- Bottom tab bar ---------- */
+
+const TAB_ICONS = {
+  overview:  '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  training:  '<path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/>',
+  nutrition: '<path d="M7 3v7a2 2 0 0 0 2 2v9M11 3v7a2 2 0 0 1-2 2M9 3v7M17 21V3c-2.2 1.4-3.5 4-3.5 7.5H17"/>',
+  fitness:   '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
+  more:      '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'
+};
+
+const TAB_ITEMS = [
+  { id: "overview",  label: "Today" },
+  { id: "training",  label: "Train" },
+  { id: "nutrition", label: "Fuel" },
+  { id: "fitness",   label: "Fitness" },
+  { id: "more",      label: "More" }
+];
+
+// Which tab is "current" for the screen being shown.
+function activeTabId() {
+  const name = getRoute().name;
+  if (name === "today" || name === "fuel") return dayTab;
+  if (name === "session" || name === "week") return "training";
+  return "more";
+}
+
+function renderTabBar() {
+  const bar = document.getElementById("tabbar");
+  if (!bar) return;
+  const active = activeTabId();
+  bar.innerHTML = TAB_ITEMS.map((t) => `
+    <button class="tab${t.id === active ? " active" : ""}" data-nav="${t.id}" ${t.id === active ? 'aria-current="page"' : ""}>
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICONS[t.id]}</svg>
+      <span>${t.label}</span>
+    </button>`).join("");
+}
+
+function showMoreSheet() {
+  const items = [
+    ["📅", "This week", "week"],
+    ["📈", "Progress", "progress"],
+    ["🗂️", "History", "history"],
+    ["🧪", "Tests", "tests"],
+    ["🗺️", "Plan", "plan"],
+    ["⚙️", "Settings", "settings"]
+  ];
+  const sheet = document.createElement("div");
+  sheet.className = "action-sheet-backdrop";
+  sheet.innerHTML = `
+    <div class="action-sheet" role="dialog">
+      <div class="action-sheet-title">More</div>
+      <div class="action-sheet-group">
+        ${items.map(([icon, label, path]) => `<button class="action-sheet-btn" data-go="${path}">${icon}&nbsp; ${label}</button>`).join("")}
+      </div>
+      <button class="action-sheet-btn action-sheet-cancel" data-cancel="1">Close</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+  const close = () => { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 220); };
+  sheet.addEventListener("click", (e) => {
+    if (e.target === sheet || e.target.closest("[data-cancel]")) { close(); return; }
+    const go = e.target.closest("[data-go]");
+    if (go) { close(); navigate(go.dataset.go); }
+  });
+}
+
+document.getElementById("tabbar")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-nav]");
+  if (!btn) return;
+  const id = btn.dataset.nav;
+  if (id === "more") { showMoreSheet(); return; }
+  dayTab = id;
+  const app = document.getElementById("app");
+  if (getRoute().name === "today") {
+    renderMain(app);          // renderMain redraws the bar itself
+    app.scrollTop = 0;
+  } else {
+    navigate("today");        // arriving at Today shows the current week and day
+  }
+});
+
+// With the keyboard up the bar would float over it (iOS) or eat a sixth of the
+// visible screen — neither is useful while typing.
+document.addEventListener("focusin", (e) => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || "")) document.body.classList.add("kbd-open");
+});
+document.addEventListener("focusout", () => {
+  setTimeout(() => {
+    if (!/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) document.body.classList.remove("kbd-open");
+  }, 60);
+});
 
 /* ---------- Router ---------- */
 
@@ -1946,6 +2189,7 @@ async function _doRoute() {
   _lastRouteName = r.name;
   _lastRouteKey  = routeKey;
   _dayAtRender   = ymd(today());
+  renderTabBar();
 }
 
 // An installed PWA can sit in memory for days. Past midnight the screen still
@@ -2060,6 +2304,14 @@ async function renderMain(app) {
   const selSession  = sessionByDay[selDay] || null;
   const selDate     = getDateForDayInWeek(wn, selDay, settings);
   const selDateStr  = ymd(selDate);
+  // Week 1 of a plan that begins mid-week: the days before its first session
+  // are not "recovery", they're simply before the start.
+  const _ORD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const firstSessionDay = week.sessions
+    .map((x) => getSessionDay(wn, x.id, x.defaultDay))
+    .sort((a, b) => _ORD.indexOf(a) - _ORD.indexOf(b))[0];
+  const beforeStart = wn === 1 && !selSession && firstSessionDay
+    && _ORD.indexOf(selDay) < _ORD.indexOf(firstSessionDay);
   const isSelToday  = selDateStr === ymd(today());
 
   /* ---- Week navigation (always visible) ---- */
@@ -2104,18 +2356,6 @@ async function renderMain(app) {
           </button>`;
         }).join("")}
       </div>
-    </div>`;
-
-  /* ---- 4-tab strip ---- */
-  const TABS = [
-    { id: "overview",  label: "Overview" },
-    { id: "training",  label: "Training" },
-    { id: "nutrition", label: "Nutrition" },
-    { id: "fitness",   label: "Fitness" },
-  ];
-  const tabStripHtml = `
-    <div class="day-tab-strip">
-      ${TABS.map((t) => `<button class="dts${dayTab === t.id ? " dts-a" : ""}" data-tab="${t.id}">${t.label}</button>`).join("")}
     </div>`;
 
   /* ---- Shared data for all tabs ---- */
@@ -2166,14 +2406,35 @@ async function renderMain(app) {
     const kcalVsAvg  = has7dAvg && kcal > 0 ? Math.round(kcal - avg7Kcal) : null;
     const avg7Burn   = avgBurnDays >= 2 ? Math.round(avgBurnSum / avgBurnDays) : 0;
 
+    // Your usual meals for the slot you're probably in, one tap each.
+    const quickSlot = isSelToday ? currentMealSlot() : null;
+    const quickMeals = quickSlot ? getSavedMeals().filter((m) => (m.label || "") === quickSlot).slice(0, 4) : [];
+    const quickSlotName = quickSlot ? (MEAL_SLOTS.find((sl) => sl.key === quickSlot) || {}).name : "";
+    const quickHtml = quickMeals.length ? `
+      <div class="quicklog">
+        <div class="quicklog-head">
+          <span class="quicklog-title">Quick log · ${escapeHtml(quickSlotName)}</span>
+          <button class="quicklog-all" data-quick-all>All meals</button>
+        </div>
+        <div class="quicklog-chips">
+          ${quickMeals.map((m) => {
+            const t = savedMealTotals(m);
+            return `<button class="quicklog-chip" data-quicklog="${escapeHtml(m.id)}">
+              <span class="ql-name">${escapeHtml(m.name)}</span>
+              <span class="ql-kcal">${Math.round(t.kcal)} kcal · ${Math.round(t.p)}g P</span>
+            </button>`;
+          }).join("")}
+        </div>
+      </div>` : "";
+
     tabContent = `
       <div class="overview-date-label">${escapeHtml(selDayLabel)}</div>
       <div class="overview-cards">
         <button class="osc${trainDone ? " osc-done" : ""}" data-jump="training">
           <div class="osc-icon">${trainIcon}</div>
           <div class="osc-label">Training</div>
-          <div class="osc-value">${escapeHtml(selSession ? selSession.title : "Rest")}</div>
-          <div class="osc-meta">${escapeHtml(selSession ? `${selSession.duration}m · ${selSession.focus}` : "Recovery day")}</div>
+          <div class="osc-value">${escapeHtml(selSession ? selSession.title : beforeStart ? `Starts ${firstSessionDay}` : "Rest")}</div>
+          <div class="osc-meta">${escapeHtml(selSession ? `${selSession.duration}m · ${selSession.focus}` : beforeStart ? "Programme not started yet" : "Recovery day")}</div>
           ${trainDone ? `<div class="osc-badge">✓</div>` : ""}
         </button>
         <button class="osc" data-jump="nutrition">
@@ -2189,6 +2450,7 @@ async function renderMain(app) {
           <div class="osc-meta">${moveKcal > 0 ? "🔥 " + moveKcal.toLocaleString() + " kcal burned" : fitKcal > 0 ? fitKcal + " kcal" : dayWorkouts.length > 0 ? escapeHtml(dayWorkouts[0].label) : "No workout"}</div>
         </button>
       </div>
+      ${quickHtml}
       ${hasBurn && kcal > 0 ? `
       <div class="energy-balance-row">
         <div class="eb-item">
@@ -2284,8 +2546,10 @@ async function renderMain(app) {
     } else {
       tabContent += `<div class="hero">
         <div class="hero-eyebrow"><span class="dot dot-test"></span><span>Rest day</span></div>
-        <div class="hero-title">Recovery 🛋️</div>
-        <div class="hero-intent">No session on ${escapeHtml(selDay)}. Rest is where adaptation happens.</div>
+        <div class="hero-title">${beforeStart ? `Programme starts ${escapeHtml(firstSessionDay)}` : "Recovery 🛋️"}</div>
+        <div class="hero-intent">${beforeStart
+          ? `Week 1 of this programme has its first session on ${escapeHtml(firstSessionDay)}. Nothing to do until then.`
+          : `No session on ${escapeHtml(selDay)}. Rest is where adaptation happens.`}</div>
       </div>`;
     }
     const doneCount     = week.sessions.filter((s) => isSessionDone(wn, s.id)).length;
@@ -2547,7 +2811,8 @@ async function renderMain(app) {
   }
 
   /* ---- Render ---- */
-  app.innerHTML = weekNavHtml + tabStripHtml + `<div id="tab-content">${tabContent}</div>`;
+  app.innerHTML = weekNavHtml + `<div id="tab-content">${tabContent}</div>`;
+  renderTabBar();
 
   /* ---- Event bindings ---- */
 
@@ -2564,10 +2829,13 @@ async function renderMain(app) {
     btn.addEventListener("click", () => { selectedDayOverride = btn.dataset.day; renderMain(app); });
   });
 
-  // Tab strip
-  app.querySelectorAll(".dts[data-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => { dayTab = btn.dataset.tab; renderMain(app); });
-  });
+  // Overview quick log
+  app.querySelectorAll("[data-quicklog]").forEach((btn) => btn.addEventListener("click", () => {
+    const m = getSavedMeals().find((x) => x.id === btn.dataset.quicklog);
+    if (m) logPresetNow(m, selDateStr);
+  }));
+  app.querySelector("[data-quick-all]")?.addEventListener("click", () =>
+    showSavedMealsSheet(selDateStr, currentMealSlot()));
 
   // Overview jump-to-tab cards
   app.querySelectorAll("[data-jump]").forEach((btn) => {
@@ -2606,10 +2874,14 @@ async function renderMain(app) {
     app.querySelectorAll("[data-action='delete-meal']").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (confirm("Delete this meal?")) {
-          deleteMeal(btn.dataset.mid, btn.dataset.date);
-          renderMain(app);
-        }
+        const date = btn.dataset.date;
+        const meal = getDayMeals(date).find((m) => m.id === btn.dataset.mid);
+        if (!meal) return;
+        // Delete at once and offer Undo — quicker than a confirm you tap through,
+        // and recoverable if it was a slip.
+        deleteMeal(meal.id, date);
+        renderMain(app);
+        showToast("Meal deleted", { action: { label: "Undo", fn: () => { saveMeal(meal, date); route(); } } });
       });
     });
     app.querySelectorAll(".fuel-period-btn").forEach((btn) => {
@@ -2621,10 +2893,12 @@ async function renderMain(app) {
     app.querySelectorAll("[data-action='delete-workout']").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (confirm("Delete this workout?")) {
-          deleteFitnessWorkout(btn.dataset.wid, btn.dataset.date);
-          renderMain(app);
-        }
+        const date = btn.dataset.date;
+        const w = getDayWorkouts(date).find((x) => x.id === btn.dataset.wid);
+        if (!w) return;
+        deleteFitnessWorkout(w.id, date);
+        renderMain(app);
+        showToast("Workout deleted", { action: { label: "Undo", fn: () => { saveFitnessWorkout(w, date); route(); } } });
       });
     });
     app.querySelector(".fi-autosync-copy")?.addEventListener("click", async (e) => {
@@ -4292,13 +4566,46 @@ function showMenuSheet() {
     overlay.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
       const m = getSavedMeals().find((x) => x.id === b.dataset.del);
       if (!m) return;
-      if (!confirm(`Remove “${m.name}” from your menu?`)) return;
       deleteSavedMeal(m.id);
       render();
+      showToast(`Removed “${m.name}”`, { action: { label: "Undo", fn: () => { restoreSavedMeal(m); render(); } } });
     }));
   };
 
   render();
+}
+
+/**
+ * Log a menu preset as a meal right now — no editor in between. Quantities are
+ * the preset's; "✏️ adjust" in the picker is for the times they aren't. Undo is
+ * on the toast, so a mis-tap costs one tap rather than a trip into the meal.
+ */
+function logPresetNow(m, dateStr) {
+  const items = (m.items || []).map((it) => ({ ...it }));
+  if (!items.length) { showToast("That menu item has no foods in it yet"); return null; }
+  const tot = items.reduce((a, it) => ({
+    kcal: a.kcal + num0(it.kcal), p: a.p + num0(it.p), c: a.c + num0(it.c), f: a.f + num0(it.f)
+  }), { kcal: 0, p: 0, c: 0, f: 0 });
+  const now = new Date();
+  const meal = {
+    id: makeMealId(),
+    label: m.label || currentMealSlot(),
+    time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+    items,
+    total: { kcal: Math.round(tot.kcal), p: Math.round(tot.p * 10) / 10, c: Math.round(tot.c * 10) / 10, f: Math.round(tot.f * 10) / 10 },
+    source: "menu",
+    photo: null
+  };
+  items.forEach((it) => {
+    if (it.name && (it.qtyNum > 0 || it.kcal > 0)) updateFoodEntry(it.name, it.qtyNum || 0, it.unit || "g", it.kcal, it.p, it.c, it.f);
+  });
+  saveMeal(meal, dateStr);
+  touchSavedMeal(m.id);
+  showToast(`Logged “${m.name}” · ${meal.total.kcal} kcal`, {
+    action: { label: "Undo", fn: () => { deleteMeal(meal.id, dateStr); route(); } }
+  });
+  route();   // redraw in place (scroll is kept)
+  return meal;
 }
 
 /* ---------- Menu picker (used when logging a meal) ---------- */
@@ -4338,7 +4645,7 @@ function showSavedMealsSheet(targetDateStr, preferLabel) {
               <div class="saved-empty-sub">Add the meals you eat often and they'll be one tap away here.</div>
               <button class="btn" id="sm-build" style="margin-top:16px">Build my menu</button>
             </div>` : `
-            <p class="menu-intro">Tap a meal to load it — you can still adjust quantities before saving.</p>
+            <p class="menu-intro">Tap a meal to log it straight away (you can undo). Tap ✏️ to change quantities first.</p>
             ${groups.map((g) => `
               <div class="menu-group">
                 <div class="menu-group-head">
@@ -4360,17 +4667,27 @@ function showSavedMealsSheet(targetDateStr, preferLabel) {
       btn.addEventListener("click", () => {
         const m = getSavedMeals().find((x) => x.id === btn.dataset.load);
         if (!m) return;
+        close();
+        logPresetNow(m, targetDateStr);
+      });
+    });
+
+    // ✏️ — adjust before logging. A deep copy, so edits never touch the preset.
+    overlay.querySelectorAll("[data-edit]").forEach((btn) => {
+      btn.setAttribute("aria-label", "Adjust quantities before logging");
+      btn.addEventListener("click", () => {
+        const m = getSavedMeals().find((x) => x.id === btn.dataset.edit);
+        if (!m) return;
         touchSavedMeal(m.id);
         close();
-        // Deep-copy so edits here never mutate the stored preset.
         const copy = (m.items || []).map((it) => ({ ...it }));
         setTimeout(() => showMealEditSheet(copy, "", "menu", targetDateStr,
           null, null, { label: m.label || prefer }), 300);
       });
     });
 
-    // The row's own edit/duplicate/delete belong to the manager, not the picker.
-    overlay.querySelectorAll("[data-edit],[data-dup],[data-del]").forEach((b) => b.remove());
+    // Duplicate and delete belong to the menu manager, not the picker.
+    overlay.querySelectorAll("[data-dup],[data-del]").forEach((b) => b.remove());
   };
 
   render();
@@ -4388,7 +4705,7 @@ function pickAudioMime() {
 
 function showVoiceMealSheet(targetDateStr) {
   if (!navigator.mediaDevices?.getUserMedia || !pickAudioMime()) {
-    alert("Voice recording isn't supported by this browser. Use a photo or add the meal manually.");
+    alertSheet("Voice recording isn't supported by this browser. Use a photo or add the meal manually.", "Voice not available");
     return;
   }
 
@@ -4806,7 +5123,7 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       if (names.length) names[names.length - 1].focus();
     });
 
-    overlay.querySelector("#fed-save-preset")?.addEventListener("click", () => {
+    overlay.querySelector("#fed-save-preset")?.addEventListener("click", async () => {
       syncDomToItems();
       const valid = items.filter((it) => it.name.trim() && !it.auto);
       if (!valid.length) { showToast("Add at least one item first"); return; }
@@ -4814,7 +5131,11 @@ function showMealEditSheet(initItems, aiNotes, source, targetDateStr, editMeal =
       const suggested = valid.length === 1
         ? valid[0].name.trim()
         : `${valid[0].name.trim()} + ${valid.length - 1} more`;
-      const name = prompt("Name this meal so you can reuse it:", suggested);
+      const name = await promptSheet({
+        title: "Save to my menu",
+        message: "Name this meal so you can reuse it.",
+        value: suggested, confirmLabel: "Save"
+      });
       if (name === null) return; // cancelled
       saveSavedMeal(name, valid, selLabel);
       showToast(`💾 Saved “${(name || "Saved meal").trim() || "Saved meal"}”`);
@@ -5300,7 +5621,7 @@ function showSettingsSuggestions(suggestions) {
       else if (runKeys.includes(k)) s.running[k] = suggestions[k].val;
       else if (ergKeys.includes(k)) s.ergs[k] = suggestions[k].val;
     });
-    saveJSON(SETTINGS_KEY, s);
+    saveSettings(s);
     close();
     setTimeout(route, 220);
   });
@@ -5400,11 +5721,19 @@ async function renderTests(app) {
 
   document.querySelectorAll("[data-delete]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (!confirm("Delete this test?")) return;
       const t = getTests();
+      const at = t.items.findIndex((x) => x.id === btn.dataset.delete);
+      if (at < 0) return;
+      const removed = t.items[at];
       t.items = t.items.filter((x) => x.id !== btn.dataset.delete);
       saveJSON(TESTS_KEY, t);
       route();
+      showToast("Test deleted", { action: { label: "Undo", fn: () => {
+        const cur = getTests();
+        cur.items.splice(Math.min(at, cur.items.length), 0, removed);
+        saveJSON(TESTS_KEY, cur);
+        route();
+      } } });
     });
   });
 }
@@ -5524,7 +5853,7 @@ async function renderSettings(app, params) {
       ${numRow("nutrition", "carbTarget", "g")}
       ${numRow("nutrition", "fatTarget", "g")}
     </div>
-    <div class="section-footer">Get a free Gemini key at aistudio.google.com · Free tier: 1,500 photo analyses/day.</div>
+    <div class="section-footer">Get a free Gemini key at aistudio.google.com · Free tier: 1,500 photo analyses/day. The key is kept on this device only — it isn't synced to your account or included in backups, so enter it once on each device.</div>
 
     <div class="section-header">Meal targets · % of daily kcal</div>
     <div class="list">
@@ -5668,7 +5997,7 @@ async function renderSettings(app, params) {
         next[key] = el.value;
       }
     });
-    saveJSON(SETTINGS_KEY, next);
+    saveSettings(next);
     if (rejected.length) showToast(`Kept the previous value for: ${rejected.join(", ")}`);
   }
 
@@ -5694,8 +6023,12 @@ async function renderSettings(app, params) {
 
   const resetBtn = document.getElementById("reset-progress");
   if (resetBtn) {
-    resetBtn.addEventListener("click", () => {
-      if (!confirm("Clear all session completion ticks? (Settings + tests preserved.)")) return;
+    resetBtn.addEventListener("click", async () => {
+      if (!await confirmSheet({
+        title: "Reset week progress?",
+        message: "This clears every session completion tick. Your settings and tests are kept.",
+        confirmLabel: "Clear ticks", danger: true
+      })) return;
       store.remove(PROGRESS_KEY);
       route();
     });
@@ -5725,7 +6058,7 @@ async function renderSettings(app, params) {
           ? "1 recent change hasn't reached your account yet. It stays on this device and uploads the next time you sign in here. Sign out anyway?"
           : `${left} recent changes haven't reached your account yet. They stay on this device and upload the next time you sign in here. Sign out anyway?`)
       : "Sign out? Your data is saved to your account and will be here when you sign back in.";
-    if (!confirm(msg)) return;
+    if (!await confirmSheet({ title: "Sign out?", message: msg, confirmLabel: "Sign out", danger: !!left })) return;
     signOut();
   });
 
@@ -5786,24 +6119,32 @@ async function renderSettings(app, params) {
         if (typeof data[k] !== "string") return false;
         try { JSON.parse(data[k]); return true; } catch { return false; }
       });
-      if (!valid.length) { alert("That file doesn't contain any restorable data."); return; }
-      if (!confirm(`Restore ${valid.length} data set${valid.length === 1 ? "" : "s"} from this backup? It replaces what's on this device and in your account for those items.`)) return;
+      if (!valid.length) { await alertSheet("That file doesn't contain any restorable data.", "Nothing to restore"); return; }
+      if (!await confirmSheet({
+        title: `Restore ${valid.length} data set${valid.length === 1 ? "" : "s"}?`,
+        message: "This replaces what's on this device and in your account for those items.",
+        confirmLabel: "Restore", danger: true
+      })) return;
       valid.forEach((k) => store.set(k, data[k]));
       // The restore only counts once it has left this device. Reloading first
       // let the next load's pull replace it with the old cloud copy.
       const r = await syncNow();
-      alert(r.ok
+      await alertSheet(r.ok
         ? `Restored ${valid.length} data sets.`
-        : `Restored ${valid.length} data sets on this device. They'll upload to your account when you're back online.`);
+        : `Restored ${valid.length} data sets on this device. They'll upload to your account when you're back online.`, "Backup restored");
       location.reload();
     } catch (err) {
-      alert("Import failed: " + err.message);
+      alertSheet(err.message, "Import failed");
     }
   });
 
   // Reset all training data
-  document.getElementById("reset-all-data")?.addEventListener("click", () => {
-    if (!confirm("Clear all progress, notes, and set logs? Settings and tests are kept.")) return;
+  document.getElementById("reset-all-data")?.addEventListener("click", async () => {
+    if (!await confirmSheet({
+      title: "Reset all training data?",
+      message: "This clears all progress, notes and set logs. Your settings and tests are kept. It can't be undone.",
+      confirmLabel: "Reset everything", danger: true
+    })) return;
     [PROGRESS_KEY, OVERRIDES_KEY, USER_BLOCKS_KEY, DAY_OVERRIDES_KEY, JOURNAL_KEY, SESSION_LOGS_KEY, ACTUALS_KEY, SET_ENTRIES_KEY].forEach((k) => store.remove(k));
     route();
   });
@@ -6586,9 +6927,12 @@ function attachSessionHandlers(weekNum) {
   document.querySelectorAll("[data-action='delete-user-block']").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (!confirm("Remove this exercise?")) return;
-      deleteUserBlock(Number(btn.dataset.week), btn.dataset.sid, btn.dataset.ubid);
+      const wk = Number(btn.dataset.week), sid = btn.dataset.sid;
+      const removed = getUserBlocks(wk, sid).find((b) => b.id === btn.dataset.ubid);
+      if (!removed) return;
+      deleteUserBlock(wk, sid, removed.id);
       route();
+      showToast("Exercise removed", { action: { label: "Undo", fn: () => { restoreUserBlock(wk, sid, removed); route(); } } });
     });
   });
 
@@ -6887,11 +7231,9 @@ function seedConfig() {
   try {
     const cfg = window.HYROX_CONFIG;
     if (!cfg || !cfg.geminiKey || !cfg.geminiKey.startsWith("AIza")) return;
-    const s = getSettings();
-    if ((s.nutrition?.geminiKey || "") === cfg.geminiKey) return; // already in sync
-    s.nutrition = { ...s.nutrition, geminiKey: cfg.geminiKey };
-    saveJSON(SETTINGS_KEY, s);
-  } catch {}
+    if (getGeminiKey() === cfg.geminiKey) return;   // already in place
+    setGeminiKey(cfg.geminiKey);
+  } catch { /* config is optional */ }
 }
 
 
@@ -6921,6 +7263,7 @@ function showLoadFailed() {
   const user = await initAuth();
   if (!user) return;
 
+  migrateGeminiKey();
   setSyncStatusHandler(renderSyncStatus);
   setRemoteChangeHandler(onRemoteDataChanged);
   reportSyncStatus();
@@ -6947,7 +7290,7 @@ function showLoadFailed() {
     const hasHistory = Object.keys(getProgress().sessions || {}).length > 0;
     if (hasHistory) {
       // Existing athlete (or freshly migrated data) — don't interrupt them.
-      saveJSON(SETTINGS_KEY, { ...s, onboarded: true });
+      saveSettings({ ...s, onboarded: true });
     } else {
       showNewBlockSheet({ firstRun: true });
     }
@@ -6956,6 +7299,7 @@ function showLoadFailed() {
 
 // A pull brought in changes another device made while this one sat open.
 function onRemoteDataChanged() {
+  migrateGeminiKey();
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "");
   if (typing) {
     // Redrawing under someone's cursor would eat what they're typing.
